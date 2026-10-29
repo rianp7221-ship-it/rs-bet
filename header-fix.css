@@ -1,0 +1,19 @@
+/* =====================================================
+   header-fix.css — cabeçalho fixo no topo
+   ===================================================== */
+#rs-header { position: sticky; top: 0; z-index: 50; background: rgba(11,18,16,.92); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.hdr { max-width: 1240px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center; gap: 24px; min-height: 64px; }
+.hdr-nav { display: flex; gap: 18px; }
+.hdr-nav a { color: var(--muted); font-weight: 600; font-size: 14px; }
+.hdr-nav a:hover, .hdr-nav a.active { color: var(--text); }
+.hdr-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.balance { display: flex; flex-direction: column; align-items: flex-end; margin-right: 6px; line-height: 1.1; }
+.balance small { color: var(--muted); font-size: 11px; }
+.balance b { font-family: var(--mono); color: var(--primary); transition: .3s; }
+.balance b.flash { color: var(--gold); transform: scale(1.08); }
+@media (max-width: 760px) {
+  .hdr { flex-wrap: wrap; gap: 10px; }
+  .hdr-nav { order: 3; width: 100%; overflow-x: auto; }
+  .hdr-right .btn { padding: 8px 10px; font-size: 13px; }
+  #btn-withdraw { display: none; }
+}

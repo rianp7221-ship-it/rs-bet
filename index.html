@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RS BET — Apostas Esportivas e Cassino</title>
+  <meta name="description" content="Aposte nos principais jogos de futebol, basquete e tênis, e jogue Mines e Dados no cassino RS BET.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="auth-style.css">
+  <link rel="stylesheet" href="header-fix.css">
+</head>
+<body>
+  <header id="rs-header"></header>
+
+  <nav class="tabs" data-tabs>
+    <button data-tab="sports" class="active">⚽ Esportes</button>
+    <button data-tab="casino">🎰 Cassino</button>
+    <button data-tab="history">📄 Histórico</button>
+  </nav>
+
+  <main class="container">
+    <!-- ESPORTES -->
+    <section id="sports" class="tab-panel">
+      <div class="hero">
+        <div><h1>Apostas <span>ao vivo</span></h1><p>Monte simples ou múltiplas com as melhores odds.</p></div>
+      </div>
+      <div class="sports-layout">
+        <div>
+          <div class="chips" id="sport-filters"></div>
+          <div id="matches"><p class="muted">Carregando jogos…</p></div>
+        </div>
+        <aside class="slip-box">
+          <h3>Bilhete <span class="pill" id="slip-count">0</span></h3>
+          <div id="slip"></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- CASSINO -->
+    <section id="casino" class="tab-panel hidden">
+      <div class="casino-grid">
+        <div class="game-card">
+          <h2>💎 Mines</h2>
+          <div class="game-body">
+            <div class="game-controls">
+              <label>Valor (R$)<input type="number" id="mines-stake" class="input" value="5" min="1" step="0.01"></label>
+              <label>Minas
+                <select id="mines-count" class="input">
+                  <option>1</option><option selected>3</option><option>5</option><option>10</option><option>15</option><option>20</option><option>24</option>
+                </select>
+              </label>
+              <p id="mines-info" class="muted"></p>
+              <button class="btn btn-primary w-full" id="mines-action">Jogar</button>
+            </div>
+            <div class="mines-grid" id="mines-grid"></div>
+          </div>
+        </div>
+
+        <div class="game-card" id="dice">
+          <h2>🎲 Dados</h2>
+          <div class="dice-result" id="dice-result">50.00</div>
+          <input type="range" id="dice-target" min="2" max="98" value="50" class="range">
+          <div class="dice-stats">
+            <button class="chip" id="dice-side"><span id="dice-label">Acima de 50</span> ⇅</button>
+            <span>Chance <b id="dice-chance">50%</b></span>
+            <span>Paga <b id="dice-mult">1.94x</b></span>
+          </div>
+          <label>Valor (R$)<input type="number" id="dice-stake" class="input" value="5" min="1" step="0.01"></label>
+          <button class="btn btn-primary w-full" id="dice-roll">Rolar</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- HISTÓRICO -->
+    <section id="history" class="tab-panel hidden">
+      <div class="chips">
+        <button class="chip active" data-hist="bets">Apostas esportivas</button>
+        <button class="chip" data-hist="casino">Cassino</button>
+        <button class="chip" data-hist="tx">Extrato</button>
+      </div>
+      <div id="history-list"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p><b>+18</b> · Jogue com responsabilidade. Apostas envolvem risco de perda financeira.</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
+  <script src="rs-base.js"></script>
+  <script src="auth-header.js"></script>
+  <script src="sports.js"></script>
+  <script src="mines.js"></script>
+  <script src="history.js"></script>
+  <script>
+    // abre a aba pelo link (#casino, #history)
+    function openHash() {
+      const t = location.hash.slice(1);
+      const b = document.querySelector(`[data-tab="${t}"]`);
+      if (b) b.click();
+    }
+    window.addEventListener("hashchange", openHash);
+    openHash();
+  </script>
+</body>
+</html>

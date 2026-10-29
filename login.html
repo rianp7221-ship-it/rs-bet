@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entrar — RS BET</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="auth-style.css">
+</head>
+<body class="auth-page">
+  <div class="auth-card">
+    <a href="index.html" class="logo big">RS<span>BET</span></a>
+    <div class="auth-switch">
+      <button data-mode="login" class="active">Entrar</button>
+      <button data-mode="signup">Cadastrar</button>
+    </div>
+    <h2 id="auth-title">Entrar na sua conta</h2>
+    <form id="auth-form">
+      <label id="row-username" class="hidden">Nome de usuário<input name="username" class="input" maxlength="30"></label>
+      <label>Email<input name="email" type="email" class="input" required autocomplete="email"></label>
+      <label id="row-password">Senha<input name="password" type="password" class="input" autocomplete="current-password"></label>
+      <label id="row-age" class="check hidden"><input type="checkbox" name="age"> Tenho 18 anos ou mais e aceito os termos</label>
+      <button class="btn btn-primary w-full" id="auth-submit" type="submit">Entrar</button>
+      <a href="#" id="forgot" class="muted small">Esqueci minha senha</a>
+    </form>
+    <p class="muted small center">+18 · Jogue com responsabilidade</p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
+  <script src="rs-base.js"></script>
+  <script src="auth.js"></script>
+</body>
+</html>
