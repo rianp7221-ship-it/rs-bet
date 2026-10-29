@@ -50,13 +50,31 @@
       try {
         const id = await RS.rpc(dep ? "request_deposit" : "request_withdraw", { p_amount: v });
         m.remove();
-        // >>> PONTO DE INTEGRAÇÃO: aqui você chama o seu provedor de pagamento
-        // licenciado (PIX) com o id da transação. Quando ele confirmar, o
-        // webhook deve aprovar a transação no banco.
-        RS.toast(dep ? `Depósito #${id} criado. Aguardando pagamento.` : `Saque #${id} solicitado.`, "ok");
+        if (dep) await showPix(id, v);
+        else RS.toast(`Saque #${id} solicitado. Aguarde a aprovação.`, "ok");
         RS.refreshBalance();
       } catch (e) { RS.toast(e.message, "error"); }
     };
+  }
+
+  // Gera o PIX no servidor (função pix-create) e mostra QR + copia e cola
+  async function showPix(id, v) {
+    const { data, error } = await sb.functions.invoke("pix-create", { body: { tx_id: id } });
+    if (error || data?.error) {
+      RS.toast(`Depósito #${id} criado, mas o PIX não foi gerado: ${data?.error || "provedor indisponível"}`, "error");
+      return;
+    }
+    const w = RS.modal(`
+      <h3>Pague com PIX</h3>
+      <p class="muted">Valor: <b>${RS.money(v)}</b>. O saldo entra sozinho assim que o pagamento for confirmado.</p>
+      ${data.qr_base64 ? `<img src="data:image/png;base64,${data.qr_base64}" alt="QR code PIX" style="width:220px;margin:12px auto;display:block;background:#fff;padding:8px;border-radius:8px">` : ""}
+      <textarea class="input" id="pix-code" readonly rows="3">${RS.esc(data.qr_code || "")}</textarea>
+      <button class="btn btn-primary w-full" id="pix-copy">Copiar código PIX</button>`);
+    RS.$("#pix-copy", w).onclick = async () => { await navigator.clipboard.writeText(data.qr_code); RS.toast("Código copiado!", "ok"); };
+    // fecha sozinho quando o pagamento cair
+    const ch = sb.channel("dep-" + id).on("postgres_changes",
+      { event: "UPDATE", schema: "public", table: "transactions", filter: `id=eq.${id}` },
+      (e) => { if (e.new.status === "done") { w.remove(); RS.toast("Depósito confirmado!", "ok"); RS.refreshBalance(); sb.removeChannel(ch); } }).subscribe();
   }
 
   document.addEventListener("rs:balance", async () => {

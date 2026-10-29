@@ -21,6 +21,10 @@
     </nav>
 
     <section id="a-matches" class="tab-panel">
+      <div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-primary" id="sync-odds">Buscar jogos e odds reais (API)</button>
+        <small class="muted" id="sync-msg">Atualiza jogos, odds, placares e paga bilhetes encerrados.</small>
+      </div>
       <form id="match-form" class="form-grid card">
         <input name="sport" class="input" placeholder="Esporte" value="Futebol" required>
         <input name="league" class="input" placeholder="Campeonato" required>
@@ -140,6 +144,15 @@
       ${data.map((b) => `<tr><td>${b.id}</td><td>${RS.esc(b.profiles?.email)}</td><td>${b.bet_selections[0]?.count}</td><td>${RS.money(b.stake)}</td>
         <td>${b.total_odd}</td><td>${RS.money(b.potential)}</td><td>${badge(b.status)}</td></tr>`).join("")}</tbody></table>`;
     }
+
+    RS.$("#sync-odds").onclick = async () => {
+      const btn = RS.$("#sync-odds"); btn.disabled = true; RS.$("#sync-msg").textContent = "Buscando…";
+      const { data, error } = await sb.functions.invoke("sync-odds");
+      btn.disabled = false;
+      if (error || data?.error) { RS.$("#sync-msg").textContent = "Erro: " + (data?.error || error.message); return; }
+      RS.$("#sync-msg").textContent = `${data.jogos_atualizados} jogos atualizados, ${data.jogos_liquidados} liquidados` + (data.errors.length ? ` · avisos: ${data.errors.join("; ")}` : "");
+      all();
+    };
 
     function all() { stats(); matches(); txs(); users(); bets(); }
     all();

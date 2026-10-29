@@ -17,3 +17,7 @@
   .hdr-right .btn { padding: 8px 10px; font-size: 13px; }
   #btn-withdraw { display: none; }
 }
+
+/* cashout */
+.cashout-box{margin-top:10px}
+.badge.b-cashout{background:#f5b301;color:#111}

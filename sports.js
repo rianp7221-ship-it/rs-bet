@@ -44,7 +44,7 @@
         ${ms.map((m) => `
           <div class="match">
             <div class="match-info">
-              <span class="match-time">${m.status === "live" ? '<i class="live">AO VIVO</i>' : RS.date(m.starts_at)}</span>
+              <span class="match-time">${m.status === "live" ? `<i class="live">AO VIVO</i>${m.score_home != null ? ` <b>${m.score_home} - ${m.score_away}</b>` : ""}` : RS.date(m.starts_at)}</span>
               <div class="teams"><b>${RS.esc(m.home)}</b><b>${RS.esc(m.away)}</b></div>
             </div>
             <div class="odds">${oddBtn(m, "home", m.odd_home)}${oddBtn(m, "draw", m.odd_draw)}${oddBtn(m, "away", m.odd_away)}</div>
