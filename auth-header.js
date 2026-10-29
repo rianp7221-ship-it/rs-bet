@@ -12,7 +12,7 @@
     const p = await RS.profile();
     el.innerHTML = `
       <div class="hdr">
-        <a href="index.html" class="logo">RS<span>BET</span></a>
+        <a href="index.html" class="logo">REAL<span>SPORTS</span></a>
         <nav class="hdr-nav">
           <a href="index.html#sports">Esportes</a>
           <a href="index.html#casino">Cassino</a>
