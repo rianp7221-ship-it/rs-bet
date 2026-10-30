@@ -1,23 +1,89 @@
 // =====================================================
-//  home.js — carrossel de banners da página inicial
+//  home.js — menu, voltar ao topo, minhas apostas e mentor de apostas
 // =====================================================
 (() => {
-  const car = RS.$("#carousel");
-  if (!car) return;
-  const slides = RS.$(".slides", car);
-  const n = slides.children.length;
-  const dots = RS.$(".dots", car);
-  dots.innerHTML = Array.from({ length: n }, (_, i) => `<button aria-label="Banner ${i + 1}" data-i="${i}"></button>`).join("");
-  let i = 0, timer;
-  function go(k) {
-    i = (k + n) % n;
-    slides.style.transform = `translateX(-${i * 100}%)`;
-    RS.$$("button", dots).forEach((d, j) => d.classList.toggle("active", j === i));
-    clearInterval(timer);
-    timer = setInterval(() => go(i + 1), 6000);
+  const body = document.body;
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-open-menu]")) { e.preventDefault(); body.classList.toggle("menu-open"); return; }
+    if (e.target.closest("[data-close]") || e.target.id === "overlay") { body.classList.remove("menu-open", "slip-open"); return; }
+    const act = e.target.closest("[data-act]");
+    if (act) {
+      e.preventDefault();
+      body.classList.remove("menu-open");
+      if (act.dataset.act === "refer") RS.refer(); else RS.support();
+    }
+  });
+
+  const top = RS.$("#to-top");
+  if (top) {
+    addEventListener("scroll", () => top.classList.toggle("hidden", scrollY < 900), { passive: true });
+    top.onclick = () => scrollTo({ top: 0, behavior: "smooth" });
   }
-  RS.$(".prev", car).onclick = () => go(i - 1);
-  RS.$(".next", car).onclick = () => go(i + 1);
-  dots.onclick = (e) => { if (e.target.dataset.i) go(Number(e.target.dataset.i)); };
-  go(0);
+
+  // ---------- Minhas apostas (coluna da direita) ----------
+  const mbList = RS.$("#mybets-list");
+  let mb = "open";
+  const ST = { pending: "Aberta", won: "Ganhou", lost: "Perdeu", canceled: "Cancelada", cashout: "Cashout" };
+  async function loadMyBets() {
+    if (!mbList) return;
+    const u = await RS.user();
+    if (!u) { mbList.innerHTML = `<p class="muted center small"><a href="login.html" style="color:var(--primary)">Entre</a> para ver suas apostas.</p>`; return; }
+    let q = sb.from("bets").select("id,stake,potential,status,cashout_amount,bet_selections(id)")
+      .eq("user_id", u.id).order("created_at", { ascending: false }).limit(5);
+    q = mb === "open" ? q.eq("status", "pending") : q.neq("status", "pending");
+    const { data } = await q;
+    mbList.innerHTML = data?.length ? data.map((b) => `<div class="mb-item">
+        <div>Bilhete #${b.id}<small>${b.bet_selections.length} seleção(ões) · ${RS.money(b.stake)}</small></div>
+        <div style="text-align:right"><span class="badge b-${b.status}">${ST[b.status] || b.status}</span><small>${RS.money(b.status === "cashout" ? b.cashout_amount : b.potential)}</small></div>
+      </div>`).join("")
+      : `<p class="muted center small">${mb === "open" ? "Não tem apostas em aberto no momento." : "Nenhuma aposta resolvida ainda."}</p>`;
+  }
+  RS.$("#mybets")?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-mb]");
+    if (!b) return;
+    mb = b.dataset.mb;
+    RS.$$("[data-mb]").forEach((x) => x.classList.toggle("active", x === b));
+    loadMyBets();
+  });
+  document.addEventListener("rs:balance", loadMyBets);
+  sb.auth.onAuthStateChange(() => setTimeout(loadMyBets, 0));
+
+  // ---------- Mentor de apostas: monta múltiplas que pagam a faixa escolhida ----------
+  const ranges = RS.$("#mentor-ranges");
+  let range = [60, 200];
+  ranges?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-r]");
+    if (!b) return;
+    range = b.dataset.r.split("-").map(Number);
+    RS.$$("[data-r]", ranges).forEach((x) => x.classList.toggle("active", x === b));
+  });
+  RS.$("#mentor-go")?.addEventListener("click", () => {
+    const out = RS.$("#mentor-out");
+    const stake = Number(RS.$("#mentor-stake").value);
+    if (!(stake > 0)) { out.innerHTML = `<p class="muted small">Digite quanto quer apostar.</p>`; return; }
+    const S = window.RSsports;
+    const pool = S.matches.filter((m) => m.status === "open" && !S.suspended(m) && m.odd_home && m.odd_away);
+    const lo = range[0] / stake, hi = range[1] / stake;
+    const found = new Map();
+    for (let t = 0; t < 4000 && found.size < 12 && pool.length; t++) {
+      const k = 1 + Math.floor(Math.random() * Math.min(10, pool.length));
+      const picks = [...pool].sort(() => Math.random() - 0.5).slice(0, k).map((m) => {
+        const opts = ["home", "draw", "away"].filter((p) => m["odd_" + p]);
+        const pick = opts[Math.floor(Math.random() * opts.length)];
+        return { m, pick, odd: Number(m["odd_" + pick]) };
+      });
+      const odd = picks.reduce((a, s) => a * s.odd, 1);
+      if (odd >= lo && odd <= hi) found.set(picks.map((s) => s.m.id + s.pick).sort().join(), { picks, odd });
+    }
+    const sug = [...found.values()].sort((a, b) => a.picks.length - b.picks.length).slice(0, 3);
+    out.innerHTML = sug.length ? sug.map((s, i) => `<div class="sug">
+        ${s.picks.map((p) => `<div><span>${RS.esc(p.pick === "draw" ? "Empate" : p.m[p.pick])} <small class="muted">· ${RS.esc(p.m.home)} x ${RS.esc(p.m.away)}</small></span><b>${p.odd.toFixed(2)}</b></div>`).join("")}
+        <div><span>Odd total <b>${s.odd.toFixed(2)}</b></span><span>Ganho <b>${RS.money(stake * s.odd)}</b></span></div>
+        <button class="btn btn-dark w-full sm" data-sug="${i}">Adicionar ao bilhete</button></div>`).join("")
+      : `<p class="muted small" style="margin-top:8px">Não achamos uma combinação para essa faixa com os jogos disponíveis agora.</p>`;
+    out.onclick = (e) => {
+      const b = e.target.closest("[data-sug]");
+      if (b) S.add(sug[b.dataset.sug].picks.map((p) => ({ id: p.m.id, pick: p.pick })), stake);
+    };
+  });
 })();
