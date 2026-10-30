@@ -1,5 +1,7 @@
 // sync-odds — busca jogos, odds e resultados reais na The Odds API (the-odds-api.com)
-// Secret obrigatório: ODDS_API_KEY. Opcional: ODDS_SPORTS (chaves separadas por vírgula).
+// Secret obrigatório: ODDS_API_KEY. Opcionais: ODDS_SPORTS (chaves separadas por vírgula) e
+// CRON_SECRET (permite a sincronização automática pelo pg_cron, header x-cron-secret).
+// Body: { mode: "full" } (padrão: todos os jogos) ou { mode: "live" } (só esportes com jogo em andamento).
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const API = "https://api.the-odds-api.com/v4/sports";
@@ -10,7 +12,7 @@ const SPORT_PT: Record<string, string> = {
 };
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
@@ -35,15 +37,34 @@ Deno.serve(async (req) => {
   const key = Deno.env.get("ODDS_API_KEY");
   if (!key) return json({ error: "Configure o secret ODDS_API_KEY no Supabase (Edge Functions → Secrets)" });
 
-  const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-    global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
-  });
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user) return json({ error: "Faça login" }, 401);
-  const { data: me } = await sb.from("profiles").select("is_admin").eq("id", user.id).single();
-  if (!me?.is_admin) return json({ error: "Apenas administradores" }, 403);
+  const cronSecret = Deno.env.get("CRON_SECRET");
+  const isCron = !!cronSecret && req.headers.get("x-cron-secret") === cronSecret;
+  const sb = isCron
+    ? createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!)
+    : createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
+    });
+  if (!isCron) {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return json({ error: "Faça login" }, 401);
+    const { data: me } = await sb.from("profiles").select("is_admin").eq("id", user.id).single();
+    if (!me?.is_admin) return json({ error: "Apenas administradores" }, 403);
+  }
+  const mode = (await req.json().catch(() => ({})))?.mode === "live" ? "live" : "full";
 
-  const sports = (Deno.env.get("ODDS_SPORTS") || DEFAULT_SPORTS).split(",").map((s) => s.trim()).filter(Boolean);
+  // jogos já iniciados e ainda não liquidados (ao vivo)
+  const { data: started } = await sb.from("matches").select("id, external_id, home, away")
+    .in("status", ["open", "live"]).lt("starts_at", new Date().toISOString()).not("external_id", "is", null);
+  const startedBySport = new Map<string, { id: number; external_id: string; home: string; away: string }[]>();
+  for (const m of started ?? []) {
+    const sport = m.external_id.split(":")[0];
+    if (!startedBySport.has(sport)) startedBySport.set(sport, []);
+    startedBySport.get(sport)!.push(m);
+  }
+
+  const sports = mode === "live"
+    ? [...startedBySport.keys()]
+    : (Deno.env.get("ODDS_SPORTS") || DEFAULT_SPORTS).split(",").map((s) => s.trim()).filter(Boolean);
   const errors: string[] = [];
   let updated = 0, settled = 0, remaining: string | null = null;
 
@@ -62,6 +83,7 @@ Deno.serve(async (req) => {
       const { data: existing } = await sb.from("matches").select("id, external_id, status").in("external_id", ids);
       const byExt = new Map((existing ?? []).map((m) => [m.external_id, m]));
       const now = Date.now();
+      const priced = new Set<string>();
       for (const ev of events) {
         const odd_home = avgOdd(ev, ev.home_team), odd_away = avgOdd(ev, ev.away_team), odd_draw = avgOdd(ev, "Draw");
         if (!odd_home || !odd_away) continue;
@@ -71,7 +93,9 @@ Deno.serve(async (req) => {
           league: ev.sport_title, home: ev.home_team, away: ev.away_team,
           starts_at: ev.commence_time, odd_home, odd_draw, odd_away,
           status: new Date(ev.commence_time).getTime() <= now ? "live" : "open",
+          synced_at: new Date().toISOString(),
         };
+        priced.add(row.external_id);
         const cur = byExt.get(row.external_id);
         if (cur && !["open", "live"].includes(cur.status)) continue;
         const { error } = cur
@@ -80,25 +104,24 @@ Deno.serve(async (req) => {
         if (error) errors.push(`${ev.home_team} x ${ev.away_team}: ${error.message}`);
         else updated++;
       }
+      // jogo ao vivo sem odds nas casas = mercado suspenso lá (lance perigoso, VAR...) => suspende aqui também
+      const gone = (startedBySport.get(sport) ?? []).filter((m) => !priced.has(m.external_id)).map((m) => m.id);
+      if (gone.length) {
+        await sb.from("matches").update({
+          suspended_until: new Date(now + 60_000).toISOString(), suspend_reason: "Mercado suspenso nas casas",
+        }).in("id", gone);
+      }
     } catch (e) {
       errors.push(`${sport}: ${(e as Error).message}`);
     }
   }
 
-  // 2) resultados — só consulta esportes com jogos já iniciados e ainda abertos
-  const { data: pending } = await sb.from("matches").select("id, external_id, home, away")
-    .in("status", ["open", "live"]).lt("starts_at", new Date().toISOString()).not("external_id", "is", null);
-  const pendingBySport = new Map<string, typeof pending>();
-  for (const m of pending ?? []) {
-    const sport = m.external_id.split(":")[0];
-    if (!pendingBySport.has(sport)) pendingBySport.set(sport, []);
-    pendingBySport.get(sport)!.push(m);
-  }
-  for (const [sport, list] of pendingBySport) {
+  // 2) placar e resultados — só esportes com jogos já iniciados e ainda abertos
+  for (const [sport, list] of startedBySport) {
     try {
       const scores = await get(`${API}/${sport}/scores?apiKey=${key}&daysFrom=3`);
       const byExt = new Map(scores.map((s) => [`${sport}:${s.id}`, s]));
-      for (const m of list!) {
+      for (const m of list) {
         const s = byExt.get(m.external_id);
         if (!s?.scores) continue;
         const sh = Number(s.scores.find((x) => x.name === s.home_team)?.score);
@@ -116,5 +139,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return json({ jogos_atualizados: updated, jogos_liquidados: settled, creditos_restantes: remaining, errors });
+  return json({ modo: mode, jogos_atualizados: updated, jogos_liquidados: settled, creditos_restantes: remaining, errors });
 });

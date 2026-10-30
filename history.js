@@ -51,29 +51,38 @@
     }
   }
 
-  // Cashout: valor calculado no servidor pelas odds atuais de cada jogo
+  // Cashout: cotado no servidor pelas odds atuais; suspenso em gol, odd mexendo ou dados atrasados
+  let cashing = false;
   async function loadCashouts() {
+    if (cashing) return;
     for (const el of RS.$$("[data-co]", box)) {
       const id = Number(el.dataset.co);
-      const { data: v } = await sb.rpc("cashout_value", { p_bet: id });
-      if (v == null) { el.innerHTML = `<small class="muted">Cashout indisponível no momento</small>`; continue; }
-      el.innerHTML = `<button class="btn btn-primary w-full" data-cash="${id}" data-v="${v}">Cashout ${RS.money(v)}</button>`;
+      const { data: q } = await sb.rpc("cashout_quote", { p_bet: id });
+      if (cashing) return;
+      if (!q) { el.innerHTML = `<small class="muted">Cashout indisponível no momento</small>`; continue; }
+      if (q.suspended) { el.innerHTML = `<button class="btn w-full" disabled>🔒 Cashout suspenso · ${RS.esc(q.reason)}</button>`; continue; }
+      el.innerHTML = `<button class="btn btn-primary w-full" data-cash="${id}" data-v="${q.value}">Cashout ${RS.money(q.value)}${q.live ? " · ao vivo" : ""}</button>`;
     }
   }
+  const showingBets = () => kind === "bets" && !RS.$("#history").classList.contains("hidden") && RS.$("[data-co]", box);
   box.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-cash]");
     if (!b) return;
     if (!confirm(`Encerrar o bilhete #${b.dataset.cash} e receber ${RS.money(b.dataset.v)} agora?`)) return;
-    b.disabled = true;
+    b.disabled = true; cashing = true;
+    b.textContent = "Confirmando cashout…";
     try {
       const v = await RS.rpc("cashout_bet", { p_bet: Number(b.dataset.cash), p_expected: Number(b.dataset.v) });
       RS.toast(`Cashout feito: ${RS.money(v)} no seu saldo.`, "ok");
-      RS.refreshBalance(); load();
-    } catch (err) { RS.toast(err.message, "error"); load(); }
+      RS.refreshBalance();
+    } catch (err) { RS.toast(err.message, "error"); }
+    cashing = false; load();
   });
-  // valor do cashout acompanha as odds ao vivo
+  // valor e suspensão do cashout acompanham o jogo: tempo real + checagem a cada 5s
+  let pend;
   sb.channel("hist-odds").on("postgres_changes", { event: "UPDATE", schema: "public", table: "matches" },
-    () => { if (kind === "bets" && !RS.$("#history").classList.contains("hidden")) loadCashouts(); }).subscribe();
+    () => { clearTimeout(pend); pend = setTimeout(() => { if (showingBets()) loadCashouts(); }, 300); }).subscribe();
+  setInterval(() => { if (showingBets() && !document.hidden) loadCashouts(); }, 5000);
 
   RS.$$("[data-hist]").forEach((b) => (b.onclick = () => {
     kind = b.dataset.hist;

@@ -77,9 +77,11 @@
       const { data } = await sb.from("matches").select("*").order("starts_at", { ascending: false }).limit(100);
       RS.$("#m-list").innerHTML = `<table class="table"><thead><tr><th>Jogo</th><th>Data</th><th>Odds</th><th>Status</th><th>Ações</th></tr></thead><tbody>
       ${data.map((m) => `<tr><td><small>${RS.esc(m.league)}</small><br>${RS.esc(m.home)} x ${RS.esc(m.away)}</td><td>${RS.date(m.starts_at)}</td>
-        <td>${m.odd_home} / ${m.odd_draw ?? "-"} / ${m.odd_away}</td><td>${badge(m.status)}${m.result ? " " + m.result : ""}</td>
+        <td>${m.odd_home} / ${m.odd_draw ?? "-"} / ${m.odd_away}</td><td>${badge(m.status)}${m.result ? " " + m.result : ""}${m.score_home != null ? `<br><small>${m.score_home} x ${m.score_away}</small>` : ""}
+          ${m.locked ? `<br><small class="neg">🔒 Suspenso</small>` : new Date(m.suspended_until) > new Date() ? `<br><small class="neg">⏸ ${RS.esc(m.suspend_reason || "Suspenso")}</small>` : ""}</td>
         <td class="actions">${m.status === "settled" ? "" : `
           <button class="btn sm" data-st="${m.id}" data-v="${m.status === "live" ? "open" : "live"}">${m.status === "live" ? "Tirar do ao vivo" : "Ao vivo"}</button>
+          <button class="btn sm ${m.locked ? "" : "danger"}" data-lock="${m.id}" data-v="${m.locked ? "" : "1"}">${m.locked ? "Liberar apostas/cashout" : "Suspender apostas/cashout"}</button>
           <button class="btn sm" data-res="${m.id}" data-r="home">Venceu casa</button>
           ${m.odd_draw ? `<button class="btn sm" data-res="${m.id}" data-r="draw">Empate</button>` : ""}
           <button class="btn sm" data-res="${m.id}" data-r="away">Venceu fora</button>`}
@@ -88,6 +90,7 @@
     RS.$("#m-list").addEventListener("click", async (e) => {
       const b = e.target;
       if (b.dataset.res && confirm("Confirmar resultado? Os bilhetes serão pagos agora.")) act("settle_match", { p_match: +b.dataset.res, p_result: b.dataset.r }, "Jogo liquidado");
+      if (b.dataset.lock) { await sb.from("matches").update({ locked: !!b.dataset.v }).eq("id", b.dataset.lock); all(); }
       if (b.dataset.st) { await sb.from("matches").update({ status: b.dataset.v }).eq("id", b.dataset.st); all(); }
       if (b.dataset.del && confirm("Excluir jogo?")) {
         const { error } = await sb.from("matches").delete().eq("id", b.dataset.del);
