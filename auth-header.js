@@ -21,6 +21,7 @@
         </nav>
         <div class="hdr-right">
           ${p ? `
+            ${p.is_admin ? `<a class="btn btn-ghost hdr-admin" href="admin.html">Admin</a>` : ""}
             <div class="balance"><small>Saldo</small><b id="hdr-balance">${RS.money(p.balance)}</b></div>
             <button class="btn btn-primary" id="btn-deposit">Depositar</button>
             <button class="btn btn-ghost" id="btn-withdraw">Sacar</button>
