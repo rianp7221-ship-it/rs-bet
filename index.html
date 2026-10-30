@@ -164,6 +164,11 @@
       if (b) b.click();
     }
     window.addEventListener("hashchange", openHash);
+    // mantém a URL igual à aba aberta, para links #casino/#sports/#history sempre funcionarem
+    document.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-tab]");
+      if (b && location.hash !== "#" + b.dataset.tab) history.replaceState(null, "", "#" + b.dataset.tab);
+    });
     // "Bilhete" na barra inferior: volta para Esportes e rola até o bilhete
     document.getElementById("bn-slip").addEventListener("click", (e) => {
       e.preventDefault();
