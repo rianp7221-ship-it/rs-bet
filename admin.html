@@ -150,7 +150,7 @@
       const { data, error } = await sb.functions.invoke("sync-odds");
       btn.disabled = false;
       if (error || data?.error) { RS.$("#sync-msg").textContent = "Erro: " + (data?.error || error.message); return; }
-      RS.$("#sync-msg").textContent = `${data.jogos_atualizados} jogos atualizados, ${data.jogos_liquidados} liquidados` + (data.errors.length ? ` · avisos: ${data.errors.join("; ")}` : "");
+      RS.$("#sync-msg").textContent = `${data.jogos_atualizados} jogos atualizados, ${data.jogos_liquidados} liquidados` + (data.creditos_restantes != null ? ` · ${data.creditos_restantes} consultas restantes na API` : "") + (data.errors.length ? ` · avisos: ${data.errors.join("; ")}` : "");
       all();
     };
 
