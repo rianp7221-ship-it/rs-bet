@@ -168,7 +168,9 @@
     document.getElementById("bn-slip").addEventListener("click", (e) => {
       e.preventDefault();
       document.querySelector('[data-tab="sports"]').click();
-      document.getElementById("slip-box").scrollIntoView({ behavior: "smooth" });
+      const box = document.getElementById("slip-box");
+      const hdr = document.getElementById("rs-header").offsetHeight;
+      window.scrollTo({ top: box.getBoundingClientRect().top + scrollY - hdr - 8, behavior: "smooth" });
     });
     openHash();
   </script>
