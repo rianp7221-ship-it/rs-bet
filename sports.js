@@ -9,6 +9,9 @@
   const slip = new Map(); // match_id -> { pick, odd }
 
   const PICK = { home: "1", draw: "X", away: "2" };
+  const LIVE = "Ao vivo";
+  const ICON = { Todos: "🏆", [LIVE]: "🔴", Futebol: "⚽", Basquete: "🏀", "Tênis": "🎾", "Vôlei": "🏐", "Futebol Americano": "🏈", Beisebol: "⚾", "Hóquei": "🏒", MMA: "🥊", "E-sports": "🎮" };
+  const icon = (s) => ICON[s] || "🏅";
 
   async function load() {
     const { data, error } = await sb.from("matches").select("*")
@@ -20,9 +23,10 @@
   }
 
   function renderFilters() {
-    const sports = ["Todos", ...new Set(matches.map((m) => m.sport))];
+    const hasLive = matches.some((m) => m.status === "live");
+    const sports = ["Todos", ...(hasLive ? [LIVE] : []), ...new Set(matches.map((m) => m.sport))];
     RS.$("#sport-filters").innerHTML = sports
-      .map((s) => `<button class="chip ${s === filter ? "active" : ""}" data-sport="${RS.esc(s)}">${RS.esc(s)}</button>`).join("");
+      .map((s) => `<button class="chip ${s === filter ? "active" : ""}" data-sport="${RS.esc(s)}"><span>${icon(s)}</span>${RS.esc(s)}</button>`).join("");
     RS.$$("#sport-filters .chip").forEach((b) => (b.onclick = () => { filter = b.dataset.sport; renderFilters(); renderMatches(); }));
   }
 
@@ -34,13 +38,14 @@
   }
 
   function renderMatches() {
-    const rows = matches.filter((m) => filter === "Todos" || m.sport === filter);
+    const rows = matches.filter((m) => filter === "Todos" || (filter === LIVE ? m.status === "live" : m.sport === filter));
     if (!rows.length) { list.innerHTML = `<p class="muted">Nenhum jogo disponível no momento.</p>`; return; }
     const byLeague = {};
     rows.forEach((m) => (byLeague[m.league] ||= []).push(m));
     list.innerHTML = Object.entries(byLeague).map(([league, ms]) => `
       <div class="league">
-        <div class="league-title">${RS.esc(ms[0].sport)} · ${RS.esc(league)}</div>
+        <div class="league-title"><span>${icon(ms[0].sport)} ${RS.esc(ms[0].sport)} · ${RS.esc(league)}</span>
+          <div class="odds-head"><span>1</span><span>X</span><span>2</span></div></div>
         ${ms.map((m) => `
           <div class="match">
             <div class="match-info">

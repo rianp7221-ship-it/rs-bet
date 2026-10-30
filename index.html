@@ -6,31 +6,37 @@
   <title>REAL SPORTS — Apostas Esportivas e Cassino</title>
   <meta name="description" content="Aposte nos principais jogos de futebol, basquete e tênis, e jogue Mines e Dados no cassino REAL SPORTS.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="auth-style.css">
   <link rel="stylesheet" href="header-fix.css">
 </head>
 <body>
   <header id="rs-header"></header>
 
-  <nav class="tabs" data-tabs>
-    <button data-tab="sports" class="active">⚽ Esportes</button>
-    <button data-tab="casino">🎰 Cassino</button>
-    <button data-tab="history">📄 Histórico</button>
-  </nav>
+  <div class="subnav-wrap">
+    <nav class="tabs" data-tabs>
+      <button data-tab="sports" class="active">⚽ Esportes</button>
+      <button data-tab="casino">🎰 Cassino</button>
+      <button data-tab="history">📄 Histórico</button>
+    </nav>
+  </div>
 
   <main class="container">
     <!-- ESPORTES -->
     <section id="sports" class="tab-panel">
-      <div class="hero">
-        <div><h1>Apostas <span>ao vivo</span></h1><p>Monte simples ou múltiplas com as melhores odds.</p></div>
-      </div>
       <div class="sports-layout">
+        <aside class="side-menu">
+          <h4>Esportes</h4>
+          <div class="side-list" id="sport-filters"></div>
+        </aside>
         <div>
-          <div class="chips" id="sport-filters"></div>
+          <div class="hero">
+            <div><h1>Apostas <span>ao vivo</span></h1><p>Monte simples ou múltiplas com as melhores odds.</p></div>
+          </div>
+          <h2 class="section-title">Principais jogos</h2>
           <div id="matches"><p class="muted">Carregando jogos…</p></div>
         </div>
-        <aside class="slip-box">
+        <aside class="slip-box" id="slip-box">
           <h3>Bilhete <span class="pill" id="slip-count">0</span></h3>
           <div id="slip"></div>
         </aside>
@@ -83,6 +89,13 @@
     </section>
   </main>
 
+  <nav class="bottom-nav">
+    <a href="#sports"><span>⚽</span>Esportes</a>
+    <a href="#casino"><span>🎰</span>Cassino</a>
+    <a href="#slip-box" id="bn-slip"><span>🧾</span>Bilhete</a>
+    <a href="#history"><span>📄</span>Histórico</a>
+  </nav>
+
   <footer class="footer">
     <p><b>+18</b> · Jogue com responsabilidade. Apostas envolvem risco de perda financeira.</p>
   </footer>
@@ -102,6 +115,12 @@
       if (b) b.click();
     }
     window.addEventListener("hashchange", openHash);
+    // "Bilhete" na barra inferior: volta para Esportes e rola até o bilhete
+    document.getElementById("bn-slip").addEventListener("click", (e) => {
+      e.preventDefault();
+      document.querySelector('[data-tab="sports"]').click();
+      document.getElementById("slip-box").scrollIntoView({ behavior: "smooth" });
+    });
     openHash();
   </script>
 </body>
