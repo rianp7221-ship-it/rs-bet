@@ -16,8 +16,9 @@
   <div class="subnav-wrap">
     <nav class="tabs" data-tabs>
       <button data-tab="sports" class="active">⚽ Esportes</button>
+      <button data-tab="sports" data-live>🔴 Ao vivo</button>
       <button data-tab="casino">🎰 Cassino</button>
-      <button data-tab="history">📄 Histórico</button>
+      <button data-tab="history">📄 Minhas apostas</button>
     </nav>
   </div>
 
@@ -26,18 +27,51 @@
     <section id="sports" class="tab-panel">
       <div class="sports-layout">
         <aside class="side-menu">
-          <h4>Esportes</h4>
+          <h4>Mais populares</h4>
           <div class="side-list" id="sport-filters"></div>
+          <h4 class="az-title">Esportes A-Z</h4>
+          <div class="side-list az-list" id="sport-az"></div>
         </aside>
-        <div>
-          <div class="hero">
-            <div><h1>Apostas <span>ao vivo</span></h1><p>Monte simples ou múltiplas com as melhores odds.</p></div>
+        <div class="center-col">
+          <div class="carousel" id="carousel">
+            <div class="slides">
+              <div class="slide s1"><div><small>Esportes</small><h1>Apostas <span>ao vivo</span></h1><p>Odds atualizadas durante a partida e cashout no seu bilhete.</p><a class="btn btn-primary" href="#sports" data-goto-live>Ver jogos ao vivo</a></div><i class="art">⚽</i></div>
+              <div class="slide s2"><div><small>Múltiplas</small><h1>Combine jogos e <span>multiplique</span></h1><p>Junte vários palpites em um só bilhete e veja o retorno na hora.</p><a class="btn btn-primary" href="#sports">Montar bilhete</a></div><i class="art">🎯</i></div>
+              <div class="slide s3"><div><small>Cassino</small><h1>Mines e <span>Dados</span></h1><p>Resultados sorteados no servidor. Retire quando quiser.</p><a class="btn btn-primary" href="#casino">Jogar agora</a></div><i class="art">💎</i></div>
+            </div>
+            <button class="car-nav prev" aria-label="Anterior">‹</button>
+            <button class="car-nav next" aria-label="Próximo">›</button>
+            <div class="dots"></div>
           </div>
-          <h2 class="section-title">Principais jogos</h2>
-          <div id="matches"><p class="muted">Carregando jogos…</p></div>
+
+          <div id="live-block" class="block hidden">
+            <h2 class="section-title"><i class="live">AO VIVO</i> Jogos ao vivo</h2>
+            <div class="hscroll" id="live-cards"></div>
+          </div>
+
+          <div id="top-block" class="block hidden">
+            <h2 class="section-title">Destaques</h2>
+            <div class="hscroll" id="top-cards"></div>
+          </div>
+
+          <div class="block">
+            <div class="list-head">
+              <h2 class="section-title" id="list-title">Todos os jogos</h2>
+              <div class="chips day-chips" id="day-filters">
+                <button class="chip active" data-day="all">Todos</button>
+                <button class="chip" data-day="today">Hoje</button>
+                <button class="chip" data-day="tomorrow">Amanhã</button>
+              </div>
+            </div>
+            <div id="matches"><p class="muted">Carregando jogos…</p></div>
+          </div>
         </div>
         <aside class="slip-box" id="slip-box">
           <h3>Bilhete <span class="pill" id="slip-count">0</span></h3>
+          <div class="slip-tabs" id="slip-tabs">
+            <button data-mode="single">Simples</button>
+            <button data-mode="multi" class="active">Múltipla</button>
+          </div>
           <div id="slip"></div>
         </aside>
       </div>
@@ -45,8 +79,16 @@
 
     <!-- CASSINO -->
     <section id="casino" class="tab-panel hidden">
+      <div class="casino-hero">
+        <div><small>Cassino</small><h1>Jogos <span>originais</span></h1><p>Escolha um jogo para começar.</p></div>
+      </div>
+      <h2 class="section-title">Jogos em destaque</h2>
+      <div class="game-tiles">
+        <a class="tile t-mines" href="#mines-card"><i>💎</i><b>Mines</b><small>Até 24 minas</small></a>
+        <a class="tile t-dice" href="#dice"><i>🎲</i><b>Dados</b><small>Escolha sua chance</small></a>
+      </div>
       <div class="casino-grid">
-        <div class="game-card">
+        <div class="game-card" id="mines-card">
           <h2>💎 Mines</h2>
           <div class="game-body">
             <div class="game-controls">
@@ -93,11 +135,17 @@
     <a href="#sports"><span>⚽</span>Esportes</a>
     <a href="#casino"><span>🎰</span>Cassino</a>
     <a href="#slip-box" id="bn-slip"><span>🧾</span>Bilhete</a>
-    <a href="#history"><span>📄</span>Histórico</a>
+    <a href="#history"><span>📄</span>Apostas</a>
   </nav>
 
   <footer class="footer">
-    <p><b>+18</b> · Jogue com responsabilidade. Apostas envolvem risco de perda financeira.</p>
+    <div class="foot-cols">
+      <div><a href="index.html" class="logo">REAL<span>SPORTS</span></a><p class="muted small">Apostas esportivas e cassino online.</p></div>
+      <div><h5>Esportes</h5><a href="#sports">Todos os jogos</a><a href="#sports" data-goto-live>Ao vivo</a></div>
+      <div><h5>Cassino</h5><a href="#casino">Mines</a><a href="#casino">Dados</a></div>
+      <div><h5>Minha conta</h5><a href="#history">Minhas apostas</a><a href="login.html">Entrar / Cadastrar</a></div>
+    </div>
+    <p class="foot-legal"><b>+18</b> Jogue com responsabilidade. Apostas envolvem risco de perda financeira. Proibido para menores de 18 anos.</p>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -107,6 +155,7 @@
   <script src="sports.js"></script>
   <script src="mines.js"></script>
   <script src="history.js"></script>
+  <script src="home.js"></script>
   <script>
     // abre a aba pelo link (#casino, #history)
     function openHash() {
