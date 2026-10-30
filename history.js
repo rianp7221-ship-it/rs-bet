@@ -77,31 +77,7 @@
 
   RS.$$("[data-hist]").forEach((b) => (b.onclick = () => {
     kind = b.dataset.hist;
-    // Cashout: valor calculado no servidor pelas odds atuais de cada jogo
-  async function loadCashouts() {
-    for (const el of RS.$$("[data-co]", box)) {
-      const id = Number(el.dataset.co);
-      const { data: v } = await sb.rpc("cashout_value", { p_bet: id });
-      if (v == null) { el.innerHTML = `<small class="muted">Cashout indisponível no momento</small>`; continue; }
-      el.innerHTML = `<button class="btn btn-primary w-full" data-cash="${id}" data-v="${v}">Cashout ${RS.money(v)}</button>`;
-    }
-  }
-  box.addEventListener("click", async (e) => {
-    const b = e.target.closest("[data-cash]");
-    if (!b) return;
-    if (!confirm(`Encerrar o bilhete #${b.dataset.cash} e receber ${RS.money(b.dataset.v)} agora?`)) return;
-    b.disabled = true;
-    try {
-      const v = await RS.rpc("cashout_bet", { p_bet: Number(b.dataset.cash), p_expected: Number(b.dataset.v) });
-      RS.toast(`Cashout feito: ${RS.money(v)} no seu saldo.`, "ok");
-      RS.refreshBalance(); load();
-    } catch (err) { RS.toast(err.message, "error"); load(); }
-  });
-  // valor do cashout acompanha as odds ao vivo
-  sb.channel("hist-odds").on("postgres_changes", { event: "UPDATE", schema: "public", table: "matches" },
-    () => { if (kind === "bets" && !RS.$("#history").classList.contains("hidden")) loadCashouts(); }).subscribe();
-
-  RS.$$("[data-hist]").forEach((x) => x.classList.toggle("active", x === b));
+    RS.$$("[data-hist]").forEach((x) => x.classList.toggle("active", x === b));
     load();
   }));
   document.addEventListener("rs:tab", (e) => { if (e.detail === "history") load(); });
