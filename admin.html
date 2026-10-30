@@ -52,7 +52,7 @@
   <script src="auth-header.js"></script>
   <script>
   (async () => {
-    await RS.requireLogin();
+    if (!(await RS.requireLogin())) return;
     const me = await RS.profile();
     // a proteção real está no banco (is_admin); isto só esconde a tela
     if (!me?.is_admin) { location.href = "index.html"; return; }
