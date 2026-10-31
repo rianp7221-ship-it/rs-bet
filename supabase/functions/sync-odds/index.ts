@@ -34,6 +34,8 @@ Deno.serve(async (req) => {
   let feed;
   try { feed = getProvider(); } catch (e) { return json({ error: (e as Error).message }); }
   const mode = (await req.json().catch(() => ({})))?.mode === "live" ? "live" : "full";
+  // jogos de fontes antigas saem do catálogo e são liquidados pelo mesmo jogo da fonte atual
+  if (feed.prefix) await sb.rpc("sync_orphan_matches", { p_prefix: feed.prefix });
 
   // jogos já iniciados e ainda não liquidados (ao vivo)
   const { data: started } = await sb.from("matches").select("id, external_id, home, away")
