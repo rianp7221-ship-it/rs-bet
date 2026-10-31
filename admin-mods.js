@@ -484,6 +484,66 @@
     await load();
   }
 
-  window.RSmods = Object.assign(window.RSmods || {}, { users, finance, sports, risk, bonus, loaded: true });
+
+  // ---------- CASSINO: PROVEDORES, JOGOS, RTP E MONITOR ----------
+  async function casino() {
+    const { can, act, ask, table, head } = A();
+    const manage = can("casino.manage");
+    const pct = (v) => (v == null ? "-" : `${(+v).toFixed(2)}%`);
+    main().innerHTML = head("Cassino") + `<div class="tabs-sm" id="cs-tabs"><button class="chip active" data-v="mon">Monitor</button><button class="chip" data-v="cfg">Jogos e provedores</button></div><div id="cs-body"></div>`;
+    let view = "mon", hours = 24;
+    const body = () => RS.$("#cs-body");
+    async function mon() {
+      const d = await RS.rpc("admin_casino_stats", { p_hours: hours }).catch((e) => { RS.toast(e.message, "error"); return null; });
+      if (!d) return;
+      const tot = d.games.reduce((a, g) => ({ h: a.h + +g.handle, p: a.p + +g.paid, r: a.r + +g.rounds }), { h: 0, p: 0, r: 0 });
+      body().innerHTML = `<div class="filters"><select class="input" id="cs-h" style="max-width:160px">${[[1, "Última hora"], [24, "Últimas 24 h"], [168, "Últimos 7 dias"], [720, "Últimos 30 dias"]].map(([v, t]) => `<option value="${v}" ${v === hours ? "selected" : ""}>${t}</option>`).join("")}</select>
+          <button class="btn btn-outline" id="cs-r">Atualizar</button><small class="muted">Rodadas ${tot.r} · Apostado ${M(tot.h)} · Pago ${M(tot.p)} · GGR <b>${M(tot.h - tot.p)}</b> · RTP real ${tot.h ? pct((100 * tot.p) / tot.h) : "-"}</small></div>` +
+        table(["Jogo", "Provedor", "Status", "RTP config.", "RTP real", "Rodadas", "Jogadores", "Apostado", "Pago", "GGR", "Em andamento"], d.games.map((g) => [esc(g.name), esc(g.provider),
+          g.active ? `<span class="badge b-done">Ligado</span>` : `<span class="badge b-canceled">Desligado</span>`, pct(g.rtp_config),
+          g.rtp_real == null ? "-" : `<span class="${+g.rtp_real > +g.rtp_config + 5 ? "neg" : ""}">${pct(g.rtp_real)}</span>`, g.rounds, g.players, M(g.handle), M(g.paid),
+          `<span class="${g.ggr >= 0 ? "pos" : "neg"}">${M(g.ggr)}</span>`, g.open_rounds]), "Sem jogos.") +
+        `<h3 style="margin:16px 0 8px">Maiores prêmios do período</h3>` +
+        table(["Quando", "Jogador", "Jogo", "Aposta", "Multiplicador", "Prêmio"], d.big_wins.map((w) => [RS.date(w.created_at),
+          `<a href="#" data-open-user="${w.user_id}" style="color:var(--primary)">${esc(w.email || "")}</a>`, w.game === "mines" ? "Mines" : w.game === "dice" ? "Dados" : esc(w.game),
+          M(w.stake), `${(+w.multiplier).toFixed(2)}x`, `<b>${M(w.payout)}</b>`]), "Nenhum prêmio no período.");
+      RS.$("#cs-h").onchange = (e) => { hours = +e.target.value; mon(); };
+      RS.$("#cs-r").onclick = mon;
+    }
+    async function cfg() {
+      const [{ data: provs }, { data: games }] = await Promise.all([sb.from("casino_providers").select("*").order("name"), sb.from("casino_catalog").select("*").order("sort")]);
+      const pname = Object.fromEntries((provs || []).map((p) => [p.id, p.name]));
+      const toggle = (kind, id, on) => manage ? `<button class="btn sm btn-outline" data-${kind}="${id}" data-on="${on ? 0 : 1}">${on ? "Desligar" : "Ligar"}</button>` : "";
+      body().innerHTML = `<p class="muted" style="margin-bottom:8px">O RTP do jogo tem prioridade sobre o do provedor, que tem prioridade sobre o RTP global (Configurações → casino_rtp_global). Em branco = herda. Partidas de Mines em andamento mantêm o RTP do início. Para desligar o cassino inteiro use Configurações → casino_enabled.</p>
+        <h3 style="margin:8px 0">Provedores</h3>` +
+        table(["Provedor", "Tipo", "Status", "RTP", ""], (provs || []).map((p) => [esc(p.name), p.kind === "interno" ? "Jogos próprios" : "Agregador",
+          p.active ? `<span class="badge b-done">Ligado</span>` : `<span class="badge b-canceled">Desligado</span>`, p.rtp == null ? "herda global" : pct(p.rtp),
+          toggle("pv", p.id, p.active) + (manage ? `<button class="btn sm" data-prtp="${p.id}" data-v="${p.rtp ?? ""}">RTP</button>` : "")]), "Nenhum provedor.") +
+        `<h3 style="margin:16px 0 8px">Jogos</h3>` +
+        table(["Jogo", "Provedor", "Categoria", "Status", "RTP", "Aposta mín.", "Aposta máx.", ""], (games || []).map((g) => [esc(g.name), esc(pname[g.provider] || g.provider), esc(g.category),
+          g.active ? `<span class="badge b-done">Ligado</span>` : `<span class="badge b-canceled">Desligado</span>`, g.rtp == null ? "herda" : pct(g.rtp), M(g.min_stake), M(g.max_stake),
+          toggle("gm", g.id, g.active) + (manage ? `<button class="btn sm" data-gedit="${g.id}">Editar</button>` : "")]), "Nenhum jogo.");
+      body().onclick = async (e) => {
+        const pv = e.target.closest("[data-pv]"), gm = e.target.closest("[data-gm]"), pr = e.target.closest("[data-prtp]"), ge = e.target.closest("[data-gedit]");
+        if (pv) { const p = provs.find((x) => x.id === pv.dataset.pv); if (await act("admin_casino_provider", { p_id: p.id, p_active: pv.dataset.on === "1", p_rtp: p.rtp }, "Provedor atualizado")) cfg(); }
+        if (gm) { const g = games.find((x) => x.id === gm.dataset.gm); if (await act("admin_casino_game", { p_id: g.id, p_active: gm.dataset.on === "1", p_rtp: g.rtp, p_min: null, p_max: null }, "Jogo atualizado")) cfg(); }
+        if (pr) {
+          const p = provs.find((x) => x.id === pr.dataset.prtp);
+          const f = await ask(`RTP — ${p.name}`, [{ name: "rtp", label: "RTP (%) entre 80 e 99,5 — em branco herda o global", type: "number", value: p.rtp ?? "" }], "Salvar");
+          if (f && await act("admin_casino_provider", { p_id: p.id, p_active: null, p_rtp: f.rtp === "" ? null : +f.rtp }, "RTP atualizado")) cfg();
+        }
+        if (ge) {
+          const g = games.find((x) => x.id === ge.dataset.gedit);
+          const f = await ask(`Editar ${g.name}`, [{ name: "rtp", label: "RTP (%) entre 80 e 99,5 — em branco herda o provedor", type: "number", value: g.rtp ?? "" },
+            { name: "min", label: "Aposta mínima (R$)", type: "number", value: g.min_stake }, { name: "max", label: "Aposta máxima (R$)", type: "number", value: g.max_stake }], "Salvar");
+          if (f && await act("admin_casino_game", { p_id: g.id, p_active: null, p_rtp: f.rtp === "" ? null : +f.rtp, p_min: +f.min, p_max: +f.max }, "Jogo atualizado")) cfg();
+        }
+      };
+    }
+    RS.$("#cs-tabs").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; view = b.dataset.v; RS.$$("#cs-tabs .chip").forEach((x) => x.classList.toggle("active", x === b)); body().onclick = null; view === "mon" ? mon() : cfg(); };
+    await mon();
+  }
+
+  window.RSmods = Object.assign(window.RSmods || {}, { users, finance, sports, risk, bonus, casino, loaded: true });
   if (window.RSadmin?.ready) window.RSadmin.ready();
 })();
