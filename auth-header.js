@@ -135,7 +135,8 @@
 
   // ---------- painel da conta ----------
   const TX_ST = { pending: "Pendente", done: "Concluída", rejected: "Recusada" };
-  const txRow = (t) => `<div class="mb-item"><div>${RS.esc(t.description || t.type)}<small>${RS.date(t.created_at)} · ${TX_ST[t.status] || t.status}</small></div>
+  const txRow = (t) => `<div class="mb-item"><div>${RS.esc(t.description || t.type)}<small>${RS.date(t.created_at)} · ${TX_ST[t.status] || t.status}${t.pix_key ? " · PIX " + RS.esc(t.pix_key) : ""}</small>
+    ${t.type === "deposit" && t.status === "pending" && t.provider_id && new Date(t.expires_at) > new Date() ? `<button class="btn sm btn-outline" data-ap="pix:${t.id}:${t.amount}">Ver PIX</button>` : ""}</div>
     <b class="${t.amount >= 0 ? "pos" : "neg"}">${RS.money(t.amount)}</b></div>`;
   const TABS = { overview: ["grid", "Visão geral"], tx: ["card", "Transações"], data: ["user", "Meus dados"], limits: ["lock", "Jogo responsável"], kyc: ["id", "Verificação"], bonus: ["gift", "Bônus"] };
 
@@ -281,6 +282,7 @@
       if (a === "refresh") { RS.refreshBalance(); show("overview"); }
       if (a === "deposit" || a === "withdraw") moneyModal(a);
       if (a === "pass") resetPass();
+      if (a?.startsWith("pix:")) { const [, id, v] = a.split(":"); showPix(+id, +v); }
     });
     document.addEventListener("rs:balance", () => { if (document.body.contains(w)) show(cur); });
     show(tab);
@@ -294,15 +296,23 @@
       <p class="muted">${dep ? "Mínimo R$ 10,00. O saldo entra assim que o pagamento for confirmado." : "Mínimo R$ 20,00. O valor é reservado até a aprovação."}</p>
       <div class="chips">${[20, 50, 100, 500].map((v) => `<button class="chip" data-v="${v}">R$ ${v}</button>`).join("")}</div>
       <input type="number" id="mm-amount" class="input" min="${dep ? 10 : 20}" step="0.01" placeholder="Valor">
+      ${dep ? "" : `<div class="ap-field"><label>Tipo da chave PIX</label><select class="input" id="mm-ktype">
+        <option value="cpf">CPF</option><option value="email">E-mail</option><option value="telefone">Celular</option>
+        <option value="aleatoria">Chave aleatória</option><option value="cnpj">CNPJ</option></select></div>
+      <input class="input" id="mm-key" maxlength="77" placeholder="Sua chave PIX (em seu nome)" autocomplete="off">`}
       <button class="btn ${dep ? "btn-green" : "btn-primary"} w-full" id="mm-go">${dep ? "Gerar pagamento" : "Solicitar saque"}</button>`);
     RS.$$(".chip", m).forEach((c) => (c.onclick = () => (RS.$("#mm-amount", m).value = c.dataset.v)));
+    if (!dep) sb.rpc("my_last_pix_key").then(({ data }) => {
+      if (data?.key && !RS.$("#mm-key", m).value) { RS.$("#mm-key", m).value = data.key; RS.$("#mm-ktype", m).value = data.type; }
+    });
     RS.$("#mm-go", m).onclick = async () => {
       const v = Number(RS.$("#mm-amount", m).value);
       try {
-        const id = await RS.rpc(dep ? "request_deposit" : "request_withdraw", { p_amount: v });
+        const id = await RS.rpc(dep ? "request_deposit" : "request_withdraw", dep ? { p_amount: v }
+          : { p_amount: v, p_pix_key: RS.$("#mm-key", m).value, p_pix_type: RS.$("#mm-ktype", m).value });
         m.remove();
         if (dep) await showPix(id, v);
-        else RS.toast(`Saque #${id} solicitado. Aguarde a aprovação.`, "ok");
+        else RS.toast(`Saque #${id} solicitado. O PIX cai na chave informada após a aprovação.`, "ok");
         RS.refreshBalance();
       } catch (e) { RS.toast(e.message, "error"); }
     };
@@ -320,8 +330,21 @@
       <p class="muted">Valor: <b>${RS.money(v)}</b>. O saldo entra sozinho assim que o pagamento for confirmado.</p>
       ${data.qr_base64 ? `<img src="data:image/png;base64,${data.qr_base64}" alt="QR code PIX" style="width:220px;margin:12px auto;display:block;background:#fff;padding:8px;border-radius:8px">` : ""}
       <textarea class="input" id="pix-code" readonly rows="3">${RS.esc(data.qr_code || "")}</textarea>
-      <button class="btn btn-primary w-full" id="pix-copy">Copiar código PIX</button>`);
-    RS.$("#pix-copy", w).onclick = async () => { await navigator.clipboard.writeText(data.qr_code); RS.toast("Código copiado!", "ok"); };
+      <button class="btn btn-primary w-full" id="pix-copy">Copiar código PIX</button>
+      <p class="muted small" id="pix-exp" style="margin-top:8px;text-align:center"></p>`);
+    RS.$("#pix-copy", w).onclick = async () => {
+      try { await navigator.clipboard.writeText(data.qr_code); } catch { RS.$("#pix-code", w).select(); document.execCommand("copy"); }
+      RS.toast("Código copiado!", "ok");
+    };
+    const end = data.expires_at ? new Date(data.expires_at).getTime() : 0;
+    const tick = () => {
+      if (!document.body.contains(w)) return clearInterval(timer);
+      const s = Math.max(0, Math.round((end - Date.now()) / 1000));
+      RS.$("#pix-exp", w).textContent = s ? `Expira em ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : "PIX expirado. Gere um novo depósito.";
+      if (!s) clearInterval(timer);
+    };
+    const timer = end ? setInterval(tick, 1000) : 0;
+    if (end) tick();
     const ch = sb.channel("dep-" + id).on("postgres_changes",
       { event: "UPDATE", schema: "public", table: "transactions", filter: `id=eq.${id}` },
       (e) => { if (e.new.status === "done") { w.remove(); RS.toast("Depósito confirmado!", "ok"); RS.refreshBalance(); sb.removeChannel(ch); } }).subscribe();
