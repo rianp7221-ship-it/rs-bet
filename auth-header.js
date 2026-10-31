@@ -137,7 +137,7 @@
   const TX_ST = { pending: "Pendente", done: "Concluída", rejected: "Recusada" };
   const txRow = (t) => `<div class="mb-item"><div>${RS.esc(t.description || t.type)}<small>${RS.date(t.created_at)} · ${TX_ST[t.status] || t.status}</small></div>
     <b class="${t.amount >= 0 ? "pos" : "neg"}">${RS.money(t.amount)}</b></div>`;
-  const TABS = { overview: ["grid", "Visão geral"], tx: ["card", "Transações"], data: ["user", "Meus dados"], limits: ["lock", "Jogo responsável"], kyc: ["id", "Verificação"] };
+  const TABS = { overview: ["grid", "Visão geral"], tx: ["card", "Transações"], data: ["user", "Meus dados"], limits: ["lock", "Jogo responsável"], kyc: ["id", "Verificação"], bonus: ["gift", "Bônus"] };
 
   function panel(tab) {
     RS.$(".acct-panel")?.remove();
@@ -205,6 +205,35 @@
           catch (err) { RS.toast(err.message, "error"); }
         });
       }
+      if (k === "bonus") {
+        const [{ data: bs }, ref] = await Promise.all([sb.from("user_bonuses").select("*").eq("user_id", p.id).order("created_at", { ascending: false }).limit(30),
+          RS.rpc("my_referrals").catch(() => null)]);
+        const ST = { aguardando_deposito: "Aguardando depósito", ativo: "Ativo", concluido: "Liberado", expirado: "Expirado", cancelado: "Cancelado" };
+        const url = `${location.origin}/login.html?ref=${ref?.code || p.id.slice(0, 8)}`;
+        body.innerHTML = `<div class="ap-card"><h3>Cupom promocional</h3>
+            <form id="cp-f" style="display:flex;gap:8px"><input class="input" name="c" placeholder="Digite o código" required style="text-transform:uppercase"><button class="btn btn-dark">Aplicar</button></form></div>
+          <div class="ap-card ap-list"><h3>Meus bônus</h3>
+            <p class="muted small" style="margin-bottom:8px">O saque fica liberado depois de apostar o valor do rollover. Apostas esportivas só contam com odd mínima do bônus.</p>
+            ${bs?.length ? bs.map((b) => { const pct = b.wager_required > 0 ? Math.min(100, Math.round((b.wagered / b.wager_required) * 100)) : 100;
+              return `<div class="tx-row" style="flex-wrap:wrap"><div><b>${RS.money(b.amount)}</b><small>${ST[b.status] || b.status}${b.expires_at && b.status === "ativo" ? " · até " + RS.date(b.expires_at) : ""}${b.status === "ativo" ? ` · odd mín. ${(+b.min_odd).toFixed(2)}` : ""}</small></div>
+                ${["ativo", "aguardando_deposito"].includes(b.status) ? `<button class="btn sm btn-outline danger" data-bx="${b.id}">Cancelar</button>` : ""}
+                ${b.status === "ativo" ? `<div style="flex-basis:100%;margin-top:6px"><div style="height:6px;background:var(--line,#eee);border-radius:4px"><div style="width:${pct}%;height:6px;background:var(--primary);border-radius:4px"></div></div>
+                  <small class="muted">${RS.money(b.wagered)} de ${RS.money(b.wager_required)} apostados</small></div>` : ""}</div>`; }).join("") : `<p class="muted">Nenhum bônus ainda.</p>`}</div>
+          <div class="ap-card"><h3>Indique um amigo</h3>
+            <p class="muted small" style="margin-bottom:8px">${ref?.reward ? `Ganhe ${RS.money(ref.reward)} de bônus quando seu amigo fizer o primeiro depósito.` : "Convide amigos para a Real Sports."}
+              ${ref ? ` Convidados: <b>${ref.invited}</b> · com depósito: <b>${ref.qualified}</b> · ganho: <b>${RS.money(ref.earned)}</b>` : ""}</p>
+            <input class="input" readonly value="${url}" style="margin-bottom:8px"><button class="btn btn-primary w-full" id="ref-cp">Copiar link</button></div>`;
+        RS.$("#cp-f", w).onsubmit = async (e) => {
+          e.preventDefault();
+          try { RS.toast(await RS.rpc("redeem_coupon", { p_code: e.target.c.value }), "ok"); show("bonus"); } catch (err) { RS.toast(err.message, "error"); }
+        };
+        RS.$("#ref-cp", w).onclick = async () => { try { await navigator.clipboard.writeText(url); RS.toast("Link copiado!", "ok"); } catch { /* sem permissão */ } };
+        body.onclick = async (e) => {
+          const b = e.target.closest("[data-bx]");
+          if (!b || !confirm("Cancelar o bônus? O valor do bônus é retirado do saldo e o saque fica liberado.")) return;
+          try { await RS.rpc("cancel_my_bonus", { p_id: +b.dataset.bx }); RS.toast("Bônus cancelado.", "ok"); show("bonus"); } catch (err) { RS.toast(err.message, "error"); }
+        };
+      } else body.onclick = null;
       if (k === "kyc") {
         const { data: docs } = await sb.from("kyc_documents").select("*").eq("user_id", p.id).order("created_at", { ascending: false });
         const DOC = { rg: "RG", cnh: "CNH", comprovante: "Comprovante de residência", selfie: "Selfie com documento" };
