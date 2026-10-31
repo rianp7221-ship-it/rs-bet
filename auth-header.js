@@ -137,7 +137,7 @@
   const TX_ST = { pending: "Pendente", done: "Concluída", rejected: "Recusada" };
   const txRow = (t) => `<div class="mb-item"><div>${RS.esc(t.description || t.type)}<small>${RS.date(t.created_at)} · ${TX_ST[t.status] || t.status}</small></div>
     <b class="${t.amount >= 0 ? "pos" : "neg"}">${RS.money(t.amount)}</b></div>`;
-  const TABS = { overview: ["grid", "Visão geral"], tx: ["card", "Transações"], data: ["user", "Meus dados"], limits: ["lock", "Jogo responsável"] };
+  const TABS = { overview: ["grid", "Visão geral"], tx: ["card", "Transações"], data: ["user", "Meus dados"], limits: ["lock", "Jogo responsável"], kyc: ["id", "Verificação"] };
 
   function panel(tab) {
     RS.$(".acct-panel")?.remove();
@@ -204,6 +204,36 @@
           try { await RS.rpc("set_my_limits", { p_deposit_day: num(v("deposit_day")), p_deposit_week: num(v("deposit_week")), p_deposit_month: num(v("deposit_month")), p_loss_day: num(v("loss_day")), p_exclude_days: d }); RS.toast("Conta pausada.", "ok"); show("limits"); }
           catch (err) { RS.toast(err.message, "error"); }
         });
+      }
+      if (k === "kyc") {
+        const { data: docs } = await sb.from("kyc_documents").select("*").eq("user_id", p.id).order("created_at", { ascending: false });
+        const DOC = { rg: "RG", cnh: "CNH", comprovante: "Comprovante de residência", selfie: "Selfie com documento" };
+        const ST = { pendente: "Não enviada", em_analise: "Em análise", aprovado: "Aprovada", rejeitado: "Rejeitada" };
+        body.innerHTML = `<div class="ap-card"><h3>Verificação de identidade</h3>
+            <p class="small" style="margin-bottom:8px">Status: <span class="badge b-${p.kyc_status || "pendente"}">${ST[p.kyc_status] || ST.pendente}</span></p>
+            <p class="muted small" style="margin-bottom:10px">Envie um documento com foto (RG ou CNH) e um comprovante de residência. Fotos nítidas, sem cortes. JPG, PNG ou PDF até 8 MB. Com a verificação aprovada, seus saques são liberados mais rápido.</p>
+            <form id="kyc-f">
+              <div class="ap-field"><label>Tipo de documento</label><select class="input" name="t">${Object.entries(DOC).map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select></div>
+              <div class="ap-field"><label>Arquivo</label><input class="input" name="f" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required></div>
+              <button class="btn btn-dark w-full">Enviar documento</button></form></div>
+          <div class="ap-card ap-list"><h3>Documentos enviados</h3>${docs?.length ? docs.map((d) => `<div class="tx-row"><div><b>${DOC[d.doc_type]}</b><small>${RS.date(d.created_at)}${d.reason ? " · " + RS.esc(d.reason) : ""}</small></div>
+            <span class="badge b-${d.status}">${ST[d.status] || d.status}</span></div>`).join("") : `<p class="muted">Nenhum documento enviado.</p>`}</div>`;
+        RS.$("#kyc-f", w).onsubmit = async (e) => {
+          e.preventDefault();
+          const f = new FormData(e.target), file = f.get("f"), btn = e.target.querySelector("button");
+          if (!file?.size) return;
+          if (file.size > 8 * 1024 * 1024) return RS.toast("Arquivo maior que 8 MB.", "error");
+          btn.disabled = true;
+          try {
+            const path = `${p.id}/${Date.now()}-${f.get("t")}.${(file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+            const { error } = await sb.storage.from("kyc").upload(path, file, { contentType: file.type });
+            if (error) throw error;
+            await RS.rpc("kyc_submit", { p_doc_type: f.get("t"), p_path: path });
+            p.kyc_status = "em_analise";
+            RS.toast("Documento enviado para análise.", "ok");
+            show("kyc");
+          } catch (err) { RS.toast(err.message, "error"); btn.disabled = false; }
+        };
       }
       if (k === "data") {
         body.innerHTML = `<div class="ap-card"><h3>Informações gerais</h3>

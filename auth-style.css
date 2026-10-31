@@ -250,9 +250,9 @@ body.slip-open .overlay, body.menu-open .overlay { display: block; }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .pos { color: var(--ok); } .neg { color: var(--danger); }
 .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: var(--card-2); color: var(--muted); text-transform: uppercase; }
-.b-won, .b-done { background: #e2f6ea; color: var(--ok); }
-.b-lost, .b-rejected, .b-canceled { background: #fde8ea; color: var(--danger); }
-.b-pending, .b-active, .b-live, .b-cashout { background: #fff3dc; color: var(--gold); }
+.b-won, .b-done, .b-aprovado { background: #e2f6ea; color: var(--ok); }
+.b-lost, .b-rejected, .b-canceled, .b-rejeitado { background: #fde8ea; color: var(--danger); }
+.b-pending, .b-active, .b-live, .b-cashout, .b-em_analise { background: #fff3dc; color: var(--gold); }
 
 /* admin */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
