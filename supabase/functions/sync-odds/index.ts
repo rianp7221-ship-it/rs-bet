@@ -82,7 +82,10 @@ Deno.serve(async (req) => {
         const { error } = await sb.from("matches").update(patch).eq("id", m.id);
         if (error) { errors.push(`${m.home} x ${m.away}: ${error.message}`); continue; }
         updated++;
-        if (u.completed && u.home != null && u.away != null) {
+        if (u.voided) {
+          const { error: e2 } = await sb.rpc("admin_void_match", { p_match: m.id, p_reason: "Jogo cancelado ou abandonado (fonte de dados)" });
+          if (e2) errors.push(`${m.home} x ${m.away}: ${e2.message}`); else settled++;
+        } else if (u.completed && u.home != null && u.away != null) {
           const result = u.home > u.away ? "home" : u.home < u.away ? "away" : "draw";
           const { error: e2 } = await sb.rpc("settle_match", { p_match: m.id, p_result: result });
           if (e2) errors.push(`${m.home} x ${m.away}: ${e2.message}`); else settled++;
