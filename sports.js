@@ -7,6 +7,17 @@
   const MAX = 12;
   const PICK = { home: "1", draw: "X", away: "2" };
   const CODE = { home: "h", draw: "d", away: "a" }, UNCODE = { h: "home", d: "draw", a: "away" };
+  const MK = {
+    dc: ["Chance Dupla", { "1x": "1X", x2: "X2", "12": "12" }],
+    ou25: ["Total de Gols 2,5", { over: "Mais de 2,5", under: "Menos de 2,5" }],
+    btts: ["Ambas Marcam", { yes: "Sim", no: "Não" }],
+    dnb: ["Empate Anula", { home: "1", away: "2" }],
+    ou15: ["Total de Gols 1,5", { over: "Mais de 1,5", under: "Menos de 1,5" }],
+    ou35: ["Total de Gols 3,5", { over: "Mais de 3,5", under: "Menos de 3,5" }],
+  };
+  const oddOf = (m, mk, pick) => Number(mk === "1x2" ? m?.["odd_" + pick] : m?.markets?.[mk]?.[pick]) || 0;
+  const extras = (m) => Object.keys(MK).filter((k) => m.markets?.[k]);
+  const openMk = new Set();
   const ICON = { Futebol: "⚽", Basquete: "🏀", "Tênis": "🎾", "Vôlei": "🏐", "Futebol Americano": "🏈", Beisebol: "⚾", "Hóquei": "🏒", MMA: "🥊", "E-sports": "🎮" };
   const icon = (s) => ICON[s] || "🏅";
   const FLAGS = [[/brazil|brasil|brasileir/i, "🇧🇷"], [/epl|premier|england|fa cup|championship/i, "🏴󠁧󠁢󠁥󠁮󠁧󠁿"], [/spain|la ?liga/i, "🇪🇸"],
@@ -23,7 +34,7 @@
   }
 
   let matches = [], sport = "Popular", view = "all", league = null, lt = "games", query = "", dayOff = 0, mode = "multi", stakeVal = "";
-  const slip = new Map(); // match_id -> { pick, odd, base }
+  const slip = new Map(); // match_id -> { market, pick, odd, base }
   const favs = new Set(JSON.parse(localStorage.getItem("rs-favs") || "[]"));
   const live = (m) => m.status === "live";
   const suspended = (m) => !!m && (m.locked || (m.suspended_until && new Date(m.suspended_until) > new Date()));
@@ -31,7 +42,7 @@
   const hhmm = (d) => new Date(d).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const ddmm = (d) => new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
   const dayLabel = (d) => (sameDay(d, 0) ? "Hoje" : sameDay(d, 1) ? "Amanhã" : ddmm(d));
-  const code = () => [...slip].map(([id, s]) => id + CODE[s.pick]).join(",");
+  const code = () => [...slip].map(([id, s]) => (s.market === "1x2" ? id + CODE[s.pick] : `${id}~${s.market}.${s.pick}`)).join(",");
   const persist = () => sessionStorage.setItem("rs-slip", code());
   const num = (v) => Number(String(v).replace(",", ".")) || 0;
   const mobile = () => matchMedia("(max-width: 1000px)").matches;
@@ -43,7 +54,7 @@
     matches = data;
     for (const [id, s] of slip) {
       const m = matches.find((x) => x.id === id);
-      const cur = m && Number(m["odd_" + s.pick]);
+      const cur = oddOf(m, s.market, s.pick);
       if (!cur) { slip.delete(id); continue; }
       s.odd = cur;
     }
@@ -56,7 +67,7 @@
     const odd = m["odd_" + pick];
     if (!odd) return pick === "draw" ? "" : `<button class="odd" disabled><small>${PICK[pick]}</small><b>-</b></button>`;
     if (suspended(m)) return `<button class="odd" disabled title="Mercado suspenso"><small>${PICK[pick]}</small><b>${RS.icon("lock")}</b></button>`;
-    const sel = slip.get(m.id)?.pick === pick;
+    const sel = slip.get(m.id)?.market === "1x2" && slip.get(m.id)?.pick === pick;
     return `<button class="odd ${sel ? "selected" : ""}" data-id="${m.id}" data-pick="${pick}"><small>${PICK[pick]}</small><b>${Number(odd).toFixed(2)}</b></button>`;
   }
   const odds = (m) => `<div class="odds">${["home", "draw", "away"].map((p) => oddBtn(m, p)).join("")}</div>`;
@@ -68,7 +79,16 @@
         <small>${flag(m.league)} ${RS.esc(lname(m.league))}</small></div>
       <div class="row-odds">${odds(m)}</div>
       <button class="fav ${favs.has(m.id) ? "on" : ""}" data-fav="${m.id}" aria-label="Favoritar">${RS.icon("star")}</button>
-    </div>`;
+      ${extras(m).length ? `<button class="more-mk ${openMk.has(m.id) ? "on" : ""}" data-more="${m.id}">+${extras(m).length} mercados</button>` : ""}
+    </div>${openMk.has(m.id) ? panel(m) : ""}`;
+
+  // mercados extras do jogo (Chance Dupla, Total de Gols, Ambas Marcam, Empate Anula)
+  const panel = (m) => `<div class="mk-panel">${extras(m).map((k) => `<div class="mk-group"><h4>${MK[k][0]}</h4>
+      <div class="odds">${Object.entries(MK[k][1]).map(([p, label]) => {
+        const odd = oddOf(m, k, p), s = slip.get(m.id);
+        if (!odd || suspended(m)) return `<button class="odd" disabled><small>${label}</small><b>${RS.icon("lock")}</b></button>`;
+        return `<button class="odd ${s?.market === k && s.pick === p ? "selected" : ""}" data-id="${m.id}" data-mk="${k}" data-pick="${p}"><small>${label}</small><b>${odd.toFixed(2)}</b></button>`;
+      }).join("")}</div></div>`).join("")}</div>`;
 
   function feat(m) {
     const sp = "sp-" + m.sport.normalize("NFD").replace(/[^\w]/g, "").toLowerCase();
@@ -153,14 +173,16 @@
   }
 
   // ---------- bilhete ----------
-  function toggle(id, pick) {
+  function toggle(id, pick, market = "1x2") {
     const m = matches.find((x) => x.id === id);
     if (!m || suspended(m)) return;
-    if (slip.get(id)?.pick === pick) slip.delete(id);
+    const cur = slip.get(id);
+    if (cur?.market === market && cur.pick === pick) slip.delete(id);
     else {
       if (!slip.has(id) && slip.size >= MAX) { RS.toast(`Máximo de ${MAX} seleções por bilhete.`, "error"); return; }
-      const odd = Number(m["odd_" + pick]);
-      slip.set(id, { pick, odd, base: odd });
+      const odd = oddOf(m, market, pick);
+      if (!odd) return;
+      slip.set(id, { market, pick, odd, base: odd });
     }
     render(); renderSlip(); persist();
   }
@@ -168,10 +190,12 @@
   function restore(str) {
     if (!str) return;
     for (const part of str.split(",")) {
-      const id = Number(part.slice(0, -1)), pick = UNCODE[part.slice(-1)];
+      const [ids, mp] = part.split("~");
+      const id = Number(mp ? ids : part.slice(0, -1));
+      const [market, pick] = mp ? mp.split(".") : ["1x2", UNCODE[part.slice(-1)]];
       const m = matches.find((x) => x.id === id);
-      const odd = m && Number(m["odd_" + pick]);
-      if (odd && !suspended(m) && (slip.has(id) || slip.size < MAX)) slip.set(id, { pick, odd, base: odd });
+      const odd = oddOf(m, market, pick);
+      if (odd && !suspended(m) && (slip.has(id) || slip.size < MAX)) slip.set(id, { market, pick, odd, base: odd });
     }
     render(); renderSlip(); persist();
   }
@@ -196,10 +220,11 @@
     const anySusp = items.some(([id]) => suspended(matches.find((m) => m.id === id)));
     slipEl.innerHTML = items.map(([id, s]) => {
       const m = matches.find((x) => x.id === id);
-      const label = s.pick === "home" ? m.home : s.pick === "away" ? m.away : "Empate";
+      const label = s.market === "1x2" || s.market === "dnb" ? (s.pick === "home" ? m.home : s.pick === "away" ? m.away : "Empate")
+        : MK[s.market][1][s.pick];
       const up = s.odd > s.base;
       return `<div class="slip-item">
-        <div class="si-main"><b>${icon(m.sport)} ${RS.esc(label)}</b><small class="si-mkt">Resultado Final</small>
+        <div class="si-main"><b>${icon(m.sport)} ${RS.esc(label)}</b><small class="si-mkt">${s.market === "1x2" ? "Resultado Final" : MK[s.market][0]}</small>
           <small>${RS.esc(m.home)}<br>${RS.esc(m.away)}</small>
           ${suspended(m) ? `<small class="si-lock">${RS.icon("lock")} Mercado suspenso</small>` : ""}</div>
         <div class="si-odd">${s.odd !== s.base
@@ -251,7 +276,7 @@
     const stake = num(RS.$("#stake").value);
     if (!(stake > 0)) { RS.toast("Digite o valor da aposta.", "error"); return; }
     btn.disabled = true;
-    const sel = [...slip.entries()].map(([match_id, s]) => ({ match_id, pick: s.pick }));
+    const sel = [...slip.entries()].map(([match_id, s]) => ({ match_id, market: s.market, pick: s.pick }));
     const groups = multi ? [sel] : sel.map((s) => [s]);
     const ok = [];
     try {
@@ -294,8 +319,10 @@
       localStorage.setItem("rs-favs", JSON.stringify([...favs]));
       render(); return;
     }
+    const mo = t.closest("[data-more]");
+    if (mo) { const id = Number(mo.dataset.more); if (openMk.has(id)) openMk.delete(id); else openMk.add(id); render(); return; }
     const b = t.closest(".odd[data-id]");
-    if (b) toggle(Number(b.dataset.id), b.dataset.pick);
+    if (b) toggle(Number(b.dataset.id), b.dataset.pick, b.dataset.mk || "1x2");
   });
   RS.$("#slip-tabs").onclick = (e) => { const b = e.target.closest("[data-mode]"); if (b) { mode = b.dataset.mode; renderSlip(); } };
   RS.$("#slip-clear").onclick = () => { slip.clear(); render(); renderSlip(); persist(); };
@@ -321,7 +348,7 @@
     search(q) { document.querySelector('[data-tabs] [data-tab="sports"]').click(); setView("all", { query: q.trim() }); scrollTo({ top: 0 }); },
     add(sels, stake) {
       slip.clear();
-      sels.forEach(({ id, pick }) => { const m = matches.find((x) => x.id === id); const odd = Number(m["odd_" + pick]); slip.set(id, { pick, odd, base: odd }); });
+      sels.forEach(({ id, pick }) => { const m = matches.find((x) => x.id === id); const odd = oddOf(m, "1x2", pick); slip.set(id, { market: "1x2", pick, odd, base: odd }); });
       mode = "multi";
       if (stake) stakeVal = String(stake);
       render(); renderSlip(); persist();
