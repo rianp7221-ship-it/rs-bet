@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Real Sports</string>
-    <string name="asset_statements">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://realsports.online\"}}]</string>
+    <string name="asset_statements">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://www.realsports.online\"}}]</string>
     <color name="brand">#FF4D00</color>
     <color name="dark">#1C2233</color>
     <style name="Theme.RealSports" parent="android:Theme.Material.Light.NoActionBar">
