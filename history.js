@@ -159,7 +159,18 @@
     b.disabled = true; cashing = true;
     b.textContent = "Confirmando cashout…";
     try {
-      const v = await RS.rpc("cashout_bet", { p_bet: Number(b.dataset.cash), p_expected: Number(b.dataset.v) });
+      const r = await RS.rpc("cashout_request", { p_bet: Number(b.dataset.cash), p_expected: Number(b.dataset.v) });
+      let v = r.paid;
+      if (v == null) {
+        // ao vivo: espera e o servidor confere o jogo de novo (gol, VAR, pênalti, mercado suspenso)
+        for (let s = r.wait; s > 0; s--) {
+          b.textContent = `Confirmando cashout… ${s}s`;
+          await new Promise((ok) => setTimeout(ok, 1000));
+        }
+        b.textContent = "Conferindo o jogo…";
+        v = await RS.rpc("cashout_confirm", { p_request: r.request });
+        if (v == null) throw new Error((await RS.rpc("cashout_reason", { p_request: r.request })) || "Cashout recusado");
+      }
       RS.toast(`Cashout feito: ${RS.money(v)} no seu saldo.`, "ok");
       RS.refreshBalance();
     } catch (err) { RS.toast(err.message, "error"); }
