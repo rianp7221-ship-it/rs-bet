@@ -1,7 +1,7 @@
 -- 015: BetsAPI (feed Betfair Sportsbook) como fonte de odds/placar ao vivo (ODDS_PROVIDER=betsapi, secret BETSAPI_TOKEN)
--- ao vivo a cada 20 s (a função só consulta a API quando há jogo em andamento; limite do plano: por hora)
+-- ao vivo a cada 30 s (cada rodada pode levar 5–45 s nessa API; a função só consulta a API quando há jogo em andamento; limite do plano: por hora)
 select cron.unschedule('sync-odds-live') where exists (select 1 from cron.job where jobname = 'sync-odds-live');
-select cron.schedule('sync-odds-live', '20 seconds', $$select public._call_sync_odds('live')$$);
+select cron.schedule('sync-odds-live', '30 seconds', $$select public._call_sync_odds('live')$$);
 
 -- jogos das APIs antigas sem apostas pendentes saem do catálogo; os novos têm external_id "bf<liga>:<id>"
 update public.matches m set status = 'canceled'
