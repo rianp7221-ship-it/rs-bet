@@ -22,7 +22,7 @@
     return `<svg class="shirt" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3 3 6l2 4 2-1v12h10V9l2 1 2-4-5-3c-.8 1.6-2.2 2.4-4 2.4S8.8 4.6 8 3z" fill="hsl(${h},55%,42%)"/></svg>`;
   }
 
-  let matches = [], sport = "Popular", view = "all", league = null, query = "", dayOff = 0, mode = "multi", stakeVal = "";
+  let matches = [], sport = "Popular", view = "all", league = null, lt = "games", query = "", dayOff = 0, mode = "multi", stakeVal = "";
   const slip = new Map(); // match_id -> { pick, odd, base }
   const favs = new Set(JSON.parse(localStorage.getItem("rs-favs") || "[]"));
   const live = (m) => m.status === "live";
@@ -33,6 +33,9 @@
   const dayLabel = (d) => (sameDay(d, 0) ? "Hoje" : sameDay(d, 1) ? "Amanhã" : ddmm(d));
   const code = () => [...slip].map(([id, s]) => id + CODE[s.pick]).join(",");
   const persist = () => sessionStorage.setItem("rs-slip", code());
+  const num = (v) => Number(String(v).replace(",", ".")) || 0;
+  const mobile = () => matchMedia("(max-width: 1000px)").matches;
+  const KP = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "del"];
 
   async function load() {
     const { data, error } = await sb.from("matches").select("*").in("status", ["open", "live"]).order("starts_at");
@@ -60,7 +63,7 @@
   const score = (m) => (m.score_home != null ? `<b class="score">${m.score_home} - ${m.score_away}</b>` : "");
 
   const row = (m) => `<div class="row">
-      <div class="row-time">${live(m) ? `<i class="live">AO VIVO</i>${score(m)}` : `${ddmm(m.starts_at)}<br>${hhmm(m.starts_at)}`}</div>
+      <div class="row-time">${live(m) ? `<i class="live">AO VIVO</i>${score(m)}` : `${ddmm(m.starts_at)} <br>${hhmm(m.starts_at)}`}</div>
       <div class="row-teams"><span>${shirt(m.home)}${RS.esc(m.home)}</span><span>${shirt(m.away)}${RS.esc(m.away)}</span>
         <small>${flag(m.league)} ${RS.esc(lname(m.league))}</small></div>
       <div class="row-odds">${odds(m)}</div>
@@ -80,7 +83,7 @@
     const q = query.toLowerCase(), now = Date.now();
     return matches.filter((m) =>
       (sport === "Popular" || m.sport === sport) &&
-      (!league || m.league === league) &&
+      (!league || (m.league === league && (lt !== "live" || live(m)))) &&
       (!q || `${m.home} ${m.away} ${m.league} ${lname(m.league)}`.toLowerCase().includes(q)) &&
       (view === "all" ||
         (view === "live" && live(m)) ||
@@ -100,7 +103,7 @@
       || `<p class="muted small" style="padding:0 6px">Sem competições no momento.</p>`;
 
     const count = {};
-    matches.forEach((m) => (count[m.sport] = (count[m.sport] || 0) + 1));
+    matches.filter((m) => view !== "live" || live(m)).forEach((m) => (count[m.sport] = (count[m.sport] || 0) + 1));
     const sports = ["Popular", ...Object.keys(count).sort((a, b) => count[b] - count[a])];
     RS.$("#sport-pills").innerHTML = sports.map((s) => `<button class="${s === sport ? "active" : ""}" data-sport="${RS.esc(s)}">
       ${s === "Popular" ? RS.icon("grid") : icon(s)} ${RS.esc(s)}${s !== "Popular" ? ` <em>${count[s]}</em>` : ""}</button>`).join("");
@@ -120,7 +123,21 @@
     RS.$("#feat-cards").classList.toggle("hidden", !home || !top.length);
     RS.$("#feat-cards").innerHTML = home ? top.map(feat).join("") : "";
     RS.$("#casino-strip").classList.toggle("hidden", !home);
-    RS.$("#list-title").textContent = query ? `Busca: "${query}"` : league ? lname(league) : TITLE[view];
+    const pop = Object.entries(byLeague).sort((a, b) => b[1].n - a[1].n).slice(0, 10);
+    RS.$("#league-sec").classList.toggle("hidden", !home || !pop.length);
+    RS.$("#league-chips").innerHTML = home ? pop.map(([l]) =>
+      `<button class="league-chip" data-league="${RS.esc(l)}"><span class="comp-ico">${flag(l)}</span>${RS.esc(lname(l))}</button>`).join("") : "";
+    const lh = RS.$("#league-head");
+    lh.classList.toggle("hidden", !league);
+    RS.$(".action-head").classList.toggle("hidden", !!league);
+    if (league) {
+      const inL = matches.filter((m) => m.league === league), nLive = inL.filter(live).length;
+      lh.innerHTML = `<div class="lh-top"><span class="lh-ico">${flag(league)}</span><h1>${RS.esc(lname(league))}</h1></div>
+        <div class="lh-tabs"><button class="${lt === "games" ? "active" : ""}" data-lt="games">Jogos <em>${inL.length}</em></button>
+          <button class="${lt === "live" ? "active" : ""}" data-lt="live">Ao vivo <em>${nLive}</em></button>
+          <button data-view="all">Todas as ligas</button></div>`;
+    }
+    RS.$("#list-title").textContent = query ? `Busca: "${query}"` : league ? lname(league) : view === "live" ? `Jogos ao vivo (${matches.filter(live).length})` : TITLE[view];
     RS.$$("[data-view]").forEach((a) => a.classList.toggle("active", a.dataset.view === view && !league && !query));
 
     const rows = visible();
@@ -130,7 +147,7 @@
   }
 
   function setView(v, opts = {}) {
-    view = v; league = opts.league ?? null; query = opts.query ?? "";
+    view = v; league = opts.league ?? null; query = opts.query ?? ""; lt = "games";
     if (v === "week") dayOff = opts.day ?? 0;
     render();
   }
@@ -191,8 +208,9 @@
         <button class="slip-x" data-rm="${id}" aria-label="Remover">${RS.icon("trash")}</button></div>`;
     }).join("") + `
       <div class="stake-row"><span>${multi ? `Múltipla ${n} seleções` : n > 1 ? `Simples · ${n} apostas` : "Simples"}</span>${multi ? `<b>${total.toFixed(2)}</b>` : ""}
-        <label class="stake"><i>R$</i><input id="stake" type="number" inputmode="decimal" min="1" step="0.01" placeholder="0,00" value="${stakeVal}"></label></div>
-      <div class="quick"><button data-stake="2">+2</button><button data-stake="10">+10</button><button data-stake="50">+50</button><button data-stake="max">MÁX</button></div>
+        <label class="stake"><i>R$</i><input id="stake" type="text" inputmode="${mobile() ? "none" : "decimal"}" autocomplete="off" placeholder="0,00" value="${stakeVal}"></label></div>
+      <div class="quick"><button data-stake="10">+10</button><button data-stake="50">+50</button><button data-stake="200">+200</button><button data-stake="max">MÁX</button></div>
+      <div class="keypad">${KP.map((k) => `<button data-kp="${k}">${k === "del" ? "⌫" : k}</button>`).join("")}</div>
       ${!multi && n > 1 ? `<div class="slip-total"><span>Total apostado</span><b id="slip-total"></b></div>` : ""}
       <button class="btn btn-green w-full" id="place" ${anySusp ? "disabled" : ""}>
         <b>${anySusp ? "Seleção suspensa" : `Apostar agora <span id="pl-stake"></span>`}</b>
@@ -201,7 +219,7 @@
     const stake = RS.$("#stake");
     const upd = () => {
       stakeVal = stake.value;
-      const v = Number(stake.value) || 0;
+      const v = num(stake.value);
       RS.$("#slip-return").textContent = RS.money(multi ? v * Number(total.toFixed(2)) : items.reduce((a, [, s]) => a + v * s.odd, 0));
       const ps = RS.$("#pl-stake");
       if (ps) ps.textContent = RS.money(multi ? v : v * n);
@@ -215,7 +233,12 @@
         const p = await RS.profile();
         if (!p) { location.href = "login.html"; return; }
         stake.value = Math.floor((Number(p.balance) / (multi ? 1 : n)) * 100) / 100;
-      } else stake.value = Math.round(((Number(stake.value) || 0) + Number(c.dataset.stake)) * 100) / 100;
+      } else stake.value = Math.round((num(stake.value) + Number(c.dataset.stake)) * 100) / 100;
+      upd();
+    }));
+    RS.$$("[data-kp]", slipEl).forEach((c) => (c.onclick = () => {
+      const k = c.dataset.kp, v = String(stake.value).replace(",", ".");
+      stake.value = k === "del" ? v.slice(0, -1) : k === "." ? (v.includes(".") ? v : (v || "0") + ".") : /\.\d{2}$/.test(v) || v.length >= 9 ? v : v === "0" ? k : v + k;
       upd();
     }));
     RS.$$("[data-rm]", slipEl).forEach((c) => (c.onclick = () => { slip.delete(Number(c.dataset.rm)); render(); renderSlip(); persist(); }));
@@ -225,7 +248,7 @@
   async function place(multi) {
     if (!(await RS.user())) { location.href = "login.html"; return; }
     const btn = RS.$("#place");
-    const stake = Number(RS.$("#stake").value);
+    const stake = num(RS.$("#stake").value);
     if (!(stake > 0)) { RS.toast("Digite o valor da aposta.", "error"); return; }
     btn.disabled = true;
     const sel = [...slip.entries()].map(([match_id, s]) => ({ match_id, pick: s.pick }));
@@ -248,6 +271,8 @@
   // ---------- eventos ----------
   document.addEventListener("click", (e) => {
     const t = e.target;
+    const lb = t.closest("[data-lt]");
+    if (lb) { lt = lb.dataset.lt; render(); return; }
     const v = t.closest("[data-view]");
     if (v) { setView(v.dataset.view); if (!v.matches("a")) scrollTo({ top: 0, behavior: "smooth" }); return; }
     const s = t.closest("[data-sport]");
