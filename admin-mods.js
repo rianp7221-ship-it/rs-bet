@@ -68,7 +68,7 @@
           ${l.self_excluded_until && new Date(l.self_excluded_until) > new Date() ? `<span class="badge b-pending">em pausa até ${RS.date(l.self_excluded_until)}</span>` : ""}
           ${d.alerts ? `<span class="badge sev-critica">${d.alerts} alerta(s) aberto(s)</span>` : ""}
           · País ${esc(p.country)} · Cadastro ${RS.date(p.created_at)} · Último acesso ${p.last_login_at ? RS.date(p.last_login_at) + " (" + esc(p.last_ip || "") + ")" : "-"}</p>
-        <div class="filters" style="margin:12px 0 0">
+        <div class="filters" id="pf-acts" style="margin:12px 0 0">
           ${can("users.balance") ? `<button class="btn sm" data-a="adj">Ajustar saldo</button>` : ""}
           ${can("users.block") ? `<button class="btn sm ${p.blocked ? "" : "danger"}" data-a="blk">${p.blocked ? "Desbloquear" : "Bloquear"}</button><button class="btn sm" data-a="risk">Nível de risco</button>` : ""}
           ${can("users.message") ? `<button class="btn sm" data-a="msg">Enviar mensagem</button>` : ""}
@@ -110,7 +110,7 @@
     }
     RS.$("#pf-tabs").onclick = (e) => { const b = e.target.closest("[data-t]"); if (b) tab(b.dataset.t); };
     main().querySelector("[data-back]").onclick = () => A().go("users");
-    main().querySelector(".filters").onclick = async (e) => {
+    RS.$("#pf-acts").onclick = async (e) => {
       const a = e.target.closest("[data-a]")?.dataset.a;
       if (!a) return;
       let ok = null;
