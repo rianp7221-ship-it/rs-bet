@@ -9,6 +9,11 @@
   - um jogo ao vivo da API está sem atualização há mais de 4 min.
 - `cashout_bet` ao vivo espera 4 s e cota de novo antes de pagar.
 
+## APIs disponíveis (`ODDS_PROVIDER`)
+- `theoddsapi` (secret `ODDS_API_KEY`): odds de várias casas, placar com atraso.
+- `apifootball` (secret `API_FOOTBALL_KEY`): placar, eventos e odds ao vivo de futebol.
+- `betsapi` (secret `BETSAPI_TOKEN`): feed Betfair Sportsbook da BetsAPI. Odds 1X2 e mercado travado pelo `/betfair/sb/event`, placar e status oficial pelo `/betfair/result`. `ODDS_SPORTS` usa o competitionId da Betfair (13 Brasileirão, 10932509 Premier, 228 Champions...). Limite do plano por hora (`x-ratelimit-limit`).
+
 ## Trocar de API
 1. Em `supabase/functions/_shared/providers.ts`, crie um adaptador que implemente `OddsProvider` (`odds(sport)`, `scores(sport)`, `remaining()`) e registre em `PROVIDERS`.
 2. Nos secrets das Edge Functions: `ODDS_PROVIDER=<nome>`, `ODDS_API_KEY=<chave>` e, se quiser, `ODDS_SPORTS=<ligas>`.

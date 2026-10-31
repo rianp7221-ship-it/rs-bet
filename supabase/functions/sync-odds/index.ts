@@ -1,5 +1,5 @@
 // sync-odds — jogos, odds, placares e resultados da API configurada (_shared/providers.ts)
-// Secrets: ODDS_PROVIDER (theoddsapi | apifootball), ODDS_API_KEY / API_FOOTBALL_KEY, ODDS_SPORTS (opcional), CRON_SECRET (cron).
+// Secrets: ODDS_PROVIDER (theoddsapi | apifootball | betsapi), ODDS_API_KEY / API_FOOTBALL_KEY / BETSAPI_TOKEN, ODDS_SPORTS (opcional), CRON_SECRET (cron).
 // Body: { mode: "full" } (padrão: todos os esportes) ou { mode: "live" } (só esportes com jogo em andamento).
 import { adminClient, cors, json } from "../_shared/auth.ts";
 import { getProvider } from "../_shared/providers.ts";
@@ -14,7 +14,7 @@ function applyMargin(o: Odds, marginPct: number): Odds {
   return { home: adj(o.home), draw: adj(o.draw), away: adj(o.away) };
 }
 
-// para de consultar ao vivo quando a cota do dia está acabando (reserva 20% para a busca completa)
+// para de consultar ao vivo quando a cota está acabando (reserva 20% para a busca completa)
 const liveReserve = (limit: number) => Math.max(20, Math.floor(limit * 0.2));
 
 Deno.serve(async (req) => {
@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
     const at = new Date().toISOString();
     if (left != null) await sb.from("settings").upsert({ key: "feed_remaining", value: Number(left), label: "Consultas restantes hoje na API de odds", updated_at: at });
     const lim = feed.limit?.();
-    if (lim) await sb.from("settings").upsert({ key: "feed_limit", value: lim, label: "Cota diária da API de odds", updated_at: at });
+    if (lim) await sb.from("settings").upsert({ key: "feed_limit", value: lim, label: "Cota da API de odds (por dia ou por hora, conforme o plano)", updated_at: at });
   };
 
   // ao vivo com feed próprio: 1 rodada para todos os jogos (placar, odds, suspensão e resultado)
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     if (!ids.length) return json({ modo: mode, jogos_atualizados: 0, jogos_liquidados: 0, creditos_restantes: null, errors });
     const rem = cfg?.find((c) => c.key === "feed_remaining");
     const lim = Number(cfg?.find((c) => c.key === "feed_limit")?.value) || 7500;
-    if (rem && Number(rem.value) < liveReserve(lim) && rem.updated_at?.slice(0, 10) === new Date().toISOString().slice(0, 10)) {
+    if (rem && Number(rem.value) < liveReserve(lim) && Date.now() - Date.parse(rem.updated_at) < 3600_000) {
       return json({ modo: mode, pulado: "cota diária da API quase no fim", creditos_restantes: rem.value, errors });
     }
     const byId = new Map(ids.map((m) => [m.external_id.split(":")[1], m]));
@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
   // 2) placar e resultados
   for (const [sport, list] of startedBySport) {
     try {
-      const byExt = new Map((await feed.scores(sport)).map((s) => [`${feed.prefix}${sport}:${s.id}`, s]));
+      const byExt = new Map((await feed.scores(sport, list.map((m) => m.external_id.split(":")[1]))).map((s) => [`${feed.prefix}${sport}:${s.id}`, s]));
       for (const m of list) {
         const s = byExt.get(m.external_id);
         if (!s) continue;
@@ -159,5 +159,5 @@ Deno.serve(async (req) => {
   }
 
   await saveRemaining();
-  return json({ modo: mode, jogos_atualizados: updated, jogos_liquidados: settled, creditos_restantes: feed.remaining(), errors });
+  return json({ modo: mode, jogos_atualizados: updated, jogos_liquidados: settled, creditos_restantes: feed.remaining(), fonte: feed.info?.() ?? null, errors });
 });

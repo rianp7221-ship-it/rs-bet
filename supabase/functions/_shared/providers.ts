@@ -1,5 +1,5 @@
 // Adaptadores de API de odds. Para trocar de API: implemente OddsProvider e registre em PROVIDERS,
-// depois defina o secret ODDS_PROVIDER com o nome do adaptador (theoddsapi | apifootball).
+// depois defina o secret ODDS_PROVIDER com o nome do adaptador (theoddsapi | apifootball | betsapi).
 
 export type MatchOdds = { home: number | null; draw: number | null; away: number | null };
 export type FeedEvent = {
@@ -21,10 +21,11 @@ export interface OddsProvider {
   prefix: string; // external_id = `${prefix}${sport}:${id}`
   defaultSports: string;
   odds(sport: string): Promise<FeedEvent[]>;
-  scores(sport: string): Promise<FeedScore[]>;
+  scores(sport: string, ids?: string[]): Promise<FeedScore[]>; // ids = jogos já iniciados dessa liga
   live?(ids: string[]): Promise<LiveUpdate[]>;
   remaining(): string | null;
-  limit?(): number | null; // cota diária do plano
+  limit?(): number | null; // cota do plano (por dia ou por hora)
+  info?(): string | null; // resumo da última busca (diagnóstico)
 }
 
 const SPORT_PT: Record<string, string> = {
@@ -198,16 +199,181 @@ function apiFootball(key: string): OddsProvider {
   };
 }
 
+// ---------- BetsAPI (betsapi.com) — feed Betfair Sportsbook ----------
+// "sport" = competitionId da Betfair (13 Brasileirão, 10932509 Premier, 228 Champions...). external_id = "bf<liga>:<eventId>".
+// Odds e mercado travado vêm do /betfair/sb/event; placar e status oficial do /betfair/result (até 10 jogos por chamada).
+type BfListEv = { id: string; time: string; league: { id: string; name: string }; home: { name: string }; away: { name: string } };
+type BfRunner = { selectionId: number; runnerStatus: string; runnerOrder: number; winRunnerOdds?: { trueOdds?: { decimalOdds?: { decimalOdds?: number } } } };
+type BfMarket = { marketStatus: string; runnerDetails?: BfRunner[]; market: { marketType: string; runners?: { selectionId: number; sortPriority: number }[] } };
+type BfEvent = {
+  event: { eventId: number }; markets?: BfMarket[];
+  timeline?: { status?: string; score?: { home?: { score?: string }; away?: { score?: string } }; updateDetails?: { type: string; updateTime: string }[] } | null;
+};
+type BfResult = { time_status: string; ss: string | null; scores?: Record<string, { home: string; away: string }> };
+
+// time_status: 0 não começou, 1 ao vivo, 3 encerrado, 4 adiado, 5 cancelado, 6 W.O., 7 interrompido, 8 abandonado, 99 removido
+const BF_VOID = ["5", "6", "8", "99"];
+const BF_CANCEL = ["4", ...BF_VOID];
+const BF_PAUSE: Record<string, string> = { "7": "Jogo interrompido" };
+// lance que mexe no jogo nos últimos 2 min
+const BF_HOT: [RegExp, string][] = [[/red/i, "Expulsão"], [/penalt/i, "Pênalti"], [/var/i, "Revisão do VAR"], [/^goal$/i, "Gol"]];
+
+function betsApi(token: string): OddsProvider {
+  const API = "https://api.b365api.com/v1/betfair";
+  // a API oscila (502/504, 1–40 s por chamada): tempo limite por chamada, novas tentativas e prazo total por execução
+  const started = Date.now(), deadline = started + 80_000;
+  let info: string | null = null;
+  let left: string | null = null, cap: number | null = null;
+  const get = async <T>(path: string): Promise<{ results: T[]; pager?: { page: number; per_page: number; total: number } }> => {
+    for (let i = 0; ; i++) {
+      let err = "";
+      try {
+        const r = await fetch(`${API}${path}${path.includes("?") ? "&" : "?"}token=${token}`, { signal: AbortSignal.timeout(25_000) });
+        left = r.headers.get("x-ratelimit-remaining") ?? left;
+        cap = Number(r.headers.get("x-ratelimit-limit")) || cap;
+        const j = await r.json().catch(() => null);
+        if (r.ok && j?.success === 1) return j;
+        err = `${r.status} ${j?.error ?? ""} ${j?.error_detail ?? ""}`.trim();
+        if (r.status < 500 && j) throw new Error(err);
+      } catch (e) {
+        if (!err && (e as Error).name !== "TimeoutError" && (e as Error).name !== "TypeError") throw e;
+        err ||= (e as Error).message;
+      }
+      if (i >= 2 || Date.now() > deadline) throw new Error(err);
+      await new Promise((ok) => setTimeout(ok, 1000));
+    }
+  };
+  // n chamadas em paralelo; o que passar do prazo fica sem resposta (undefined)
+  const pool = async <I, O>(items: I[], n: number, fn: (x: I) => Promise<O>) => {
+    const out: (O | undefined)[] = new Array(items.length);
+    let next = 0;
+    await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+      while (next < items.length && Date.now() < deadline) {
+        const i = next++;
+        out[i] = await fn(items[i]).catch(() => undefined);
+      }
+    }));
+    return out;
+  };
+  const list = async (kind: "inplay" | "upcoming", until: number) => {
+    const first = await get<BfListEv>(`/sb/${kind}?sport_id=1&page=1`);
+    const out = [...first.results];
+    const pages = Math.min(30, Math.ceil((first.pager?.total ?? 0) / (first.pager?.per_page || 50)));
+    // a lista vem em ordem de horário: estima quantas páginas cobrem o período e busca todas em paralelo
+    const span = Number(first.results.at(-1)?.time ?? 0) - Number(first.results[0]?.time ?? 0);
+    const need = until === Infinity || span <= 0 ? pages : Math.min(pages, Math.ceil((until / 1000 - Number(first.results[0].time)) / span) + 2);
+    const rest = await pool(Array.from({ length: Math.max(0, need - 1) }, (_, k) => k + 2), 10, (pg) => get<BfListEv>(`/sb/${kind}?sport_id=1&page=${pg}`));
+    for (const r of rest) out.push(...(r?.results ?? []));
+    return out;
+  };
+  const eventMap = (evs: (BfEvent | undefined)[]) => new Map(evs.filter((d): d is BfEvent => !!d).map((d) => [String(d.event.eventId), d]));
+  // até 10 ids por chamada; se o lote falhar ou vier incompleto, busca um por um
+  const batch = async <T>(path: string, ids: string[]) => {
+    const parts = Array.from({ length: Math.ceil(ids.length / 10) }, (_, i) => ids.slice(i * 10, i * 10 + 10));
+    const res = await pool(parts, 4, async (part) => {
+      const r = await get<T>(`${path}?event_id=${part.join(",")}`).catch(() => null);
+      if (r?.results.length === part.length) return r.results;
+      return (await pool(part, 10, async (id) => (await get<T>(`${path}?event_id=${id}`)).results[0]));
+    });
+    return parts.flatMap((part, i) => res[i] ?? part.map(() => undefined));
+  };
+  // catálogo (ao vivo + próximos 7 dias) e odds pré-jogo de todas as ligas, uma vez por execução, jogos mais próximos primeiro
+  let catalog: Promise<{ evs: BfListEv[]; details: Map<string, BfEvent> }> | null = null;
+  const loadCatalog = async () => {
+    const until = Date.now() + 7 * 86400_000;
+    const leagues = new Set((Deno.env.get("ODDS_SPORTS") || "13,321319,89219,10932509,117,81,59,55,228,2005").split(",").map((x) => x.trim()));
+    const [live, next] = await Promise.all([list("inplay", Infinity), list("upcoming", until)]);
+    // jogos das próximas 3 h primeiro; o resto em ordem aleatória para cada execução cobrir jogos diferentes dentro do prazo
+    const soon = Date.now() + 3 * 3600_000;
+    const evs = [...live, ...next].filter((e) => leagues.has(e.league.id) && Number(e.time) * 1000 <= until)
+      .map((e) => ({ e, k: Number(e.time) * 1000 <= soon ? Number(e.time) : 2e10 + Math.random() }))
+      .sort((a, b) => a.k - b.k).map(({ e }) => e);
+    // o /sb/event pré-jogo é lento em lote: 1 jogo por chamada, 10 em paralelo
+    const details = eventMap(await pool(evs.map((e) => e.id), 10, async (id) => (await get<BfEvent>(`/sb/event?event_id=${id}`)).results[0]));
+    info = `catálogo: ${evs.length} jogos, ${details.size} com mercados, ${Math.round((Date.now() - started) / 1000)} s`;
+    return { evs, details };
+  };
+  const price = (r: BfRunner) => { const v = Math.round((r.winRunnerOdds?.trueOdds?.decimalOdds?.decimalOdds ?? 0) * 100) / 100; return v > 1 ? v : null; };
+  const pick = (ev?: BfEvent) => {
+    const m = ev?.markets?.find((x) => x.market.marketType === "MATCH_ODDS");
+    if (!m) return { odds: null, locked: false };
+    if (m.marketStatus !== "OPEN") return { odds: null, locked: true };
+    const prio = new Map((m.market.runners ?? []).map((r) => [r.selectionId, r.sortPriority]));
+    const rs = [...(m.runnerDetails ?? [])].sort((a, b) => (prio.get(a.selectionId) ?? a.runnerOrder) - (prio.get(b.selectionId) ?? b.runnerOrder));
+    if (rs.length !== 3 || rs.some((r) => r.runnerStatus !== "ACTIVE")) return { odds: null, locked: true };
+    const odds = { home: price(rs[0]), draw: price(rs[1]), away: price(rs[2]) };
+    return { odds: odds.home && odds.away ? odds : null, locked: false };
+  };
+  // 1X2 vale pelos 90 min: scores["2"] é o placar do tempo normal; ss pode incluir prorrogação
+  const goals = (r?: BfResult) => {
+    const s = r?.scores?.["2"] ?? (r?.ss ? { home: r.ss.split("-")[0], away: r.ss.split("-")[1] } : null);
+    const h = Number(s?.home), a = Number(s?.away);
+    return s && Number.isFinite(h) && Number.isFinite(a) ? { home: h, away: a } : null;
+  };
+  return {
+    name: "betsapi",
+    prefix: "bf",
+    // Brasileirão A/B, Copa do Brasil, Premier, La Liga, Serie A, Bundesliga, Ligue 1, Champions, Europa League
+    defaultSports: "13,321319,89219,10932509,117,81,59,55,228,2005",
+    async odds(league) {
+      catalog ??= loadCatalog();
+      const { evs, details } = await catalog;
+      return evs.filter((e) => e.league.id === league).map((e) => ({
+        id: e.id, league: e.league.name, sport: "Futebol", home: e.home.name, away: e.away.name,
+        commence_time: new Date(Number(e.time) * 1000).toISOString(), odds: pick(details.get(e.id)).odds,
+      }));
+    },
+    async scores(_league, ids = []) {
+      const res = await batch<BfResult>("/result", ids);
+      return ids.flatMap((id, i) => {
+        const g = goals(res[i]);
+        return g ? [{ id, ...g, completed: res[i]!.time_status === "3" }] : [];
+      });
+    },
+    async live(ids) {
+      const byId = eventMap(await batch<BfEvent>("/sb/event", ids));
+      // placar ao vivo vem do /sb/event; o /result (status oficial) só para jogo fora do ar ou que não está mais "IN_PLAY"
+      const check = ids.filter((id) => byId.get(id)?.timeline?.status !== "IN_PLAY");
+      const res = new Map((await batch<BfResult>("/result", check)).map((r, i) => [check[i], r]));
+      const now = Date.now();
+      return ids.map((id) => {
+        const ev = byId.get(id), r = res.get(id), st = r?.time_status ?? "";
+        const sc = ev?.timeline?.score;
+        const g = goals(r) ?? (sc?.home?.score != null && sc.away?.score != null ? { home: Number(sc.home.score), away: Number(sc.away.score) } : null);
+        const { odds, locked } = pick(ev);
+        const recent = (ev?.timeline?.updateDetails ?? []).filter((u) => now - Date.parse(u.updateTime) < 120_000);
+        const hot = BF_HOT.find(([re]) => recent.some((u) => re.test(u.type)))?.[1] ?? null;
+        return {
+          id, home: g?.home ?? null, away: g?.away ?? null,
+          completed: st === "3", cancelled: BF_CANCEL.includes(st), voided: BF_VOID.includes(st),
+          odds, suspended: BF_PAUSE[st] ?? (locked ? "Mercado travado na fonte" : hot),
+        };
+      });
+    },
+    remaining: () => left,
+    limit: () => cap,
+    info: () => info,
+  };
+}
+
 const PROVIDERS: Record<string, (key: string) => OddsProvider> = {
   theoddsapi: theOddsApi,
   apifootball: apiFootball,
+  betsapi: betsApi,
+};
+
+// secret com a chave de cada API (o primeiro que existir)
+const KEYS: Record<string, string[]> = {
+  theoddsapi: ["ODDS_API_KEY"],
+  apifootball: ["API_FOOTBALL_KEY", "ODDS_API_KEY"],
+  betsapi: ["BETSAPI_TOKEN", "ODDS_API_KEY"],
 };
 
 export function getProvider(): OddsProvider {
   const name = (Deno.env.get("ODDS_PROVIDER") || "theoddsapi").toLowerCase();
   const make = PROVIDERS[name];
   if (!make) throw new Error(`ODDS_PROVIDER desconhecido: ${name}`);
-  const key = name === "apifootball" ? Deno.env.get("API_FOOTBALL_KEY") ?? Deno.env.get("ODDS_API_KEY") : Deno.env.get("ODDS_API_KEY");
-  if (!key) throw new Error(`Configure o secret ${name === "apifootball" ? "API_FOOTBALL_KEY" : "ODDS_API_KEY"} no Supabase (Edge Functions → Secrets)`);
+  const key = KEYS[name].map((k) => Deno.env.get(k)).find(Boolean);
+  if (!key) throw new Error(`Configure o secret ${KEYS[name][0]} no Supabase (Edge Functions → Secrets)`);
   return make(key);
 }
