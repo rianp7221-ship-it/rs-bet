@@ -98,7 +98,7 @@
   });
   const recentIds = () => JSON.parse(localStorage.getItem("rs-recent-games") || "[]");
   function recent() {
-    const html = recentIds().map((id) => tiles.find((t) => t.dataset.game === id)?.outerHTML).filter(Boolean).join("");
+    const html = recentIds().map((id) => tiles.find((t) => t.dataset.game === id)?.cloneNode(true)).filter(Boolean).map((t) => (t.classList.remove("hidden"), t.outerHTML)).filter(Boolean).join("");
     RS.$("#recent-tiles").innerHTML = html;
     RS.$("#recent-wrap").classList.toggle("hidden", !html);
   }
