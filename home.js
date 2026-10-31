@@ -86,4 +86,27 @@
       if (b) S.add(sug[b.dataset.sug].picks.map((p) => ({ id: p.m.id, pick: p.pick })), stake);
     };
   });
+
+  // ---------- Cassino: categorias e "continuar jogando" ----------
+  const cats = RS.$("#cat-chips");
+  const tiles = [...document.querySelectorAll("#casino .game-tiles:not(#recent-tiles) .tile")];
+  cats?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-cat]");
+    if (!b) return;
+    cats.querySelectorAll("[data-cat]").forEach((x) => x.classList.toggle("active", x === b));
+    tiles.forEach((t) => t.classList.toggle("hidden", b.dataset.cat !== "all" && !t.dataset.cat.split(" ").includes(b.dataset.cat)));
+  });
+  const recentIds = () => JSON.parse(localStorage.getItem("rs-recent-games") || "[]");
+  function recent() {
+    const html = recentIds().map((id) => tiles.find((t) => t.dataset.game === id)?.outerHTML).filter(Boolean).join("");
+    RS.$("#recent-tiles").innerHTML = html;
+    RS.$("#recent-wrap").classList.toggle("hidden", !html);
+  }
+  document.addEventListener("click", (e) => {
+    const g = e.target.closest("[data-game]");
+    if (!g || !cats) return;
+    localStorage.setItem("rs-recent-games", JSON.stringify([g.dataset.game, ...recentIds().filter((x) => x !== g.dataset.game)].slice(0, 6)));
+    setTimeout(recent, 0);
+  });
+  if (cats) recent();
 })();

@@ -358,3 +358,30 @@ body.slip-open .overlay, body.menu-open .overlay { display: block; }
 }
 .rside > * { flex: none; }
 .feat-card .odd.selected { background: var(--primary); border-color: var(--primary); }
+
+/* ligas populares, cabeçalho da liga, teclado do bilhete e cassino escuro */
+.sub-title { font-size: 16px; font-weight: 900; margin: 4px 0 10px; }
+.league-sec { margin-bottom: 18px; }
+.league-chips { display: grid; grid-auto-flow: column; grid-template-rows: repeat(2, auto); grid-auto-columns: max-content; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.league-chip { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #e3e7f0; border-radius: 12px; padding: 8px 14px 8px 8px; font: inherit; font-weight: 700; font-size: 14px; cursor: pointer; color: var(--text); white-space: nowrap; }
+.league-chip:hover { border-color: var(--primary); }
+.league-head { background: linear-gradient(135deg, #0f1f4d, #1b2f6e 60%, #13235a); color: #fff; border-radius: 0 0 22px 22px; padding: 18px 16px 14px; margin: -4px 0 14px; }
+.lh-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.lh-top h1 { font-size: 22px; font-weight: 900; line-height: 1.15; }
+.lh-ico { width: 44px; height: 44px; border-radius: 10px; background: rgba(255,255,255,.12); display: grid; place-items: center; font-size: 24px; flex: none; }
+.lh-tabs { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.lh-tabs button { background: none; border: 0; color: #dfe6ff; font: inherit; font-size: 15px; padding: 8px 16px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.lh-tabs button.active { background: #fff; color: var(--text); font-weight: 700; }
+.lh-tabs em { font-style: normal; opacity: .7; font-size: 12px; margin-left: 2px; }
+.keypad { display: none; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0 0 12px; }
+.keypad button { background: #fff; border: 1px solid #e1e6f0; border-radius: 8px; height: 44px; font: inherit; font-size: 20px; cursor: pointer; color: var(--text); }
+.keypad button:active { background: #eef1f8; }
+@media (max-width: 1000px) { .keypad { display: grid; } }
+.casino-dark { background: #0f1424; color: #eef1fb; border-radius: var(--radius); padding: 14px; }
+.casino-dark .section-title { color: #fff; }
+.casino-dark .game-card { background: #1a2136; color: #eef1fb; box-shadow: none; }
+.casino-dark .game-card .muted, .casino-dark .game-card label { color: #aab3cc; }
+.casino-dark .input { background: #0f1424; border-color: #2c3653; color: #fff; }
+.cat-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 14px 0 6px; }
+.cat-chips button { background: none; border: 1px solid #3a4566; color: #dfe4f5; border-radius: 999px; padding: 9px 18px; font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.cat-chips button.active { background: #2a3455; border-color: #2a3455; color: #fff; }

@@ -50,6 +50,8 @@
           <a class="cs-tile cs-live" href="#sports" data-view="live"><i>🔴</i>Ao vivo<small>Esportes</small></a>
           <a class="cs-tile cs-refer" href="#" data-act="refer"><i>🎁</i>Indique<small>Convide amigos</small></a>
         </div>
+        <div class="league-sec" id="league-sec"><h3 class="sub-title">🏆 Ligas populares</h3><div class="league-chips" id="league-chips"></div></div>
+        <div class="league-head hidden" id="league-head"></div>
         <div class="action-head">
           <h2 class="h-title" id="list-title">Junte-se à ação</h2>
           <button class="btn btn-outline sm" data-view="next"><i data-ic="clock"></i>Próximos</button>
@@ -60,14 +62,16 @@
       </section>
 
       <!-- CASSINO -->
-      <section id="casino" class="tab-panel hidden">
+      <section id="casino" class="tab-panel hidden casino-dark">
         <div class="casino-hero">
           <div><small>Cassino</small><h1>Jogos <span>originais</span></h1><p>Escolha um jogo para começar.</p></div>
         </div>
+        <div class="cat-chips" id="cat-chips"><button class="active" data-cat="all">Todos</button><button data-cat="orig">Originais</button><button data-cat="rtp">Alto RTP</button><button data-cat="fast">Rápidos</button></div>
+        <div id="recent-wrap" class="hidden"><h2 class="section-title">Continuar jogando</h2><div class="game-tiles" id="recent-tiles"></div></div>
         <h2 class="section-title">Jogos em destaque</h2>
         <div class="game-tiles">
-          <a class="tile t-mines" href="#casino" data-game="mines-card"><i>💎</i><b>Mines</b><small>Até 24 minas</small></a>
-          <a class="tile t-dice" href="#casino" data-game="dice"><i>🎲</i><b>Dados</b><small>Escolha sua chance</small></a>
+          <a class="tile t-mines" href="#casino" data-game="mines-card" data-cat="orig rtp"><i>💎</i><b>Mines</b><small>Até 24 minas</small></a>
+          <a class="tile t-dice" href="#casino" data-game="dice" data-cat="orig rtp fast"><i>🎲</i><b>Dados</b><small>Escolha sua chance</small></a>
         </div>
         <div class="casino-grid">
           <div class="game-card" id="mines-card">
