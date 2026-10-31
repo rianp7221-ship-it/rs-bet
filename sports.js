@@ -25,7 +25,7 @@
     [/nba|nfl|mlb|nhl|ncaa|usa|mls/i, "🇺🇸"], [/uefa|champions|europa/i, "🇪🇺"], [/libertadores|sudamericana|conmebol/i, "🌎"]];
   const flag = (l) => (FLAGS.find(([r]) => r.test(l)) || [null, "🌍"])[1];
   const LEAGUE_PT = { "Brazil Série A": "Brasileirão Série A", "Brazil Série B": "Brasileirão Série B", EPL: "Premier League",
-    "UEFA Champions League": "Liga dos Campeões da UEFA", "UEFA Europa League": "Liga Europa da UEFA", "La Liga - Spain": "La Liga" };
+    "UEFA Champions League": "Liga dos Campeões da UEFA", "UEFA Europa League": "Liga Europa da UEFA", "La Liga - Spain": "La Liga", "Serie A - Italy": "Serie A Itália" };
   const lname = (l) => LEAGUE_PT[l] || l;
   function shirt(name) {
     let h = 0;
