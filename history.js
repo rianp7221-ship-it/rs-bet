@@ -17,11 +17,13 @@
 
   function selName(s) {
     const { home, away } = s.matches, mk = s.market || "1x2";
+    if (mk === "bb") return "Criar Aposta";
     if (LINE[mk]) return `${s.pick === "over" ? "Mais" : "Menos"} de ${LINE[mk]}`;
     if (mk === "btts") return s.pick === "yes" ? "Sim" : "Não";
     if (mk === "dc") return { "1x": `${home} ou Empate`, x2: `Empate ou ${away}`, "12": `${home} ou ${away}` }[s.pick] || s.pick;
     return s.pick === "home" ? home : s.pick === "away" ? away : "Empate";
   }
+  const legs = (s) => s.pick.split("|").map((l) => { const [market, pick] = l.split(":"); return RS.esc(selName({ ...s, market, pick })); }).join(" · ");
   function when(iso) {
     const d = new Date(iso), hm = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     const days = Math.round((new Date(iso).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 864e5);
@@ -52,7 +54,7 @@
       <div class="bc-body">
         ${sels.map((s) => `<div class="bc-sel">
           <div class="bc-l1">${RS.icon("ball")}<b>${RS.esc(selName(s))}</b><span>${Number(s.odd).toFixed(2)}</span></div>
-          <div class="bc-mk">${MNAME[s.market || "1x2"] || RS.esc(s.market)}</div>
+          <div class="bc-mk">${s.market === "bb" ? legs(s) : MNAME[s.market || "1x2"] || RS.esc(s.market)}</div>
           <div class="bc-l3"><span>${RS.esc(s.matches.home)} - ${RS.esc(s.matches.away)}</span><span>${selState(s)}</span></div></div>`).join("")}
         <div class="bc-row"><span>Aposta</span><b>${RS.money(b.stake)}</b></div>
         <div class="bc-row bc-win"><span>${wl}</span><b>${RS.money(wv)}</b></div>
