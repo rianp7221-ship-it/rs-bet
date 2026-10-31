@@ -150,33 +150,55 @@
   }
 
   // ---------- FINANCEIRO ----------
+  const LEVEL = { rapido: ["Rápido", "b-won"], manual: ["Manual", "b-pending"], dupla: ["2 aprovadores", "b-lost"] };
   async function finance() {
-    const { can, act, table, head, badge } = A();
-    main().innerHTML = head("Financeiro", `<select class="input" id="f-type"><option value="">Depósitos e saques</option><option value="deposit">Depósitos</option><option value="withdraw">Saques</option></select>
-      <select class="input" id="f-st"><option value="">Todos</option><option value="pending" selected>Pendentes</option><option value="done">Concluídos</option><option value="rejected">Recusados</option></select>`) + `<div id="f-list"></div>`;
-    async function load() {
-      const type = RS.$("#f-type").value, st = RS.$("#f-st").value;
-      let req = sb.from("transactions").select("*, profiles(email)").order("created_at", { ascending: false }).limit(200);
-      req = type ? req.eq("type", type) : req.in("type", ["deposit", "withdraw"]);
-      if (st) req = req.eq("status", st);
-      const { data } = await req;
-      RS.$("#f-list").innerHTML = table(["#", "Usuário", "Tipo", "Valor", "Data", "Status", ""], (data || []).map((t) => [
-        t.id, `<a href="#users" data-open-user="${t.user_id}" style="color:var(--primary)">${esc(t.profiles?.email || "")}</a>`,
-        t.type === "deposit" ? "Depósito" : "Saque", M(Math.abs(t.amount)), RS.date(t.created_at), badge(t.status),
-        t.status === "pending" && can("finance.manage") ? `<button class="btn sm" data-ok="${t.id}">Aprovar</button><button class="btn sm danger" data-no="${t.id}">Recusar</button>` : ""]),
-        "Nenhuma transação.");
+    const { can, act, table, head, badge, csv } = A();
+    main().innerHTML = head("Financeiro") + `
+      <div class="tabs-sm" id="f-tabs"><button class="chip active" data-v="queue">Fila de saques</button><button class="chip" data-v="all">Depósitos e saques</button><button class="chip" data-v="rec">Reconciliação</button></div>
+      <div id="f-body"></div>`;
+    let view = "queue";
+    async function queue() {
+      const { data } = await sb.from("transactions").select("*, profiles(email, risk_level)").eq("type", "withdraw").eq("status", "pending").order("created_at");
+      const rows = data || [];
+      const sum = rows.reduce((a, t) => a + Math.abs(t.amount), 0);
+      RS.$("#f-body").innerHTML = `<p class="muted" style="margin-bottom:8px">${rows.length} saque(s) aguardando · ${M(sum)}. Fila rápida = sem risco e abaixo do limite; manual = motivos ao lado; 2 aprovadores = valor alto.</p>` +
+        table(["#", "Jogador", "Valor", "Pedido em", "Fila", "Motivos", ""], rows.map((t) => [t.id,
+          `<a href="#" data-open-user="${t.user_id}" style="color:var(--primary)">${esc(t.profiles?.email || "")}</a><br><small>risco ${esc(t.profiles?.risk_level || "")}</small>`,
+          `<b>${M(Math.abs(t.amount))}</b>`, RS.date(t.created_at),
+          `<span class="badge ${(LEVEL[t.review_level] || ["", ""])[1]}">${(LEVEL[t.review_level] || ["Manual"])[0]}</span>${t.first_approver ? "<br><small>1ª aprovação feita</small>" : ""}`,
+          `<small>${esc(t.review_notes || "-")}</small>`,
+          can("finance.manage") ? `<button class="btn sm btn-green" data-ok="${t.id}">${t.review_level === "dupla" && !t.first_approver ? "1ª aprovação" : "Aprovar e pagar"}</button><button class="btn sm danger" data-no="${t.id}">Recusar</button>` : ""]),
+          "Nenhum saque na fila.");
     }
-    RS.$("#f-type").onchange = load;
-    RS.$("#f-st").onchange = load;
-    RS.$("#f-list").onclick = async (e) => {
-      const b = e.target.closest("button");
+    async function all() {
+      const { data } = await sb.from("transactions").select("*, profiles(email)").in("type", ["deposit", "withdraw"]).order("created_at", { ascending: false }).limit(300);
+      RS.$("#f-body").innerHTML = table(["#", "Usuário", "Tipo", "Método", "Valor", "Taxa", "Data", "Status", ""], (data || []).map((t) => [t.id,
+        `<a href="#" data-open-user="${t.user_id}" style="color:var(--primary)">${esc(t.profiles?.email || "")}</a>`, t.type === "deposit" ? "Depósito" : "Saque", esc(t.method || "PIX"),
+        M(Math.abs(t.amount)), t.fee ? M(t.fee) : "-", RS.date(t.created_at), badge(t.status),
+        t.status === "pending" && can("finance.manage") ? `<button class="btn sm" data-ok="${t.id}">Aprovar</button><button class="btn sm danger" data-no="${t.id}">Recusar</button>` : ""]), "Nenhuma transação.");
+    }
+    async function rec() {
+      const to = new Date(Date.now() + 60000), from = new Date(); from.setDate(from.getDate() - 29); from.setHours(0, 0, 0, 0);
+      const r = await RS.rpc("admin_reconciliation", { p_from: from.toISOString(), p_to: to.toISOString() });
+      const tot = r.days.reduce((a, d) => ({ dep: a.dep + +d.deposits, wd: a.wd + +d.withdrawals, fee: a.fee + +d.fees, net: a.net + +d.net }), { dep: 0, wd: 0, fee: 0, net: 0 });
+      RS.$("#f-body").innerHTML = `<div class="kpis">${[["Entradas (30 dias)", M(tot.dep)], ["Saídas (30 dias)", M(tot.wd)], ["Taxas de gateway", M(tot.fee)], ["Resultado de caixa", M(tot.net), tot.net >= 0],
+          ["Saldo retido (jogadores)", M(r.retained)], ["Saques pendentes", M(r.pending_withdrawals)], ["Depósitos pendentes", M(r.pending_deposits)],
+          ["Divergências de saldo", r.ledger_diff, r.ledger_diff ? false : true]].map(([k, v, ok]) => `<div class="kpi ${ok === true ? "pos" : ok === false ? "neg" : ""}"><small>${k}</small><b>${v}</b></div>`).join("")}</div>
+        <div class="filters"><button class="btn btn-outline" id="rec-csv">Exportar CSV</button><small class="muted">Confira estes totais com o extrato do gateway de pagamento. Divergências de saldo aparecem em Alertas.</small></div>` +
+        table(["Dia", "Depósitos", "Qtd.", "Saques", "Qtd.", "Taxas", "Líquido"], r.days.map((d) => [d.day.split("-").reverse().join("/"), M(d.deposits), d.deposits_n, M(d.withdrawals), d.withdrawals_n, M(d.fees),
+          `<span class="${d.net >= 0 ? "pos" : "neg"}">${M(d.net)}</span>`]), "Sem movimentação no período.");
+      RS.$("#rec-csv").onclick = () => csv("reconciliacao.csv", [["dia", "depositos", "qtd_depositos", "saques", "qtd_saques", "taxas", "liquido"],
+        ...r.days.map((d) => [d.day, d.deposits, d.deposits_n, d.withdrawals, d.withdrawals_n, d.fees, d.net])]);
+    }
+    const load = () => (view === "queue" ? queue() : view === "all" ? all() : rec());
+    RS.$("#f-tabs").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; view = b.dataset.v; RS.$$("#f-tabs .chip").forEach((x) => x.classList.toggle("active", x === b)); load(); };
+    RS.$("#f-body").onclick = async (e) => {
+      const b = e.target.closest("button[data-ok],button[data-no]");
       if (!b) return;
       const approve = !!b.dataset.ok;
-      if (!confirm(approve ? "Aprovar esta transação?" : "Recusar esta transação?")) return;
-      if (await act("admin_review_transaction", { p_tx: +(b.dataset.ok || b.dataset.no), p_approve: approve }, approve ? "Aprovado" : "Recusado")) load();
+      if (!confirm(approve ? "Aprovar esta transação? Para saque, faça o PIX ao jogador antes de confirmar." : "Recusar? Em saque, o valor volta para o saldo do jogador.")) return;
+      if (await act("admin_review_transaction", { p_tx: +(b.dataset.ok || b.dataset.no), p_approve: approve }, approve ? "Aprovação registrada" : "Recusado")) load();
     };
-    A().onLeave(() => {});
-    window.RSadmin && (RS.$("#f-list").dataset.ready = "1");
     await load();
   }
 
