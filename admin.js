@@ -31,8 +31,9 @@
         : `<input class="input" name="${f.name}" type="${f.type || "text"}" step="any" value="${esc(f.value ?? "")}" ${f.required ? "required" : ""} placeholder="${esc(f.placeholder || "")}">`}</label>`).join("")}
         <button class="btn btn-primary w-full">${okText}</button></form>`);
       let done = false;
-      RS.$("#ask-f", m).onsubmit = (e) => { e.preventDefault(); done = true; resolve(Object.fromEntries(new FormData(e.target))); m.remove(); };
-      new MutationObserver(() => { if (!document.body.contains(m) && !done) resolve(null); }).observe(document.body, { childList: true });
+      const obs = new MutationObserver(() => { if (!document.body.contains(m)) { obs.disconnect(); if (!done) resolve(null); } });
+      RS.$("#ask-f", m).onsubmit = (e) => { e.preventDefault(); done = true; obs.disconnect(); resolve(Object.fromEntries(new FormData(e.target))); m.remove(); };
+      obs.observe(document.body, { childList: true });
     });
   }
   function csv(name, rows) {
@@ -59,7 +60,7 @@
   const MODS = [
     { id: "dash", t: "Visão geral", ic: "grid", p: "kpi.view", run: dash },
     { id: "alerts", t: "Alertas", ic: "live", p: "alerts.view", run: alerts },
-    { id: "users", t: "Usuários", ic: "user", p: "users.view", run: () => window.RSmods.users() },
+    { id: "users", t: "Usuários", ic: "user", p: "users.view", run: (id) => window.RSmods.users(id) },
     { id: "finance", t: "Financeiro", ic: "card", p: "finance.view", run: () => window.RSmods.finance() },
     { id: "sports", t: "Apostas e jogos", ic: "receipt", p: "sports.view", run: () => window.RSmods.sports() },
     { id: "staff", t: "Equipe e acessos", ic: "key", p: "staff.manage", run: staff },
