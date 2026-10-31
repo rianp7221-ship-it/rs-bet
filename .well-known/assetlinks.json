@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "online.realsports.app",
+    "sha256_cert_fingerprints": ["F0:7C:91:E9:BC:9A:F8:D2:23:C2:CA:4C:C4:78:A5:B1:2B:49:3D:87:36:D1:5E:38:69:C1:C8:66:3C:B3:0B:A6"]
+  }
+}]

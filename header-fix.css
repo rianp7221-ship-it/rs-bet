@@ -69,3 +69,11 @@
 #rs-header .logo span.logo-word { opacity: 1; color: #fff; }
 .logo-word em { font-style: inherit; opacity: .8; }
 .bell-dot { position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: #ffe14d; border: 2px solid var(--primary); }
+
+.app-banner { display: flex; align-items: center; gap: 10px; background: var(--card, #fff); border: 1px solid var(--line, #e3e7f0); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; }
+.app-banner.hidden { display: none; }
+.app-banner img { border-radius: 10px; flex: none; }
+.app-banner div { flex: 1; min-width: 0; line-height: 1.25; }
+.app-banner b { display: block; font-size: 14px; }
+.app-banner small { color: var(--muted); font-size: 12px; }
+.app-banner .btn { flex: none; }
