@@ -25,6 +25,7 @@ export interface OddsProvider {
   live?(ids: string[]): Promise<LiveUpdate[]>;
   remaining(): string | null;
   limit?(): number | null; // cota do plano (por dia ou por hora)
+  info?(): string | null; // resumo da última busca (diagnóstico)
 }
 
 const SPORT_PT: Record<string, string> = {
@@ -220,7 +221,8 @@ const BF_HOT: [RegExp, string][] = [[/red/i, "Expulsão"], [/penalt/i, "Pênalti
 function betsApi(token: string): OddsProvider {
   const API = "https://api.b365api.com/v1/betfair";
   // a API oscila (502/504, 1–40 s por chamada): tempo limite por chamada, novas tentativas e prazo total por execução
-  const deadline = Date.now() + 90_000;
+  const started = Date.now(), deadline = started + 80_000;
+  let info: string | null = null;
   let left: string | null = null, cap: number | null = null;
   const get = async <T>(path: string): Promise<{ results: T[]; pager?: { page: number; per_page: number; total: number } }> => {
     for (let i = 0; ; i++) {
@@ -257,10 +259,11 @@ function betsApi(token: string): OddsProvider {
     const first = await get<BfListEv>(`/sb/${kind}?sport_id=1&page=1`);
     const out = [...first.results];
     const pages = Math.min(30, Math.ceil((first.pager?.total ?? 0) / (first.pager?.per_page || 50)));
-    for (let p = 2; p <= pages && Number(out.at(-1)?.time ?? 0) * 1000 <= until; p += 6) {
-      const chunk = Array.from({ length: Math.min(6, pages - p + 1) }, (_, k) => p + k);
-      for (const r of await pool(chunk, 6, (pg) => get<BfListEv>(`/sb/${kind}?sport_id=1&page=${pg}`))) out.push(...(r?.results ?? []));
-    }
+    // a lista vem em ordem de horário: estima quantas páginas cobrem o período e busca todas em paralelo
+    const span = Number(first.results.at(-1)?.time ?? 0) - Number(first.results[0]?.time ?? 0);
+    const need = until === Infinity || span <= 0 ? pages : Math.min(pages, Math.ceil((until / 1000 - Number(first.results[0].time)) / span) + 2);
+    const rest = await pool(Array.from({ length: Math.max(0, need - 1) }, (_, k) => k + 2), 10, (pg) => get<BfListEv>(`/sb/${kind}?sport_id=1&page=${pg}`));
+    for (const r of rest) out.push(...(r?.results ?? []));
     return out;
   };
   const eventMap = (evs: (BfEvent | undefined)[]) => new Map(evs.filter((d): d is BfEvent => !!d).map((d) => [String(d.event.eventId), d]));
@@ -280,13 +283,14 @@ function betsApi(token: string): OddsProvider {
     const until = Date.now() + 7 * 86400_000;
     const leagues = new Set((Deno.env.get("ODDS_SPORTS") || "13,321319,89219,10932509,117,81,59,55,228,2005").split(",").map((x) => x.trim()));
     const [live, next] = await Promise.all([list("inplay", Infinity), list("upcoming", until)]);
-    // próximas 24 h primeiro; o resto em ordem aleatória para cada execução cobrir jogos diferentes dentro do prazo
-    const soon = Date.now() + 86400_000;
+    // jogos das próximas 3 h primeiro; o resto em ordem aleatória para cada execução cobrir jogos diferentes dentro do prazo
+    const soon = Date.now() + 3 * 3600_000;
     const evs = [...live, ...next].filter((e) => leagues.has(e.league.id) && Number(e.time) * 1000 <= until)
       .map((e) => ({ e, k: Number(e.time) * 1000 <= soon ? Number(e.time) : 2e10 + Math.random() }))
       .sort((a, b) => a.k - b.k).map(({ e }) => e);
     // o /sb/event pré-jogo é lento em lote: 1 jogo por chamada, 10 em paralelo
     const details = eventMap(await pool(evs.map((e) => e.id), 10, async (id) => (await get<BfEvent>(`/sb/event?event_id=${id}`)).results[0]));
+    info = `catálogo: ${evs.length} jogos, ${details.size} com mercados, ${Math.round((Date.now() - started) / 1000)} s`;
     return { evs, details };
   };
   const price = (r: BfRunner) => { const v = Math.round((r.winRunnerOdds?.trueOdds?.decimalOdds?.decimalOdds ?? 0) * 100) / 100; return v > 1 ? v : null; };
@@ -348,6 +352,7 @@ function betsApi(token: string): OddsProvider {
     },
     remaining: () => left,
     limit: () => cap,
+    info: () => info,
   };
 }
 

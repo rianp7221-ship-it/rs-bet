@@ -8,9 +8,9 @@ update public.matches m set status = 'canceled'
  where m.status in ('open', 'live') and m.external_id is not null and m.external_id not like 'bf%'
    and not exists (select 1 from public.bet_selections s where s.match_id = m.id and s.status = 'pending');
 
--- busca completa a cada hora (cada execução tem prazo e cobre parte dos jogos mais distantes)
+-- busca completa a cada 15 min: o /sb/event pré-jogo é lento, então cada execução (prazo de 80 s) atualiza parte dos jogos
 select cron.unschedule('sync-odds-full') where exists (select 1 from cron.job where jobname = 'sync-odds-full');
-select cron.schedule('sync-odds-full', '7 * * * *', $$select public._call_sync_odds('full')$$);
+select cron.schedule('sync-odds-full', '*/15 * * * *', $$select public._call_sync_odds('full')$$);
 
 -- a busca completa nessa API leva até ~2 min: espera a resposta por até 150 s
 create or replace function public._call_sync_odds(p_mode text) returns bigint
