@@ -403,3 +403,6 @@ body.on-casino .bn-ball { display: grid !important; }
 body.on-casino .bottom-nav { background: #0f1424; border-top-color: #2c3653; }
 body.on-casino .bottom-nav a { color: #dfe4f5; }
 body.on-casino .bn-switch span { border-color: #0f1424; }
+@keyframes co-flash { from { filter: brightness(1.35); } to { filter: none; } }
+.btn.co-up { background: var(--green); animation: co-flash .8s; }
+.btn.co-down { background: var(--danger); animation: co-flash .8s; }
