@@ -173,7 +173,7 @@
       (sport === "Popular" || m.sport === sport) &&
       (!league || (m.league === league && (lt !== "live" || live(m)))) &&
       (!q || `${m.home} ${m.away} ${m.league} ${lname(m.league)}`.toLowerCase().includes(q)) &&
-      (view === "all" ||
+      ((view === "all" && (league || q || !live(m))) ||
         (view === "live" && live(m)) ||
         (view === "today" && (live(m) || sameDay(m.starts_at, 0))) ||
         (view === "week" && sameDay(m.starts_at, dayOff)) ||
@@ -191,7 +191,7 @@
       || `<p class="muted small" style="padding:0 6px">Sem competições no momento.</p>`;
 
     const count = {};
-    matches.filter((m) => view !== "live" || live(m)).forEach((m) => (count[m.sport] = (count[m.sport] || 0) + 1));
+    matches.filter((m) => (view === "live" ? live(m) : view !== "all" || league || query || !live(m))).forEach((m) => (count[m.sport] = (count[m.sport] || 0) + 1));
     if (sport !== "Popular" && !count[sport]) sport = "Popular";
     const sports = ["Popular", ...Object.keys(count).sort((a, b) => count[b] - count[a])];
     RS.$("#sport-pills").innerHTML = sports.map((s) => `<button class="${s === sport ? "active" : ""}" data-sport="${RS.esc(s)}">
@@ -208,7 +208,7 @@
     }
 
     const home = view === "all" && sport === "Popular" && !league && !query;
-    const top = [...matches.filter(live), ...matches.filter((m) => !live(m))].filter((m) => !suspended(m)).slice(0, 6);
+    const top = matches.filter((m) => !live(m) && !suspended(m)).slice(0, 6);
     RS.$("#feat-cards").classList.toggle("hidden", !home || !top.length);
     RS.$("#feat-cards").innerHTML = home ? top.map(feat).join("") : "";
     RS.$("#casino-strip").classList.toggle("hidden", !home);
