@@ -24,7 +24,7 @@
           ${me ? navLink("index.html#history", "Minhas apostas", "history") : ""}
           ${me?.is_admin || me?.staff_role ? `<a href="admin.html" class="${page === "admin.html" ? "active" : ""}">Admin</a>` : ""}
         </nav>
-        <div class="hdr-right">
+        <div class="hdr-right${me ? " logged" : ""}">
           <button class="icon-btn hide-xs" id="hdr-search" aria-label="Buscar">${RS.icon("search")}</button>
           ${me ? `
             <button class="icon-btn hide-xs" id="hdr-bell" aria-label="Notificações" style="position:relative">${RS.icon("bell")}<i class="bell-dot" id="bell-dot" hidden></i></button>
