@@ -74,7 +74,7 @@
   const score = (m) => (m.score_home != null ? `<b class="score">${m.score_home} - ${m.score_away}</b>` : "");
 
   const row = (m) => `<div class="row">
-      <div class="row-time">${live(m) ? `<i class="live">AO VIVO</i>${score(m)}` : `${ddmm(m.starts_at)} <br>${hhmm(m.starts_at)}`}</div>
+      <div class="row-time">${live(m) ? `<i class="live">${m.minute ? m.minute + "'" : "AO VIVO"}</i>${score(m)}` : `${ddmm(m.starts_at)} <br>${hhmm(m.starts_at)}`}</div>
       <div class="row-teams"><span>${shirt(m.home)}${RS.esc(m.home)}</span><span>${shirt(m.away)}${RS.esc(m.away)}</span>
         <small>${flag(m.league)} ${RS.esc(lname(m.league))}</small></div>
       <div class="row-odds">${odds(m)}</div>
@@ -93,7 +93,7 @@
   function feat(m) {
     const sp = "sp-" + m.sport.normalize("NFD").replace(/[^\w]/g, "").toLowerCase();
     const top = live(m)
-      ? `<i class="live">AO VIVO</i>${m.score_home != null ? ` ${m.score_home} - ${m.score_away}` : ""}`
+      ? `<i class="live">${m.minute ? m.minute + "' AO VIVO" : "AO VIVO"}</i>${m.score_home != null ? ` ${m.score_home} - ${m.score_away}` : ""}`
       : `${RS.icon("clock")} ${dayLabel(m.starts_at)} ${hhmm(m.starts_at)}`;
     return `<div class="feat-card ${sp}"><div class="feat-top">${top}</div>
       <div class="feat-teams"><b>${shirt(m.home)}${RS.esc(m.home)}</b><b>${shirt(m.away)}${RS.esc(m.away)}</b></div>${odds(m)}</div>`;

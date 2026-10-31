@@ -82,6 +82,7 @@ Deno.serve(async (req) => {
         const patch: Record<string, unknown> = { synced_at: new Date().toISOString() };
         if (u.home != null && u.away != null) { patch.score_home = u.home; patch.score_away = u.away; }
         if (!u.completed && !u.cancelled) patch.status = "live";
+        if (u.minute != null) patch.minute = u.minute;
         if (u.odds) {
           const o = applyMargin(u.odds, margin("odds_margin_live"));
           patch.odd_home = o.home; patch.odd_draw = o.draw; patch.odd_away = o.away;

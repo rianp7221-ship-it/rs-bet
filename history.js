@@ -17,13 +17,13 @@
 
     if (kind === "bets") {
       const { data } = await sb.from("bets")
-        .select("*, bet_selections(market, pick, odd, status, matches(home, away, league))")
+        .select("*, bet_selections(market, pick, odd, status, matches(home, away, league, status, score_home, score_away, minute))")
         .eq("user_id", u.id).order("created_at", { ascending: false }).limit(50);
       box.innerHTML = data?.length ? data.map((b) => `
         <div class="hist-card">
           <div class="hist-top"><b>Bilhete #${b.id}</b>${badge(b.status)}<small>${RS.date(b.created_at)}</small></div>
           ${b.bet_selections.map((s) => `<div class="hist-sel">
-            <span>${RS.esc(s.matches.home)} x ${RS.esc(s.matches.away)} · <b>${s.market && s.market !== "1x2" ? `${MKT[s.market] || s.market}: ${PICK[s.pick] || s.pick}` : PICK[s.pick]}</b></span>
+            <span>${RS.esc(s.matches.home)} x ${RS.esc(s.matches.away)}${s.status === "pending" && s.matches.status === "live" ? ` <i class="live">${s.matches.minute ? s.matches.minute + "'" : "AO VIVO"}${s.matches.score_home != null ? ` ${s.matches.score_home}-${s.matches.score_away}` : ""}</i>` : ""} · <b>${s.market && s.market !== "1x2" ? `${MKT[s.market] || s.market}: ${PICK[s.pick] || s.pick}` : PICK[s.pick]}</b></span>
             <span>${Number(s.odd).toFixed(2)} ${badge(s.status)}</span></div>`).join("")}
           <div class="hist-foot"><span>Apostado ${RS.money(b.stake)} · Odd ${Number(b.total_odd).toFixed(2)}</span>
             <b>${b.status === "cashout" ? "Recebeu " + RS.money(b.cashout_amount) : (b.status === "won" ? "Recebeu " : "Retorno ") + RS.money(b.potential)}</b></div>
@@ -54,6 +54,7 @@
 
   // Cashout: cotado no servidor pelas odds atuais; suspenso em gol, odd mexendo ou dados atrasados
   let cashing = false;
+  const lastCo = new Map();
   async function loadCashouts() {
     if (cashing) return;
     for (const el of RS.$$("[data-co]", box)) {
@@ -62,7 +63,9 @@
       if (cashing) return;
       if (!q) { el.innerHTML = `<small class="muted">Cashout indisponível no momento</small>`; continue; }
       if (q.suspended) { el.innerHTML = `<button class="btn w-full" disabled>🔒 Cashout suspenso · ${RS.esc(q.reason)}</button>`; continue; }
-      el.innerHTML = `<button class="btn btn-primary w-full" data-cash="${id}" data-v="${q.value}">Cashout ${RS.money(q.value)}${q.live ? " · ao vivo" : ""}</button>`;
+      const prev = lastCo.get(id), trend = prev == null || prev === q.value ? "" : q.value > prev ? "co-up" : "co-down";
+      lastCo.set(id, q.value);
+      el.innerHTML = `<button class="btn btn-primary w-full ${trend}" data-cash="${id}" data-v="${q.value}">Cashout ${RS.money(q.value)}${trend ? (trend === "co-up" ? " ▲" : " ▼") : ""}${q.live ? " · ao vivo" : ""}</button>`;
     }
   }
   const showingBets = () => kind === "bets" && !RS.$("#history").classList.contains("hidden") && RS.$("[data-co]", box);

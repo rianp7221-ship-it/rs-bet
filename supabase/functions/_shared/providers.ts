@@ -16,6 +16,7 @@ export type LiveUpdate = {
   cancelled: boolean; // adiado ou cancelado: trava o mercado
   voided: boolean; // cancelado de vez: anula as seleções
   odds: MatchOdds | null; markets?: Markets | null;
+  minute?: number | null; // minuto de jogo
   suspended: string | null; // motivo de suspensão (lance perigoso, pênalti, mercado travado...)
 };
 
@@ -210,7 +211,8 @@ type BfRunner = { selectionId: number; runnerStatus: string; runnerOrder: number
 type BfMarket = { marketStatus: string; runnerDetails?: BfRunner[]; market: { marketType: string; runners?: { selectionId: number; sortPriority: number; runnerName?: string }[] } };
 type BfEvent = {
   event: { eventId: number }; markets?: BfMarket[];
-  timeline?: { status?: string; score?: { home?: { score?: string }; away?: { score?: string } }; updateDetails?: { type: string; updateTime: string }[] } | null;
+  markets_updated_at?: string | number;
+  timeline?: { status?: string; timeElapsed?: number; score?: { home?: { score?: string }; away?: { score?: string } }; updateDetails?: { type: string; updateTime: string }[] } | null;
 };
 type BfResult = { time_status: string; ss: string | null; scores?: Record<string, { home: string; away: string }> };
 
@@ -377,10 +379,14 @@ function betsApi(token: string): OddsProvider {
         const { odds, locked } = pick(ev);
         const recent = (ev?.timeline?.updateDetails ?? []).filter((u) => now - Date.parse(u.updateTime) < 120_000);
         const hot = BF_HOT.find(([re]) => recent.some((u) => re.test(u.type)))?.[1] ?? null;
+        // em jogo, a Betfair reprecifica a cada poucos segundos: odds paradas há mais de 90 s não servem para cashout
+        const at = Number(ev?.markets_updated_at) || Date.parse(String(ev?.markets_updated_at ?? ""));
+        const stale = ev?.timeline?.status === "IN_PLAY" && at > 0 && now - (at < 1e12 ? at * 1000 : at) > 90_000 ? "Odds desatualizadas na fonte" : null;
         return {
           id, home: g?.home ?? null, away: g?.away ?? null,
           completed: st === "3", cancelled: BF_CANCEL.includes(st), voided: BF_VOID.includes(st),
-          odds, markets: locked ? null : extra(ev), suspended: BF_PAUSE[st] ?? (locked ? "Mercado travado na fonte" : hot),
+          odds, markets: locked ? null : extra(ev), minute: ev?.timeline?.timeElapsed ?? null,
+          suspended: BF_PAUSE[st] ?? (locked ? "Mercado travado na fonte" : hot ?? stale),
         };
       });
     },
