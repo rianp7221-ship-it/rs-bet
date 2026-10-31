@@ -4,6 +4,16 @@
 import { adminClient, cors, json } from "../_shared/auth.ts";
 import { getProvider } from "../_shared/providers.ts";
 
+type Odds = { home: number | null; draw?: number | null; away: number | null };
+// margem da casa: tira a margem do mercado (probabilidade justa) e aplica a margem configurada
+function applyMargin(o: Odds, marginPct: number): Odds {
+  if (!(marginPct > 0)) return o;
+  const prices = [o.home, o.draw, o.away].filter((x): x is number => !!x && x > 1);
+  const book = prices.reduce((a, x) => a + 1 / x, 0);
+  const adj = (x?: number | null) => (x && x > 1 ? Math.max(1.01, Math.floor((x * book / (1 + marginPct / 100)) * 100) / 100) : x ?? null);
+  return { home: adj(o.home), draw: adj(o.draw), away: adj(o.away) };
+}
+
 const DEFAULT_SPORTS = "soccer_brazil_campeonato,soccer_epl,soccer_uefa_champs_league,soccer_spain_la_liga,basketball_nba";
 
 Deno.serve(async (req) => {
@@ -26,6 +36,8 @@ Deno.serve(async (req) => {
   const sports = mode === "live"
     ? [...startedBySport.keys()]
     : (Deno.env.get("ODDS_SPORTS") || DEFAULT_SPORTS).split(",").map((s) => s.trim()).filter(Boolean);
+  const { data: cfg } = await sb.from("settings").select("key, value").in("key", ["odds_margin_pre", "odds_margin_live"]);
+  const margin = (k: string) => Number(cfg?.find((c) => c.key === k)?.value ?? 0) || 0;
   const errors: string[] = [];
   let updated = 0, settled = 0;
 
@@ -40,10 +52,12 @@ Deno.serve(async (req) => {
       const priced = new Set<string>();
       for (const ev of events) {
         if (!ev.odds) continue;
+        const isLive = new Date(ev.commence_time).getTime() <= now;
+        const odds = applyMargin(ev.odds, margin(isLive ? "odds_margin_live" : "odds_margin_pre"));
         const row = {
           external_id: `${sport}:${ev.id}`, sport: ev.sport, league: ev.league, home: ev.home, away: ev.away,
-          starts_at: ev.commence_time, odd_home: ev.odds.home, odd_draw: ev.odds.draw, odd_away: ev.odds.away,
-          status: new Date(ev.commence_time).getTime() <= now ? "live" : "open",
+          starts_at: ev.commence_time, odd_home: odds.home, odd_draw: odds.draw, odd_away: odds.away,
+          status: isLive ? "live" : "open",
           synced_at: new Date().toISOString(),
         };
         priced.add(row.external_id);
