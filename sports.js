@@ -47,7 +47,8 @@
   }
   const bbOn = new Set();
   const extras = (m) => Object.keys(MK).filter((k) => m.markets?.[k]);
-  const openMk = new Set();
+  let mvId = null, mvTab = "all";
+  const mvClosed = new Set();
   const isSel = (id, mk, pick) => legsOf(slip.get(id)).some(([k, p]) => k === mk && p === pick);
   const ICON = { Futebol: "⚽", Basquete: "🏀", "Tênis": "🎾", "Vôlei": "🏐", "Futebol Americano": "🏈", Beisebol: "⚾", "Hóquei": "🏒", MMA: "🥊", "E-sports": "🎮" };
   const icon = (s) => ICON[s] || "🏅";
@@ -110,21 +111,52 @@
         <small>${flag(m.league)} ${RS.esc(lname(m.league))}</small></div>
       <div class="row-odds">${odds(m)}</div>
       <button class="fav ${favs.has(m.id) ? "on" : ""}" data-fav="${m.id}" aria-label="Favoritar">${RS.icon("star")}</button>
-      ${extras(m).length ? `<button class="more-mk ${openMk.has(m.id) ? "on" : ""}" data-more="${m.id}">+${extras(m).length} mercados</button>` : ""}
-    </div>${openMk.has(m.id) ? panel(m) : ""}`;
+      ${extras(m).length ? `<button class="more-mk" data-more="${m.id}">+${extras(m).length} mercados</button>` : ""}
+    </div>`;
 
-  // mercados extras do jogo (Chance Dupla, Total de Gols, Ambas Marcam, Empate Anula)
-  const panel = (m) => {
-    const bb = bbOn.has(m.id);
-    return `<div class="mk-panel">${bbReady(m) ? `<div class="bb-bar"><span>Combine até ${BB_MAX} mercados deste jogo numa aposta só</span>
-      <button class="bb-toggle ${bb ? "on" : ""}" data-bb="${m.id}" aria-pressed="${bb}">CRIAR<br>APOSTA</button></div>` : ""}
-    ${extras(m).filter((k) => !bb || BB_MK.includes(k)).map((k) => `<div class="mk-group"><h4>${MK[k][0]}</h4>
-      <div class="odds">${Object.entries(MK[k][1]).map(([p, label]) => {
-        const odd = oddOf(m, k, p);
-        if (!odd || suspended(m)) return `<button class="odd" disabled><small>${label}</small><b>${RS.icon("lock")}</b></button>`;
-        return `<button class="odd ${isSel(m.id, k, p) ? "selected" : ""}" data-id="${m.id}" data-mk="${k}" data-pick="${p}"><small>${label}</small><b>${odd.toFixed(2)}</b></button>`;
-      }).join("")}</div></div>`).join("")}</div>`;
+  // tela do jogo: mercados em blocos que abrem e fecham, separados por abas
+  const MV_TABS = { all: "Todos", main: "Principais", goals: "Gols" };
+  const MV_GROUPS = [
+    { key: "r", tab: "main", name: "Resultado Final", rows: (m) => [[["1x2", "home", m.home], ["1x2", "draw", "Empate"], ["1x2", "away", m.away]]] },
+    { key: "ou", tab: "goals", name: "Total de Gols Mais/Menos", rows: () => ["ou15", "ou25", "ou35"].map((k) => Object.entries(MK[k][1]).map(([p, l]) => [k, p, l])) },
+    { key: "btts", tab: "goals", name: "Ambas equipes Marcam", rows: () => [[["btts", "yes", "Sim"], ["btts", "no", "Não"]]] },
+    { key: "dc", tab: "main", name: "Chance Dupla", rows: (m) => [[["dc", "1x", `${m.home} ou Empate`], ["dc", "x2", `Empate ou ${m.away}`], ["dc", "12", `${m.home} ou ${m.away}`]]] },
+    { key: "dnb", tab: "main", name: "Empate Anula", ca: false, rows: (m) => [[["dnb", "home", m.home], ["dnb", "away", m.away]]] },
+  ];
+  const mvBtn = (m, [mk, p, label]) => {
+    const odd = oddOf(m, mk, p);
+    if (!odd) return "";
+    if (suspended(m)) return `<button class="odd" disabled><small>${RS.esc(label)}</small><b>${RS.icon("lock")}</b></button>`;
+    return `<button class="odd ${isSel(m.id, mk, p) ? "selected" : ""}" data-id="${m.id}" data-mk="${mk}" data-pick="${p}"><small>${RS.esc(label)}</small><b>${odd.toFixed(2)}</b></button>`;
   };
+  function renderMv() {
+    let el = RS.$("#mv");
+    const m = mvId != null && matches.find((x) => x.id === mvId);
+    document.body.classList.toggle("mv-open", !!m);
+    if (!m) { el?.remove(); return; }
+    if (!el) { el = document.createElement("section"); el.id = "mv"; el.className = "mv"; document.body.append(el); }
+    const bb = bbOn.has(m.id) && bbReady(m), canBB = bbReady(m);
+    const groups = MV_GROUPS.map((g) => ({ ...g, html: g.rows(m).map((r) => r.map((b) => mvBtn(m, b)).join("")).filter(Boolean) }))
+      .filter((g) => g.html.length && (mvTab === "all" || g.tab === mvTab) && (!bb || g.ca !== false));
+    const allClosed = groups.length && groups.every((g) => mvClosed.has(g.key));
+    const top = live(m)
+      ? `<i class="live">${m.minute ? m.minute + "' " : ""}AO VIVO</i>`
+      : new Date(m.starts_at).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" }) + " " + hhmm(m.starts_at);
+    const sc = m.score_home != null ? `<b class="mv-score">${m.score_home} - ${m.score_away}</b>` : `<i class="mv-vs">x</i>`;
+    const keep = el.querySelector(".mv-body")?.scrollTop || 0;
+    el.innerHTML = `<div class="mv-head"><button class="mv-back" data-mvclose aria-label="Voltar">←</button><small>${flag(m.league)} ${RS.esc(lname(m.league))}</small></div>
+      <div class="mv-match"><div class="mv-date">${top}</div>
+        <div class="mv-teams"><span>${shirt(m.home)}${RS.esc(m.home)}</span>${sc}<span>${RS.esc(m.away)}${shirt(m.away)}</span></div></div>
+      <div class="mv-bar"><div class="mv-tabs">${Object.entries(MV_TABS).map(([k, l]) => `<button class="${mvTab === k ? "on" : ""}" data-mvtab="${k}">${l}</button>`).join("")}</div>
+        <button class="mv-all" data-mvall title="${allClosed ? "Abrir todos" : "Fechar todos"}">${allClosed ? "⇕" : "⇳"}</button>
+        ${canBB ? `<button class="bb-toggle ${bb ? "on" : ""}" data-bb="${m.id}" aria-pressed="${bb}">CRIAR<br>APOSTA</button>` : ""}</div>
+      ${bb ? `<p class="mv-hint">Escolha de 2 a ${BB_MAX} mercados deste jogo para combinar numa aposta só.</p>` : ""}
+      <div class="mv-body">${groups.map((g) => `<div class="mv-acc ${mvClosed.has(g.key) ? "closed" : ""}">
+        <button class="mv-acc-h" data-mvacc="${g.key}"><span>${g.name}</span>${canBB && g.ca !== false ? `<i class="ca">CA</i>` : ""}<i class="mv-chev"></i></button>
+        <div class="mv-acc-b">${g.html.map((r) => `<div class="odds">${r}</div>`).join("")}</div></div>`).join("")
+        || `<p class="empty">Nenhum mercado disponível nesta aba.</p>`}</div>`;
+    el.querySelector(".mv-body").scrollTop = keep;
+  }
 
   function feat(m) {
     const sp = "sp-" + m.sport.normalize("NFD").replace(/[^\w]/g, "").toLowerCase();
@@ -201,6 +233,7 @@
     const reset = home ? "" : `<div class="filter-bar"><button class="btn btn-outline sm" data-view="all">Ver todos os jogos</button></div>`;
     list.innerHTML = reset + (rows.length ? rows.map(row).join("")
       : `<p class="empty">${view === "fav" ? "Toque na estrela de um jogo para salvá-lo nos favoritos." : "Nenhum jogo disponível no momento."}</p>`);
+    renderMv();
   }
 
   function setView(v, opts = {}) {
@@ -378,7 +411,16 @@
     const bt = t.closest("[data-bb]");
     if (bt) { const id = Number(bt.dataset.bb); if (bbOn.has(id)) bbOn.delete(id); else bbOn.add(id); render(); return; }
     const mo = t.closest("[data-more]");
-    if (mo) { const id = Number(mo.dataset.more); if (openMk.has(id)) openMk.delete(id); else openMk.add(id); render(); return; }
+    if (mo) { mvId = Number(mo.dataset.more); mvTab = "all"; render(); return; }
+    if (t.closest("[data-mvclose]")) { mvId = null; render(); return; }
+    const mt = t.closest("[data-mvtab]");
+    if (mt) { mvTab = mt.dataset.mvtab; render(); return; }
+    const ma = t.closest("[data-mvacc]");
+    if (ma) { const k = ma.dataset.mvacc; if (mvClosed.has(k)) mvClosed.delete(k); else mvClosed.add(k); render(); return; }
+    if (t.closest("[data-mvall]")) {
+      const keys = MV_GROUPS.map((g) => g.key), shut = keys.every((k) => mvClosed.has(k));
+      keys.forEach((k) => (shut ? mvClosed.delete(k) : mvClosed.add(k))); render(); return;
+    }
     const b = t.closest(".odd[data-id]");
     if (b) toggle(Number(b.dataset.id), b.dataset.pick, b.dataset.mk || "1x2");
   });
