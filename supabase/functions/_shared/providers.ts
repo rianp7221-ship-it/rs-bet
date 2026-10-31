@@ -112,7 +112,18 @@ const afGoals = (f: AfFixture) =>
 const AF_PAUSE: Record<string, string> = { SUSP: "Jogo paralisado", INT: "Jogo interrompido", BT: "Intervalo da prorrogação", P: "Disputa de pênaltis" };
 const AF_1X2 = ["Match Winner", "Fulltime Result", "1x2"];
 // a API chama Brasileirão e Itália de "Serie A"/"Serie B": nome único por liga
-const AF_LEAGUE: Record<number, string> = { 71: "Brazil Série A", 72: "Brazil Série B", 73: "Copa do Brasil", 135: "Serie A - Italy" };
+const AF_LEAGUE: Record<number, string> = {
+  71: "Brazil Série A", 72: "Brazil Série B", 73: "Copa do Brasil", 135: "Serie A - Italy", 75: "Brazil Série C",
+  94: "Primeira Liga Portugal", 88: "Eredivisie Holanda", 144: "Pro League Bélgica", 203: "Süper Lig Turquia", 179: "Premiership Escócia",
+  40: "Championship Inglaterra", 141: "La Liga 2 Espanha", 136: "Serie B Itália", 79: "2. Bundesliga Alemanha", 62: "Ligue 2 França",
+  207: "Super League Suíça", 218: "Bundesliga Áustria", 119: "Superliga Dinamarca", 103: "Eliteserien Noruega", 113: "Allsvenskan Suécia",
+  106: "Ekstraklasa Polônia", 345: "Liga Tcheca", 197: "Super League Grécia", 210: "HNL Croácia", 283: "Liga I Romênia", 286: "Super Liga Sérvia",
+  333: "Premier League Ucrânia", 128: "Liga Profesional Argentina", 253: "MLS EUA", 262: "Liga MX México", 239: "Primera A Colômbia",
+  265: "Primera División Chile", 268: "Primera División Uruguai", 281: "Liga 1 Peru", 242: "Liga Pro Equador", 98: "J1 League Japão",
+  292: "K League 1 Coreia do Sul", 307: "Saudi Pro League", 188: "A-League Austrália", 169: "Super League China", 305: "Stars League Catar",
+  848: "UEFA Conference League", 45: "FA Cup Inglaterra", 48: "Copa da Liga Inglesa", 143: "Copa del Rey", 137: "Coppa Italia", 81: "DFB Pokal",
+  66: "Coupe de France",
+};
 // mercados extras: nomes do pré-jogo (/odds) e do ao vivo (/odds/live)
 const AF_OU = ["Goals Over/Under", "Match Goals"];
 const AF_BTTS = ["Both Teams Score", "Both Teams to Score"];
@@ -126,14 +137,20 @@ function apiFootball(key: string): OddsProvider {
   const API = "https://v3.football.api-sports.io";
   let left: string | null = null, daily: number | null = null;
   const seasons = new Map<string, number>();
-  const get = async <T>(path: string): Promise<{ response: T[]; paging?: { current: number; total: number } }> => {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  // limite por minuto do plano (Ultra: 450): espera e tenta de novo em vez de perder a liga
+  const get = async <T>(path: string, tries = 4): Promise<{ response: T[]; paging?: { current: number; total: number } }> => {
     const r = await fetch(`${API}${path}`, { headers: { "x-apisports-key": key } });
     left = r.headers.get("x-ratelimit-requests-remaining") ?? left;
     daily = Number(r.headers.get("x-ratelimit-requests-limit")) || daily;
+    const perMin = Number(r.headers.get("x-ratelimit-remaining"));
+    if (r.status === 429 && tries > 1) { await sleep(8000); return get(path, tries - 1); }
     if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 120)}`);
     const j = await r.json();
     const errs = j.errors && (Array.isArray(j.errors) ? j.errors : Object.values(j.errors));
+    if (errs?.length && /too many requests/i.test(String(errs[0])) && tries > 1) { await sleep(8000); return get(path, tries - 1); }
     if (errs?.length) throw new Error(String(errs[0]));
+    if (perMin >= 0 && perMin < 30) await sleep(3000);
     return j;
   };
   const num = (s?: string) => { const v = Math.round(Number(s) * 100) / 100; return v > 1 ? v : null; };
@@ -191,8 +208,9 @@ function apiFootball(key: string): OddsProvider {
   return {
     name: "apifootball",
     prefix: "af",
-    // Brasileirão A/B, Copa do Brasil, Libertadores, Sul-Americana, Premier, La Liga, Serie A, Bundesliga, Ligue 1, Champions
-    defaultSports: "71,72,73,13,11,39,140,135,78,61,2",
+    // principais ligas e copas da Europa, Américas, Ásia e Oceania (nomes em AF_LEAGUE)
+    defaultSports: "71,72,73,13,11,39,140,135,78,61,2,3,848,75,94,88,144,203,179,40,141,136,79,62,207,218,119,103,113,106,345,197,210,283,286,333," +
+      "128,253,262,239,265,268,281,242,98,292,307,188,169,305,45,48,143,137,81,66",
     async odds(league) {
       const y = await season(league);
       const { response: fx } = await get<AfFixture>(`/fixtures?league=${league}&season=${y}&from=${day(0)}&to=${day(7)}&timezone=UTC`);

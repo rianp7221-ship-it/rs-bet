@@ -1,6 +1,7 @@
 // sync-odds — jogos, odds, placares e resultados da API configurada (_shared/providers.ts)
 // Secrets: ODDS_PROVIDER (theoddsapi | apifootball | betsapi), ODDS_API_KEY / API_FOOTBALL_KEY / BETSAPI_TOKEN, ODDS_SPORTS (opcional), CRON_SECRET (cron).
 // Body: { mode: "full" } (padrão: todos os esportes) ou { mode: "live" } (só esportes com jogo em andamento).
+// No full com muitas ligas, a função chama a si mesma com { mode: "full", leagues: [...] } em grupos (limite de CPU por execução).
 import { adminClient, cors, json } from "../_shared/auth.ts";
 import { getProvider, type Markets } from "../_shared/providers.ts";
 
@@ -33,9 +34,11 @@ Deno.serve(async (req) => {
   if (sb instanceof Response) return sb;
   let feed;
   try { feed = getProvider(); } catch (e) { return json({ error: (e as Error).message }); }
-  const mode = (await req.json().catch(() => ({})))?.mode === "live" ? "live" : "full";
+  const body = await req.json().catch(() => ({}));
+  const mode = body?.mode === "live" ? "live" : "full";
+  const only: string[] | null = mode === "full" && Array.isArray(body?.leagues) ? body.leagues.map(String) : null;
   // jogos de fontes antigas saem do catálogo e são liquidados pelo mesmo jogo da fonte atual
-  if (feed.prefix) await sb.rpc("sync_orphan_matches", { p_prefix: feed.prefix });
+  if (feed.prefix && !only) await sb.rpc("sync_orphan_matches", { p_prefix: feed.prefix });
 
   // jogos já iniciados e ainda não liquidados (ao vivo)
   const { data: started } = await sb.from("matches").select("id, external_id, home, away")
@@ -53,7 +56,7 @@ Deno.serve(async (req) => {
   }
   const sports = mode === "live"
     ? [...startedBySport.keys()]
-    : (Deno.env.get("ODDS_SPORTS") || feed.defaultSports).split(",").map((s) => s.trim()).filter(Boolean);
+    : only ?? (Deno.env.get("ODDS_SPORTS") || feed.defaultSports).split(",").map((s) => s.trim()).filter(Boolean);
   const { data: cfg } = await sb.from("settings").select("key, value, updated_at")
     .in("key", ["odds_margin_pre", "odds_margin_live", "feed_remaining", "feed_limit"]);
   const margin = (k: string) => Number(cfg?.find((c) => c.key === k)?.value ?? 0) || 0;
@@ -112,8 +115,30 @@ Deno.serve(async (req) => {
     return json({ modo: mode, jogos_atualizados: updated, jogos_liquidados: settled, creditos_restantes: feed.remaining(), errors });
   }
 
-  // 1) jogos e odds
-  for (const sport of sports) {
+  // 1) jogos e odds; com muitas ligas, cada grupo roda numa execução separada da função
+  const GROUP = 6;
+  const fanOut = mode === "full" && !only && sports.length > GROUP;
+  if (fanOut) {
+    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/sync-odds`;
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    for (const h of ["x-cron-secret", "authorization", "apikey"]) { const v = req.headers.get(h); if (v) headers[h] = v; }
+    const groups = Array.from({ length: Math.ceil(sports.length / GROUP) }, (_, i) => sports.slice(i * GROUP, (i + 1) * GROUP));
+    // 2 grupos por vez para não estourar o limite por minuto da API
+    const runGroup = async (leagues: string[]) => {
+      try {
+        const r = await fetch(url, { method: "POST", headers, body: JSON.stringify({ mode: "full", leagues }) });
+        const j = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
+        if (!r.ok || j.error) errors.push(`ligas ${leagues.join(",")}: ${j.error ?? j.message ?? r.status}`);
+        updated += Number(j.jogos_atualizados) || 0;
+        settled += Number(j.jogos_liquidados) || 0;
+        errors.push(...(j.errors ?? []));
+      } catch (e) {
+        errors.push(`ligas ${leagues.join(",")}: ${(e as Error).message}`);
+      }
+    };
+    for (let i = 0; i < groups.length; i += 2) await Promise.all(groups.slice(i, i + 2).map(runGroup));
+  }
+  const syncLeague = async (sport: string) => {
     try {
       const events = await feed.odds(sport);
       const ext = (id: string) => `${feed.prefix}${sport}:${id}`;
@@ -152,10 +177,13 @@ Deno.serve(async (req) => {
     } catch (e) {
       errors.push(`${sport}: ${(e as Error).message}`);
     }
-  }
+  };
+  if (!fanOut) for (const sport of sports) await syncLeague(sport);
 
   // 2) placar e resultados
   for (const [sport, list] of startedBySport) {
+    // cada grupo liquida as próprias ligas; a execução principal só as que estão fora da lista
+    if (only ? !only.includes(sport) : fanOut && sports.includes(sport)) continue;
     try {
       const byExt = new Map((await feed.scores(sport, list.map((m) => m.external_id.split(":")[1]))).map((s) => [`${feed.prefix}${sport}:${s.id}`, s]));
       for (const m of list) {
