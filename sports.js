@@ -15,9 +15,40 @@
     ou15: ["Total de Gols 1,5", { over: "Mais de 1,5", under: "Menos de 1,5" }],
     ou35: ["Total de Gols 3,5", { over: "Mais de 3,5", under: "Menos de 3,5" }],
   };
-  const oddOf = (m, mk, pick) => Number(mk === "1x2" ? m?.["odd_" + pick] : m?.markets?.[mk]?.[pick]) || 0;
+  const oddOf = (m, mk, pick) => mk === "bb" ? bbOdd(m, pick) : Number(mk === "1x2" ? m?.["odd_" + pick] : m?.markets?.[mk]?.[pick]) || 0;
+  // Criar Aposta: mesmo modelo de Poisson do servidor (_bb_odd); o servidor recalcula a odd ao apostar
+  const BB_MK = ["1x2", "ou15", "ou25", "ou35", "btts", "dc"], BB_MAX = 4;
+  let bbMargin = 10;
+  sb.rpc("bb_params").then(({ data }) => { if (data?.margin != null) bbMargin = Number(data.margin); });
+  const legsOf = (s) => (s ? (s.market === "bb" ? s.pick.split("|").map((l) => l.split(":")) : [[s.market, s.pick]]) : []);
+  const legWon = (mk, p, h, a) => {
+    if (mk === "1x2") return (h > a ? "home" : h < a ? "away" : "draw") === p;
+    if (mk === "btts") return (h > 0 && a > 0) === (p === "yes");
+    if (mk === "dc") return p === "1x" ? h >= a : p === "x2" ? h <= a : h !== a;
+    return (h + a > { ou15: 1.5, ou25: 2.5, ou35: 3.5 }[mk]) === (p === "over");
+  };
+  const bbReady = (m) => !!m && m.status === "open" && m.bb_lh != null && new Date(m.starts_at) > new Date();
+  function bbOdd(m, pick) {
+    const legs = String(pick).split("|").map((l) => l.split(":"));
+    if (!bbReady(m) || legs.length < 2 || legs.length > BB_MAX || new Set(legs.map((l) => l[0])).size !== legs.length) return 0;
+    let prod = 1;
+    for (const [mk, p] of legs) {
+      const o = BB_MK.includes(mk) ? oddOf(m, mk, p) : 0;
+      if (!(o > 1)) return 0;
+      prod *= o;
+    }
+    const pois = (l) => { const r = [Math.exp(-l)]; for (let i = 1; i <= 10; i++) r.push((r[i - 1] * l) / i); return r; };
+    const ph = pois(Number(m.bb_lh)), pa = pois(Number(m.bb_la));
+    let pr = 0;
+    for (let h = 0; h <= 10; h++) for (let a = 0; a <= 10; a++) if (legs.every(([mk, p]) => legWon(mk, p, h, a))) pr += ph[h] * pa[a];
+    if (pr < 0.002) return 0;
+    const v = Math.round(Math.min(prod, (1 / pr) * (1 - bbMargin / 100)) * 100) / 100;
+    return v >= 1.05 ? v : 0;
+  }
+  const bbOn = new Set();
   const extras = (m) => Object.keys(MK).filter((k) => m.markets?.[k]);
   const openMk = new Set();
+  const isSel = (id, mk, pick) => legsOf(slip.get(id)).some(([k, p]) => k === mk && p === pick);
   const ICON = { Futebol: "⚽", Basquete: "🏀", "Tênis": "🎾", "Vôlei": "🏐", "Futebol Americano": "🏈", Beisebol: "⚾", "Hóquei": "🏒", MMA: "🥊", "E-sports": "🎮" };
   const icon = (s) => ICON[s] || "🏅";
   const FLAGS = [[/brazil|brasil|brasileir/i, "🇧🇷"], [/epl|premier|england|fa cup|championship/i, "🏴󠁧󠁢󠁥󠁮󠁧󠁿"], [/spain|la ?liga/i, "🇪🇸"],
@@ -67,7 +98,7 @@
     const odd = m["odd_" + pick];
     if (!odd) return pick === "draw" ? "" : `<button class="odd" disabled><small>${PICK[pick]}</small><b>-</b></button>`;
     if (suspended(m)) return `<button class="odd" disabled title="Mercado suspenso"><small>${PICK[pick]}</small><b>${RS.icon("lock")}</b></button>`;
-    const sel = slip.get(m.id)?.market === "1x2" && slip.get(m.id)?.pick === pick;
+    const sel = isSel(m.id, "1x2", pick);
     return `<button class="odd ${sel ? "selected" : ""}" data-id="${m.id}" data-pick="${pick}"><small>${PICK[pick]}</small><b>${Number(odd).toFixed(2)}</b></button>`;
   }
   const odds = (m) => `<div class="odds">${["home", "draw", "away"].map((p) => oddBtn(m, p)).join("")}</div>`;
@@ -83,12 +114,17 @@
     </div>${openMk.has(m.id) ? panel(m) : ""}`;
 
   // mercados extras do jogo (Chance Dupla, Total de Gols, Ambas Marcam, Empate Anula)
-  const panel = (m) => `<div class="mk-panel">${extras(m).map((k) => `<div class="mk-group"><h4>${MK[k][0]}</h4>
+  const panel = (m) => {
+    const bb = bbOn.has(m.id);
+    return `<div class="mk-panel">${bbReady(m) ? `<div class="bb-bar"><span>Combine até ${BB_MAX} mercados deste jogo numa aposta só</span>
+      <button class="bb-toggle ${bb ? "on" : ""}" data-bb="${m.id}" aria-pressed="${bb}">CRIAR<br>APOSTA</button></div>` : ""}
+    ${extras(m).filter((k) => !bb || BB_MK.includes(k)).map((k) => `<div class="mk-group"><h4>${MK[k][0]}</h4>
       <div class="odds">${Object.entries(MK[k][1]).map(([p, label]) => {
-        const odd = oddOf(m, k, p), s = slip.get(m.id);
+        const odd = oddOf(m, k, p);
         if (!odd || suspended(m)) return `<button class="odd" disabled><small>${label}</small><b>${RS.icon("lock")}</b></button>`;
-        return `<button class="odd ${s?.market === k && s.pick === p ? "selected" : ""}" data-id="${m.id}" data-mk="${k}" data-pick="${p}"><small>${label}</small><b>${odd.toFixed(2)}</b></button>`;
+        return `<button class="odd ${isSel(m.id, k, p) ? "selected" : ""}" data-id="${m.id}" data-mk="${k}" data-pick="${p}"><small>${label}</small><b>${odd.toFixed(2)}</b></button>`;
       }).join("")}</div></div>`).join("")}</div>`;
+  };
 
   function feat(m) {
     const sp = "sp-" + m.sport.normalize("NFD").replace(/[^\w]/g, "").toLowerCase();
@@ -178,7 +214,21 @@
     const m = matches.find((x) => x.id === id);
     if (!m || suspended(m)) return;
     const cur = slip.get(id);
-    if (cur?.market === market && cur.pick === pick) slip.delete(id);
+    if (bbOn.has(id) && bbReady(m) && BB_MK.includes(market)) {
+      let legs = legsOf(cur).filter(([k]) => BB_MK.includes(k));
+      if (legs.some(([k, p]) => k === market && p === pick)) legs = legs.filter(([k]) => k !== market);
+      else if (legs.some(([k]) => k === market)) legs = legs.map(([k, p]) => [k, k === market ? pick : p]);
+      else if (legs.length >= BB_MAX) { RS.toast(`Criar Aposta: até ${BB_MAX} mercados por jogo.`, "error"); return; }
+      else legs.push([market, pick]);
+      if (!cur && slip.size >= MAX) { RS.toast(`Máximo de ${MAX} seleções por bilhete.`, "error"); return; }
+      if (!legs.length) slip.delete(id);
+      else {
+        const [mk, pk] = legs.length > 1 ? ["bb", legs.map((l) => l.join(":")).join("|")] : legs[0];
+        const odd = oddOf(m, mk, pk);
+        if (!odd) { RS.toast("Essa combinação não está disponível.", "error"); return; }
+        slip.set(id, { market: mk, pick: pk, odd, base: odd });
+      }
+    } else if (cur?.market === market && cur.pick === pick) slip.delete(id);
     else {
       if (!slip.has(id) && slip.size >= MAX) { RS.toast(`Máximo de ${MAX} seleções por bilhete.`, "error"); return; }
       const odd = oddOf(m, market, pick);
@@ -223,12 +273,15 @@
     const anySusp = items.some(([id]) => suspended(matches.find((m) => m.id === id)));
     slipEl.innerHTML = items.map(([id, s]) => {
       const m = matches.find((x) => x.id === id);
-      const label = s.market === "1x2" || s.market === "dnb" ? (s.pick === "home" ? m.home : s.pick === "away" ? m.away : "Empate")
-        : MK[s.market][1][s.pick];
+      const name = (mk, p) => (mk === "1x2" || mk === "dnb" ? (p === "home" ? m.home : p === "away" ? m.away : "Empate") : MK[mk][1][p]);
+      const mkName = (mk) => (mk === "1x2" ? "Resultado Final" : MK[mk][0]);
       const up = s.odd > s.base;
       return `<div class="slip-item">
-        <div class="si-main"><b>${icon(m.sport)} ${RS.esc(label)}</b><small class="si-mkt">${s.market === "1x2" ? "Resultado Final" : MK[s.market][0]}</small>
-          <small>${RS.esc(m.home)}<br>${RS.esc(m.away)}</small>
+        <div class="si-main">${s.market === "bb"
+          ? `<b class="si-bb">${RS.icon("ball")} Criar Aposta</b><small>${RS.esc(m.home)} - ${RS.esc(m.away)}</small>
+            <ul class="si-legs">${legsOf(s).map(([k, p]) => `<li><b>${RS.esc(name(k, p))}</b><small>${mkName(k)}</small></li>`).join("")}</ul>`
+          : `<b>${icon(m.sport)} ${RS.esc(name(s.market, s.pick))}</b><small class="si-mkt">${mkName(s.market)}</small>
+          <small>${RS.esc(m.home)}<br>${RS.esc(m.away)}</small>`}
           ${suspended(m) ? `<small class="si-lock">${RS.icon("lock")} Mercado suspenso</small>` : ""}</div>
         <div class="si-odd">${s.odd !== s.base
           ? `<s>${s.base.toFixed(2)}</s><span class="${up ? "up" : "down"}">${up ? "▲" : "▼"} ${s.odd.toFixed(2)}</span>`
@@ -322,6 +375,8 @@
       localStorage.setItem("rs-favs", JSON.stringify([...favs]));
       render(); return;
     }
+    const bt = t.closest("[data-bb]");
+    if (bt) { const id = Number(bt.dataset.bb); if (bbOn.has(id)) bbOn.delete(id); else bbOn.add(id); render(); return; }
     const mo = t.closest("[data-more]");
     if (mo) { const id = Number(mo.dataset.more); if (openMk.has(id)) openMk.delete(id); else openMk.add(id); render(); return; }
     const b = t.closest(".odd[data-id]");
