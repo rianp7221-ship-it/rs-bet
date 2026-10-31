@@ -63,6 +63,7 @@
     { id: "users", t: "Usuários", ic: "user", p: "users.view", run: (id) => window.RSmods.users(id) },
     { id: "finance", t: "Financeiro", ic: "card", p: "finance.view", run: () => window.RSmods.finance() },
     { id: "risk", t: "Risco e KYC", ic: "id", p: "kyc.view", run: () => window.RSmods.risk() },
+    { id: "bonus", t: "Bônus e marketing", ic: "gift", p: "bonus.view", run: () => window.RSmods.bonus() },
     { id: "sports", t: "Apostas e jogos", ic: "receipt", p: "sports.view", run: () => window.RSmods.sports() },
     { id: "staff", t: "Equipe e acessos", ic: "key", p: "staff.manage", run: staff },
     { id: "audit", t: "Auditoria", ic: "id", p: "audit.view", run: audit },

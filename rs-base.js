@@ -124,3 +124,17 @@ RS.refer = async () => {
     } catch { /* cancelado */ }
   };
 };
+
+// guarda indicação (?ref=) e afiliado (?aff=) para enviar no cadastro
+(() => {
+  const q = new URLSearchParams(location.search);
+  const ref = (q.get("ref") || "").toLowerCase(), aff = (q.get("aff") || "").toLowerCase();
+  if (/^[0-9a-f]{8}$/.test(ref)) localStorage.setItem("rs-ref", ref);
+  if (/^[a-z0-9_-]{3,30}$/.test(aff)) {
+    localStorage.setItem("rs-aff", aff);
+    if (sessionStorage.getItem("rs-aff-click") !== aff && window.sb) {
+      sessionStorage.setItem("rs-aff-click", aff);
+      sb.rpc("track_aff_click", { p_code: aff }).then(() => {}, () => {});
+    }
+  }
+})();

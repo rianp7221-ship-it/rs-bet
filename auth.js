@@ -38,7 +38,7 @@
         if (password.length < 8) throw new Error("A senha precisa de pelo menos 8 caracteres");
         const { data, error } = await sb.auth.signUp({
           email, password,
-          options: { data: { username: form.username.value.trim() }, emailRedirectTo: location.origin + "/index.html" },
+          options: { data: { username: form.username.value.trim(), ref: localStorage.getItem("rs-ref") || undefined, aff: localStorage.getItem("rs-aff") || undefined }, emailRedirectTo: location.origin + "/index.html" },
         });
         if (error) throw error;
         if (data.session) location.href = "index.html";

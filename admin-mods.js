@@ -388,6 +388,102 @@
     await load();
   }
 
-  window.RSmods = Object.assign(window.RSmods || {}, { users, finance, sports, risk, loaded: true });
+
+  // ---------- BÔNUS, CUPONS, INDICAÇÕES E AFILIADOS ----------
+  const KIND = { boas_vindas: "Boas-vindas (1º depósito)", deposito: "Bônus de depósito (cupom)", freebet: "Free bet", cashback: "Cashback", cupom: "Cupom de valor fixo" };
+  const BST = { aguardando_deposito: "Aguardando depósito", ativo: "Ativo", concluido: "Liberado", expirado: "Expirado", cancelado: "Cancelado" };
+  async function bonus() {
+    const { can, act, ask, table, head } = A();
+    const tabs = [["camp", "Campanhas e cupons", "bonus.view"], ["ub", "Bônus dos jogadores", "bonus.view"], ["aff", "Afiliados", "affiliates.manage"], ["ref", "Indicações", "bonus.view"]].filter((t) => can(t[2]));
+    main().innerHTML = head("Bônus e marketing") + `<div class="tabs-sm" id="b-tabs">${tabs.map(([v, t], i) => `<button class="chip ${i ? "" : "active"}" data-v="${v}">${t}</button>`).join("")}</div><div id="b-body"></div>`;
+    let view = tabs[0]?.[0];
+    const body = () => RS.$("#b-body");
+    const rule = (c) => [c.fixed > 0 ? M(c.fixed) : "", c.percent > 0 ? `${+c.percent}%` : ""].filter(Boolean).join(" + ") + (c.max_amount ? ` (máx. ${M(c.max_amount)})` : "");
+    async function camp() {
+      const { data } = await sb.from("bonus_campaigns").select("*").order("created_at", { ascending: false });
+      body().innerHTML = (can("bonus.manage") ? `<div class="filters"><button class="btn btn-primary" id="c-new">Nova campanha</button><button class="btn btn-outline" id="c-grant">Bônus manual para jogador</button>
+        <small class="muted">Boas-vindas sem código é aplicado sozinho no 1º depósito. Cupons com % ou depósito mínimo entram no próximo depósito.</small></div>` : "") +
+        table(["#", "Campanha", "Tipo", "Código", "Valor", "Dep. mín.", "Rollover", "Odd mín.", "Validade", "Usos", "Status", ""], (data || []).map((c) => [c.id, esc(c.name), KIND[c.kind] || c.kind,
+          c.code ? `<b>${esc(c.code)}</b>` : "-", rule(c), c.min_deposit > 0 ? M(c.min_deposit) : "-", `${+c.rollover}x`, (+c.min_odd).toFixed(2), `${c.valid_days} dias${c.ends_at ? "<br><small>até " + RS.date(c.ends_at) + "</small>" : ""}`,
+          `${c.uses}${c.max_uses ? " / " + c.max_uses : ""}`, c.active ? `<span class="badge b-done">Ativa</span>` : `<span class="badge b-canceled">Pausada</span>`,
+          can("bonus.manage") ? `<button class="btn sm btn-outline" data-tg="${c.id}" data-on="${c.active ? 0 : 1}">${c.active ? "Pausar" : "Ativar"}</button>` +
+            (c.kind === "cashback" && c.active ? `<button class="btn sm" data-cb="${c.id}">Pagar cashback</button>` : "") : ""]), "Nenhuma campanha criada.");
+      RS.$("#c-new")?.addEventListener("click", async () => {
+        const f = await ask("Nova campanha de bônus", [
+          { name: "name", label: "Nome", required: true },
+          { name: "kind", label: "Tipo", options: Object.entries(KIND) },
+          { name: "code", label: "Código do cupom (em branco = sem código)", placeholder: "EX.: BEMVINDO100" },
+          { name: "fixed", label: "Valor fixo (R$)", type: "number", value: "0" },
+          { name: "percent", label: "% do depósito ou das perdas (cashback)", type: "number", value: "0" },
+          { name: "max_amount", label: "Bônus máximo (R$)", type: "number" },
+          { name: "min_deposit", label: "Depósito mínimo (R$)", type: "number", value: "0" },
+          { name: "rollover", label: "Rollover (x o valor do bônus)", type: "number", value: "5" },
+          { name: "min_odd", label: "Odd mínima para contar no rollover", type: "number", value: "1.5" },
+          { name: "valid_days", label: "Dias para cumprir", type: "number", value: "30" },
+          { name: "max_uses", label: "Limite de usos (em branco = sem limite)", type: "number" },
+          { name: "ends_at", label: "Encerrar em", type: "datetime-local" }], "Criar campanha");
+        if (!f) return;
+        if (f.ends_at) f.ends_at = new Date(f.ends_at).toISOString();
+        if (await act("admin_save_campaign", { p: f }, "Campanha criada")) camp();
+      });
+      RS.$("#c-grant")?.addEventListener("click", async () => {
+        const f = await ask("Bônus manual", [{ name: "user", label: "ID do jogador", required: true }, { name: "amount", label: "Valor (R$)", type: "number", required: true },
+          { name: "rollover", label: "Rollover (x)", type: "number", value: "1" }, { name: "reason", label: "Motivo (fica na auditoria)", type: "textarea", required: true }], "Creditar");
+        if (f && await act("admin_grant_bonus", { p_user: f.user.trim(), p_amount: +f.amount, p_rollover: +f.rollover, p_reason: f.reason }, "Bônus creditado")) view === "camp" ? camp() : ub();
+      });
+    }
+    async function ub() {
+      const { data } = await sb.from("user_bonuses").select("*, profiles(email), bonus_campaigns(name)").order("created_at", { ascending: false }).limit(300);
+      body().innerHTML = table(["#", "Jogador", "Origem", "Valor", "Rollover", "Status", "Expira", ""], (data || []).map((b) => [b.id,
+        `<a href="#" data-open-user="${b.user_id}" style="color:var(--primary)">${esc(b.profiles?.email || "")}</a>`,
+        esc(b.bonus_campaigns?.name || ({ indicacao: "Indicação", manual: "Manual" })[b.kind] || b.kind), M(b.amount),
+        b.wager_required > 0 ? `${M(b.wagered)} / ${M(b.wager_required)}` : "-", BST[b.status] || b.status, b.expires_at ? RS.date(b.expires_at) : "-",
+        can("bonus.manage") && ["ativo", "aguardando_deposito"].includes(b.status) ? `<button class="btn sm danger" data-bx="${b.id}">Cancelar</button>` : ""]), "Nenhum bônus concedido.");
+    }
+    async function aff() {
+      const to = new Date(Date.now() + 60000), from = new Date(); from.setDate(from.getDate() - 29); from.setHours(0, 0, 0, 0);
+      const rows = await RS.rpc("admin_affiliate_report", { p_from: from.toISOString(), p_to: to.toISOString() }).catch((e) => { RS.toast(e.message, "error"); return []; });
+      const MOD = { cpa: "CPA", revshare: "Revenue share", hibrido: "Híbrido" };
+      body().innerHTML = `<div class="filters"><button class="btn btn-primary" id="a-new">Novo afiliado</button><small class="muted">Últimos 30 dias. Link do afiliado: ${location.origin}/?aff=CODIGO. CPA conta 1º depósito acima do mínimo; revenue share é % do NGR positivo dos jogadores.</small></div>` +
+        table(["Afiliado", "Código / link", "Modelo", "Cliques", "Cadastros", "FTD", "Depósitos", "NGR", "Comissão", ""], rows.map((a) => [esc(a.name),
+          `<b>${esc(a.code)}</b><br><small>${location.origin}/?aff=${esc(a.code)}</small>`, `${MOD[a.model]}<br><small>${a.model !== "revshare" ? M(a.cpa_value) + " CPA " : ""}${a.model !== "cpa" ? +a.revshare_pct + "% RS" : ""}</small>`,
+          a.clicks, a.signups, `${a.ftd}${a.ftd !== a.ftd_ok ? ` <small>(${a.ftd_ok} válidos)</small>` : ""}`, M(a.deposits), `<span class="${a.ngr >= 0 ? "pos" : "neg"}">${M(a.ngr)}</span>`, `<b>${M(a.commission)}</b>`,
+          `<button class="btn sm btn-outline" data-af="${a.id}" data-on="${a.active ? 0 : 1}">${a.active ? "Desativar" : "Ativar"}</button>`]), "Nenhum afiliado cadastrado.");
+      RS.$("#a-new").onclick = async () => {
+        const f = await ask("Novo afiliado", [{ name: "name", label: "Nome", required: true }, { name: "email", label: "E-mail", type: "email" },
+          { name: "code", label: "Código (letras minúsculas, números, - ou _)", required: true },
+          { name: "model", label: "Modelo", options: Object.entries(MOD) }, { name: "cpa_value", label: "CPA por FTD (R$)", type: "number", value: "0" },
+          { name: "cpa_min_deposit", label: "Depósito mínimo do FTD (R$)", type: "number", value: "20" }, { name: "revshare_pct", label: "Revenue share (%)", type: "number", value: "0" }], "Cadastrar");
+        if (f && await act("admin_save_affiliate", { p: f }, "Afiliado cadastrado")) aff();
+      };
+    }
+    async function ref() {
+      const rows = await RS.rpc("admin_referrals").catch((e) => { RS.toast(e.message, "error"); return []; });
+      body().innerHTML = `<p class="muted" style="margin-bottom:8px">O valor, o depósito mínimo e o rollover da indicação ficam em Configurações.</p>` +
+        table(["Quem indicou", "Convidados", "Com 1º depósito", "Bônus recebido"], rows.map((r) => [`<a href="#" data-open-user="${r.id}" style="color:var(--primary)">${esc(r.email || "")}</a>`,
+          r.invited, r.qualified, M(r.earned)]), "Nenhuma indicação ainda.");
+    }
+    const load = () => ({ camp, ub, aff, ref })[view]?.() ?? (body().innerHTML = `<p class="empty">Sem acesso.</p>`);
+    RS.$("#b-tabs").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; view = b.dataset.v; RS.$$("#b-tabs .chip").forEach((x) => x.classList.toggle("active", x === b)); load(); };
+    body().onclick = async (e) => {
+      const t = e.target.closest("[data-tg]"), cb = e.target.closest("[data-cb]"), bx = e.target.closest("[data-bx]"), af = e.target.closest("[data-af]");
+      if (t && await act("admin_save_campaign", { p: { id: t.dataset.tg, active: t.dataset.on === "1" } }, "Campanha atualizada")) camp();
+      if (af && await act("admin_save_affiliate", { p: { id: af.dataset.af, active: af.dataset.on === "1" } }, "Afiliado atualizado")) aff();
+      if (bx) {
+        const f = await ask("Cancelar bônus", [{ name: "reason", label: "Motivo (o valor do bônus é retirado do saldo)", type: "textarea", required: true }], "Cancelar bônus");
+        if (f && await act("admin_cancel_bonus", { p_id: +bx.dataset.bx, p_reason: f.reason }, "Bônus cancelado")) ub();
+      }
+      if (cb) {
+        const d = new Date(); d.setHours(0, 0, 0, 0); const from = new Date(d); from.setDate(from.getDate() - 7);
+        const f = await ask("Pagar cashback", [{ name: "from", label: "De", type: "date", value: from.toISOString().slice(0, 10) }, { name: "to", label: "Até (exclusivo)", type: "date", value: d.toISOString().slice(0, 10) }], "Calcular e pagar");
+        if (!f) return;
+        const r = await act("admin_run_cashback", { p_campaign: +cb.dataset.cb, p_from: new Date(f.from + "T00:00:00").toISOString(), p_to: new Date(f.to + "T00:00:00").toISOString() });
+        if (r) { RS.toast(`Cashback pago a ${r.players} jogador(es): ${M(r.total)}`, "ok"); camp(); }
+      }
+    };
+    await load();
+  }
+
+  window.RSmods = Object.assign(window.RSmods || {}, { users, finance, sports, risk, bonus, loaded: true });
   if (window.RSadmin?.ready) window.RSadmin.ready();
 })();
