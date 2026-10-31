@@ -6,7 +6,8 @@
   if (!box) return;
   let kind = "bets";
   const STATUS = { pending: "Aberta", won: "Ganhou", lost: "Perdeu", canceled: "Cancelada", done: "Concluída", rejected: "Recusada", active: "Em jogo", cashout: "Cashout" };
-  const PICK = { home: "Casa", draw: "Empate", away: "Fora" };
+  const PICK = { home: "Casa", draw: "Empate", away: "Fora", over: "Mais", under: "Menos", yes: "Sim", no: "Não", "1x": "1X", x2: "X2", "12": "12" };
+  const MKT = { dc: "Chance Dupla", ou15: "Gols 1,5", ou25: "Gols 2,5", ou35: "Gols 3,5", btts: "Ambas Marcam", dnb: "Empate Anula" };
   const badge = (s) => `<span class="badge b-${s}">${STATUS[s] || s}</span>`;
 
   async function load() {
@@ -16,13 +17,13 @@
 
     if (kind === "bets") {
       const { data } = await sb.from("bets")
-        .select("*, bet_selections(pick, odd, status, matches(home, away, league))")
+        .select("*, bet_selections(market, pick, odd, status, matches(home, away, league))")
         .eq("user_id", u.id).order("created_at", { ascending: false }).limit(50);
       box.innerHTML = data?.length ? data.map((b) => `
         <div class="hist-card">
           <div class="hist-top"><b>Bilhete #${b.id}</b>${badge(b.status)}<small>${RS.date(b.created_at)}</small></div>
           ${b.bet_selections.map((s) => `<div class="hist-sel">
-            <span>${RS.esc(s.matches.home)} x ${RS.esc(s.matches.away)} · <b>${PICK[s.pick]}</b></span>
+            <span>${RS.esc(s.matches.home)} x ${RS.esc(s.matches.away)} · <b>${s.market && s.market !== "1x2" ? `${MKT[s.market] || s.market}: ${PICK[s.pick] || s.pick}` : PICK[s.pick]}</b></span>
             <span>${Number(s.odd).toFixed(2)} ${badge(s.status)}</span></div>`).join("")}
           <div class="hist-foot"><span>Apostado ${RS.money(b.stake)} · Odd ${Number(b.total_odd).toFixed(2)}</span>
             <b>${b.status === "cashout" ? "Recebeu " + RS.money(b.cashout_amount) : (b.status === "won" ? "Recebeu " : "Retorno ") + RS.money(b.potential)}</b></div>

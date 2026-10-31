@@ -2,9 +2,11 @@
 // depois defina o secret ODDS_PROVIDER com o nome do adaptador (theoddsapi | apifootball | betsapi).
 
 export type MatchOdds = { home: number | null; draw: number | null; away: number | null };
+// mercados extras por jogo: { ou15|ou25|ou35: {over, under}, btts: {yes, no}, dc: {"1x", "12", "x2"}, dnb: {home, away} }
+export type Markets = Record<string, Record<string, number>>;
 export type FeedEvent = {
   id: string; league: string; sport: string; home: string; away: string;
-  commence_time: string; odds: MatchOdds | null;
+  commence_time: string; odds: MatchOdds | null; markets?: Markets | null;
 };
 export type FeedScore = { id: string; home: number; away: number; completed: boolean };
 
@@ -13,7 +15,8 @@ export type LiveUpdate = {
   id: string; home: number | null; away: number | null; completed: boolean;
   cancelled: boolean; // adiado ou cancelado: trava o mercado
   voided: boolean; // cancelado de vez: anula as seleções
-  odds: MatchOdds | null; suspended: string | null; // motivo de suspensão (lance perigoso, pênalti, mercado travado...)
+  odds: MatchOdds | null; markets?: Markets | null;
+  suspended: string | null; // motivo de suspensão (lance perigoso, pênalti, mercado travado...)
 };
 
 export interface OddsProvider {
@@ -204,7 +207,7 @@ function apiFootball(key: string): OddsProvider {
 // Odds e mercado travado vêm do /betfair/sb/event; placar e status oficial do /betfair/result (até 10 jogos por chamada).
 type BfListEv = { id: string; time: string; league: { id: string; name: string }; home: { name: string }; away: { name: string } };
 type BfRunner = { selectionId: number; runnerStatus: string; runnerOrder: number; winRunnerOdds?: { trueOdds?: { decimalOdds?: { decimalOdds?: number } } } };
-type BfMarket = { marketStatus: string; runnerDetails?: BfRunner[]; market: { marketType: string; runners?: { selectionId: number; sortPriority: number }[] } };
+type BfMarket = { marketStatus: string; runnerDetails?: BfRunner[]; market: { marketType: string; runners?: { selectionId: number; sortPriority: number; runnerName?: string }[] } };
 type BfEvent = {
   event: { eventId: number }; markets?: BfMarket[];
   timeline?: { status?: string; score?: { home?: { score?: string }; away?: { score?: string } }; updateDetails?: { type: string; updateTime: string }[] } | null;
@@ -304,6 +307,36 @@ function betsApi(token: string): OddsProvider {
     const odds = { home: price(rs[0]), draw: price(rs[1]), away: price(rs[2]) };
     return { odds: odds.home && odds.away ? odds : null, locked: false };
   };
+  const BF_MKT: Record<string, string> = {
+    OVER_UNDER_15: "ou15", OVER_UNDER_25: "ou25", OVER_UNDER_35: "ou35", BOTH_TEAMS_TO_SCORE: "btts", DOUBLE_CHANCE: "dc", DRAW_NO_BET: "dnb",
+  };
+  // seleção pelo nome do runner (Over/Under, Yes/No, "X And Draw"); Empate Anula e a ordem das chances duplas pela sortPriority
+  const sel = (mk: string, name: string, i: number, draws: number) =>
+    mk === "btts" ? (/^yes/i.test(name) ? "yes" : "no")
+    : mk === "dnb" ? (i === 0 ? "home" : "away")
+    : mk === "dc" ? (!/draw/i.test(name) ? "12" : draws === 0 ? "1x" : "x2")
+    : /^over/i.test(name) ? "over" : "under";
+  const extra = (ev?: BfEvent): Markets | null => {
+    const out: Markets = {};
+    for (const m of ev?.markets ?? []) {
+      const mk = BF_MKT[m.market.marketType];
+      if (!mk || m.marketStatus !== "OPEN") continue;
+      const info = new Map((m.market.runners ?? []).map((r) => [r.selectionId, r]));
+      const rs = [...(m.runnerDetails ?? [])].sort((a, b) =>
+        (info.get(a.selectionId)?.sortPriority ?? a.runnerOrder) - (info.get(b.selectionId)?.sortPriority ?? b.runnerOrder));
+      if (rs.length !== (mk === "dc" ? 3 : 2) || rs.some((r) => r.runnerStatus !== "ACTIVE")) continue;
+      const o: Record<string, number> = {};
+      let draws = 0;
+      rs.forEach((r, i) => {
+        const name = info.get(r.selectionId)?.runnerName ?? "";
+        const k = sel(mk, name, i, draws), v = price(r);
+        if (mk === "dc" && /draw/i.test(name)) draws++;
+        if (v) o[k] = v;
+      });
+      if (Object.keys(o).length === rs.length) out[mk] = o;
+    }
+    return Object.keys(out).length ? out : null;
+  };
   // 1X2 vale pelos 90 min: scores["2"] é o placar do tempo normal; ss pode incluir prorrogação
   const goals = (r?: BfResult) => {
     const s = r?.scores?.["2"] ?? (r?.ss ? { home: r.ss.split("-")[0], away: r.ss.split("-")[1] } : null);
@@ -321,6 +354,7 @@ function betsApi(token: string): OddsProvider {
       return evs.filter((e) => e.league.id === league).map((e) => ({
         id: e.id, league: e.league.name, sport: "Futebol", home: e.home.name, away: e.away.name,
         commence_time: new Date(Number(e.time) * 1000).toISOString(), odds: pick(details.get(e.id)).odds,
+        markets: extra(details.get(e.id)),
       }));
     },
     async scores(_league, ids = []) {
@@ -346,7 +380,7 @@ function betsApi(token: string): OddsProvider {
         return {
           id, home: g?.home ?? null, away: g?.away ?? null,
           completed: st === "3", cancelled: BF_CANCEL.includes(st), voided: BF_VOID.includes(st),
-          odds, suspended: BF_PAUSE[st] ?? (locked ? "Mercado travado na fonte" : hot),
+          odds, markets: locked ? null : extra(ev), suspended: BF_PAUSE[st] ?? (locked ? "Mercado travado na fonte" : hot),
         };
       });
     },

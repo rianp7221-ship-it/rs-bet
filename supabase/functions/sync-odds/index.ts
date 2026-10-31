@@ -2,7 +2,7 @@
 // Secrets: ODDS_PROVIDER (theoddsapi | apifootball | betsapi), ODDS_API_KEY / API_FOOTBALL_KEY / BETSAPI_TOKEN, ODDS_SPORTS (opcional), CRON_SECRET (cron).
 // Body: { mode: "full" } (padrão: todos os esportes) ou { mode: "live" } (só esportes com jogo em andamento).
 import { adminClient, cors, json } from "../_shared/auth.ts";
-import { getProvider } from "../_shared/providers.ts";
+import { getProvider, type Markets } from "../_shared/providers.ts";
 
 type Odds = { home: number | null; draw?: number | null; away: number | null };
 // margem da casa: tira a margem do mercado (probabilidade justa) e aplica a margem configurada
@@ -12,6 +12,16 @@ function applyMargin(o: Odds, marginPct: number): Odds {
   const book = prices.reduce((a, x) => a + 1 / x, 0);
   const adj = (x?: number | null) => (x && x > 1 ? Math.max(1.01, Math.floor((x * book / (1 + marginPct / 100)) * 100) / 100) : x ?? null);
   return { home: adj(o.home), draw: adj(o.draw), away: adj(o.away) };
+}
+
+// mesma margem nos mercados extras; na Chance Dupla cada resultado cobre 2 de 3, então a soma justa das probabilidades é 2
+function marginMarkets(mk: Markets | null | undefined, marginPct: number): Markets | null {
+  if (!mk) return null;
+  if (!(marginPct > 0)) return mk;
+  return Object.fromEntries(Object.entries(mk).map(([k, o]) => {
+    const book = Object.values(o).reduce((a, x) => a + 1 / x, 0) / (k === "dc" ? 2 : 1);
+    return [k, Object.fromEntries(Object.entries(o).map(([p, x]) => [p, Math.max(1.01, Math.floor((x * book / (1 + marginPct / 100)) * 100) / 100)]))];
+  }));
 }
 
 // para de consultar ao vivo quando a cota está acabando (reserva 20% para a busca completa)
@@ -76,6 +86,7 @@ Deno.serve(async (req) => {
           const o = applyMargin(u.odds, margin("odds_margin_live"));
           patch.odd_home = o.home; patch.odd_draw = o.draw; patch.odd_away = o.away;
         }
+        if (u.markets !== undefined) patch.markets = marginMarkets(u.markets, margin("odds_margin_live"));
         if (u.cancelled) { patch.suspended_until = new Date(Date.now() + 600_000).toISOString(); patch.suspend_reason = "Jogo adiado ou cancelado"; }
         else if (u.suspended) { patch.suspended_until = new Date(Date.now() + 30_000).toISOString(); patch.suspend_reason = u.suspended; }
         else if (!u.odds && !u.completed) { patch.suspended_until = new Date(Date.now() + 30_000).toISOString(); patch.suspend_reason = "Mercado suspenso nas casas"; }
@@ -116,6 +127,7 @@ Deno.serve(async (req) => {
           external_id: ext(ev.id), sport: ev.sport, league: ev.league, home: ev.home, away: ev.away,
           starts_at: ev.commence_time, odd_home: odds.home, odd_draw: odds.draw, odd_away: odds.away,
           status: isLive ? "live" : "open",
+          ...(ev.markets !== undefined ? { markets: marginMarkets(ev.markets, margin(isLive ? "odds_margin_live" : "odds_margin_pre")) } : {}),
           synced_at: new Date().toISOString(),
         };
         priced.add(row.external_id);
