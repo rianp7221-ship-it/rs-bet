@@ -166,14 +166,14 @@
           `<a href="#" data-open-user="${t.user_id}" style="color:var(--primary)">${esc(t.profiles?.email || "")}</a><br><small>risco ${esc(t.profiles?.risk_level || "")}</small>`,
           `<b>${M(Math.abs(t.amount))}</b>`, RS.date(t.created_at),
           `<span class="badge ${(LEVEL[t.review_level] || ["", ""])[1]}">${(LEVEL[t.review_level] || ["Manual"])[0]}</span>${t.first_approver ? "<br><small>1ª aprovação feita</small>" : ""}`,
-          `<small>${esc(t.review_notes || "-")}</small>`,
+          `<small>${esc(t.review_notes || "-")}</small>${t.pix_key ? `<br><small>PIX (${esc(t.pix_key_type)}): <b>${esc(t.pix_key)}</b></small> <button class="btn sm btn-outline" data-copy="${esc(t.pix_key)}">Copiar</button>` : "<br><small>sem chave PIX informada</small>"}`,
           can("finance.manage") ? `<button class="btn sm btn-green" data-ok="${t.id}">${t.review_level === "dupla" && !t.first_approver ? "1ª aprovação" : "Aprovar e pagar"}</button><button class="btn sm danger" data-no="${t.id}">Recusar</button>` : ""]),
           "Nenhum saque na fila.");
     }
     async function all() {
       const { data } = await sb.from("transactions").select("*, profiles(email)").in("type", ["deposit", "withdraw"]).order("created_at", { ascending: false }).limit(300);
       RS.$("#f-body").innerHTML = table(["#", "Usuário", "Tipo", "Método", "Valor", "Taxa", "Data", "Status", ""], (data || []).map((t) => [t.id,
-        `<a href="#" data-open-user="${t.user_id}" style="color:var(--primary)">${esc(t.profiles?.email || "")}</a>`, t.type === "deposit" ? "Depósito" : "Saque", esc(t.method || "PIX"),
+        `<a href="#" data-open-user="${t.user_id}" style="color:var(--primary)">${esc(t.profiles?.email || "")}</a>`, t.type === "deposit" ? "Depósito" : "Saque", esc(t.method || "PIX") + (t.gateway ? `<br><small>${esc(t.gateway)}${t.provider_id ? " #" + esc(t.provider_id) : ""}</small>` : t.pix_key ? `<br><small>${esc(t.pix_key)}</small>` : ""),
         M(Math.abs(t.amount)), t.fee ? M(t.fee) : "-", RS.date(t.created_at), badge(t.status),
         t.status === "pending" && can("finance.manage") ? `<button class="btn sm" data-ok="${t.id}">Aprovar</button><button class="btn sm danger" data-no="${t.id}">Recusar</button>`
           : t.type === "deposit" && t.status === "done" && can("chargeback.manage") ? `<button class="btn sm btn-outline danger" data-cbtx="${t.id}">Contestação</button>` : ""]), "Nenhuma transação.");
@@ -200,6 +200,8 @@
         if (f && await act("admin_chargeback_open", { p_tx: +cbt.dataset.cbtx, p_reason: f.reason }, "Contestação registrada")) load();
         return;
       }
+      const cp = e.target.closest("button[data-copy]");
+      if (cp) { e.preventDefault(); navigator.clipboard.writeText(cp.dataset.copy).then(() => RS.toast("Chave copiada", "ok")); return; }
       const b = e.target.closest("button[data-ok],button[data-no]");
       if (!b) return;
       const approve = !!b.dataset.ok;

@@ -172,7 +172,7 @@
 
   // ---------- ALERTAS ----------
   const KIND = { aposta_alta: "Aposta alta", retorno_alto: "Retorno alto", saque_sem_giro: "Saque sem apostar", saldo_divergente: "Saldo divergente",
-    concentracao: "Apostas concentradas", multi_conta: "Multi-contas", odd_atrasada: "Odd atrasada" };
+    concentracao: "Apostas concentradas", multi_conta: "Multi-contas", odd_atrasada: "Odd atrasada", pix_devolvido: "PIX devolvido" };
   async function alerts() {
     let st = "aberto";
     main.innerHTML = head("Alertas", `<div class="seg" id="al-st" style="min-width:330px"><button data-s="aberto" class="active">Abertos</button><button data-s="em_analise">Em análise</button><button data-s="resolvido">Resolvidos</button></div>`) + `<div id="al-list"></div>`;
