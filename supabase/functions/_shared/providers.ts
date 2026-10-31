@@ -10,7 +10,9 @@ export type FeedScore = { id: string; home: number; away: number; completed: boo
 
 // ao vivo em 1 chamada para todos os jogos (APIs com feed ao vivo)
 export type LiveUpdate = {
-  id: string; home: number | null; away: number | null; completed: boolean; cancelled: boolean;
+  id: string; home: number | null; away: number | null; completed: boolean;
+  cancelled: boolean; // adiado ou cancelado: trava o mercado
+  voided: boolean; // cancelado de vez: anula as seleções
   odds: MatchOdds | null; suspended: string | null; // motivo de suspensão (lance perigoso, pênalti, mercado travado...)
 };
 
@@ -87,6 +89,7 @@ type AfFixture = {
   league: { id: number; name: string; country: string };
   teams: { home: { name: string }; away: { name: string } };
   goals: { home: number | null; away: number | null };
+  score?: { fulltime?: { home: number | null; away: number | null } };
   events?: { time: { elapsed: number; extra: number | null }; type: string; detail: string }[];
 };
 type AfBet = { id: number; name: string; values: { value: string; odd: string; suspended?: boolean }[] };
@@ -94,7 +97,12 @@ type AfOdds = { fixture: { id: number }; bookmakers?: { bets: AfBet[] }[] };
 type AfLiveOdds = { fixture: { id: number }; status?: { stopped?: boolean; blocked?: boolean; finished?: boolean }; odds: AfBet[] };
 
 const AF_DONE = ["FT", "AET", "PEN"];
-const AF_CANCEL = ["PST", "CANC", "ABD", "AWD", "WO"];
+const AF_VOID = ["CANC", "ABD", "AWD", "WO"];
+const AF_CANCEL = ["PST", ...AF_VOID];
+// o mercado 1X2 vale só pelos 90 min: na prorrogação/pênaltis usa o placar do tempo normal
+const afGoals = (f: AfFixture) =>
+  ["AET", "PEN"].includes(f.fixture.status.short) && f.score?.fulltime?.home != null && f.score.fulltime.away != null
+    ? f.score.fulltime : f.goals;
 const AF_PAUSE: Record<string, string> = { SUSP: "Jogo paralisado", INT: "Jogo interrompido", BT: "Intervalo da prorrogação", P: "Disputa de pênaltis" };
 const AF_1X2 = ["Match Winner", "Fulltime Result", "1x2"];
 
@@ -156,8 +164,8 @@ function apiFootball(key: string): OddsProvider {
     async scores(league) {
       const y = await season(league);
       const { response } = await get<AfFixture>(`/fixtures?league=${league}&season=${y}&from=${day(-3)}&to=${day(0)}&timezone=UTC`);
-      return response.filter((f) => f.goals.home != null && f.goals.away != null).map((f) => ({
-        id: String(f.fixture.id), home: f.goals.home!, away: f.goals.away!, completed: AF_DONE.includes(f.fixture.status.short),
+      return response.map((f) => ({ f, g: afGoals(f) })).filter(({ g }) => g.home != null && g.away != null).map(({ f, g }) => ({
+        id: String(f.fixture.id), home: g.home!, away: g.away!, completed: AF_DONE.includes(f.fixture.status.short),
       }));
     },
     async live(ids) {
@@ -176,9 +184,10 @@ function apiFootball(key: string): OddsProvider {
           (e.type === "Var" || e.detail === "Red Card" || /penalty/i.test(e.detail)));
         const suspended = AF_PAUSE[st] ?? (lo?.status?.blocked || lo?.status?.stopped ? "Mercado travado na fonte"
           : hot ? (hot.type === "Var" ? "Revisão do VAR" : hot.detail === "Red Card" ? "Expulsão" : "Pênalti") : null);
+        const g = afGoals(f);
         out.push({
-          id: String(f.fixture.id), home: f.goals.home, away: f.goals.away,
-          completed: AF_DONE.includes(st), cancelled: AF_CANCEL.includes(st),
+          id: String(f.fixture.id), home: g.home, away: g.away,
+          completed: AF_DONE.includes(st), cancelled: AF_CANCEL.includes(st), voided: AF_VOID.includes(st),
           odds: lo ? pick(lo.odds) : null, suspended,
         });
       }
