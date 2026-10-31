@@ -225,13 +225,13 @@
             <input class="input" readonly value="${url}" style="margin-bottom:8px"><button class="btn btn-primary w-full" id="ref-cp">Copiar link</button></div>`;
         RS.$("#cp-f", w).onsubmit = async (e) => {
           e.preventDefault();
-          try { RS.toast(await RS.rpc("redeem_coupon", { p_code: e.target.c.value }), "ok"); show("bonus"); } catch (err) { RS.toast(err.message, "error"); }
+          try { RS.toast(await RS.rpc("redeem_coupon", { p_code: e.target.c.value }), "ok"); RS.refreshBalance(); show("bonus"); } catch (err) { RS.toast(err.message, "error"); }
         };
         RS.$("#ref-cp", w).onclick = async () => { try { await navigator.clipboard.writeText(url); RS.toast("Link copiado!", "ok"); } catch { /* sem permissão */ } };
         body.onclick = async (e) => {
           const b = e.target.closest("[data-bx]");
           if (!b || !confirm("Cancelar o bônus? O valor do bônus é retirado do saldo e o saque fica liberado.")) return;
-          try { await RS.rpc("cancel_my_bonus", { p_id: +b.dataset.bx }); RS.toast("Bônus cancelado.", "ok"); show("bonus"); } catch (err) { RS.toast(err.message, "error"); }
+          try { await RS.rpc("cancel_my_bonus", { p_id: +b.dataset.bx }); RS.toast("Bônus cancelado.", "ok"); RS.refreshBalance(); show("bonus"); } catch (err) { RS.toast(err.message, "error"); }
         };
       } else body.onclick = null;
       if (k === "kyc") {
