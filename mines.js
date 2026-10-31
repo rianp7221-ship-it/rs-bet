@@ -3,6 +3,16 @@
 //  O resultado é sorteado NO SERVIDOR (schema.sql). O navegador só mostra.
 // =====================================================
 (() => {
+  // jogos ligados e RTP definidos no Admin → Cassino
+  const lobby = sb.rpc("casino_lobby").then((r) => r.data || null, () => null);
+  lobby.then((l) => {
+    if (!l) return;
+    const on = new Set(l.map((g) => g.id));
+    [["mines", "mines-card"], ["dice", "dice"]].forEach(([id, el]) =>
+      RS.$$(`#${el}, [data-game="${el}"]`).forEach((n) => { n.style.display = on.has(id) ? "" : "none"; }));
+    if (!l.length) RS.$(".casino-grid")?.insertAdjacentHTML("beforebegin", `<p class="muted" style="margin:12px 0">O cassino está temporariamente indisponível.</p>`);
+  });
+
   // ---------------- MINES ----------------
   const grid = RS.$("#mines-grid");
   if (grid) {
@@ -94,13 +104,13 @@
   const dice = RS.$("#dice");
   if (dice) {
     const range = RS.$("#dice-target");
-    let over = true;
+    let over = true, rtp = 97;
     const upd = () => {
       const t = Number(range.value);
       const chance = over ? 100 - t : t;
       RS.$("#dice-label").textContent = `${over ? "Acima de" : "Abaixo de"} ${t}`;
       RS.$("#dice-chance").textContent = chance + "%";
-      RS.$("#dice-mult").textContent = (97 / chance).toFixed(2) + "x";
+      RS.$("#dice-mult").textContent = (rtp / chance).toFixed(2) + "x";
     };
     range.oninput = upd;
     RS.$("#dice-side").onclick = () => { over = !over; upd(); };
@@ -118,5 +128,9 @@
       e.target.disabled = false;
     };
     upd();
+    lobby.then((l) => {
+      const g = l?.find((x) => x.id === "dice");
+      if (g) { rtp = Number(g.rtp); RS.$("#dice-stake").min = g.min; RS.$("#dice-stake").max = g.max; upd(); }
+    });
   }
 })();
