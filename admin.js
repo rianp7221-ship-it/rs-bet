@@ -13,7 +13,7 @@
 
   // ---------- utilidades ----------
   const STATUS = { open: "Aberto", live: "Ao vivo", closed: "Fechado", settled: "Liquidado", canceled: "Cancelado", pending: "Pendente",
-    won: "Ganhou", lost: "Perdeu", done: "Concluída", rejected: "Recusada", cashout: "Cashout", aberto: "Aberto", em_analise: "Em análise", resolvido: "Resolvido" };
+    won: "Ganhou", lost: "Perdeu", done: "Concluída", rejected: "Recusada", cashout: "Cashout", aberto: "Aberto", em_analise: "Em análise", resolvido: "Resolvido", aprovado: "Aprovado", rejeitado: "Rejeitado" };
   const badge = (s, label) => `<span class="badge b-${s}">${label || STATUS[s] || s}</span>`;
   const head = (title, right = "") => `<div class="adm-head"><h1>${title}</h1><div class="filters" style="margin:0">${right}</div></div>`;
   const table = (cols, rows, empty = "Nada por aqui.") => rows.length
@@ -62,6 +62,7 @@
     { id: "alerts", t: "Alertas", ic: "live", p: "alerts.view", run: alerts },
     { id: "users", t: "Usuários", ic: "user", p: "users.view", run: (id) => window.RSmods.users(id) },
     { id: "finance", t: "Financeiro", ic: "card", p: "finance.view", run: () => window.RSmods.finance() },
+    { id: "risk", t: "Risco e KYC", ic: "id", p: "kyc.view", run: () => window.RSmods.risk() },
     { id: "sports", t: "Apostas e jogos", ic: "receipt", p: "sports.view", run: () => window.RSmods.sports() },
     { id: "staff", t: "Equipe e acessos", ic: "key", p: "staff.manage", run: staff },
     { id: "audit", t: "Auditoria", ic: "id", p: "audit.view", run: audit },

@@ -152,7 +152,7 @@
   // ---------- FINANCEIRO ----------
   const LEVEL = { rapido: ["Rápido", "b-won"], manual: ["Manual", "b-pending"], dupla: ["2 aprovadores", "b-lost"] };
   async function finance() {
-    const { can, act, table, head, badge, csv } = A();
+    const { can, act, ask, table, head, badge, csv } = A();
     main().innerHTML = head("Financeiro") + `
       <div class="tabs-sm" id="f-tabs"><button class="chip active" data-v="queue">Fila de saques</button><button class="chip" data-v="all">Depósitos e saques</button><button class="chip" data-v="rec">Reconciliação</button></div>
       <div id="f-body"></div>`;
@@ -175,7 +175,8 @@
       RS.$("#f-body").innerHTML = table(["#", "Usuário", "Tipo", "Método", "Valor", "Taxa", "Data", "Status", ""], (data || []).map((t) => [t.id,
         `<a href="#" data-open-user="${t.user_id}" style="color:var(--primary)">${esc(t.profiles?.email || "")}</a>`, t.type === "deposit" ? "Depósito" : "Saque", esc(t.method || "PIX"),
         M(Math.abs(t.amount)), t.fee ? M(t.fee) : "-", RS.date(t.created_at), badge(t.status),
-        t.status === "pending" && can("finance.manage") ? `<button class="btn sm" data-ok="${t.id}">Aprovar</button><button class="btn sm danger" data-no="${t.id}">Recusar</button>` : ""]), "Nenhuma transação.");
+        t.status === "pending" && can("finance.manage") ? `<button class="btn sm" data-ok="${t.id}">Aprovar</button><button class="btn sm danger" data-no="${t.id}">Recusar</button>`
+          : t.type === "deposit" && t.status === "done" && can("chargeback.manage") ? `<button class="btn sm btn-outline danger" data-cbtx="${t.id}">Contestação</button>` : ""]), "Nenhuma transação.");
     }
     async function rec() {
       const to = new Date(Date.now() + 60000), from = new Date(); from.setDate(from.getDate() - 29); from.setHours(0, 0, 0, 0);
@@ -193,6 +194,12 @@
     const load = () => (view === "queue" ? queue() : view === "all" ? all() : rec());
     RS.$("#f-tabs").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; view = b.dataset.v; RS.$$("#f-tabs .chip").forEach((x) => x.classList.toggle("active", x === b)); load(); };
     RS.$("#f-body").onclick = async (e) => {
+      const cbt = e.target.closest("[data-cbtx]");
+      if (cbt) {
+        const f = await ask("Registrar contestação do depósito #" + cbt.dataset.cbtx, [{ name: "reason", label: "Motivo (ex.: PIX contestado no banco, MED)", type: "textarea", required: true }], "Registrar");
+        if (f && await act("admin_chargeback_open", { p_tx: +cbt.dataset.cbtx, p_reason: f.reason }, "Contestação registrada")) load();
+        return;
+      }
       const b = e.target.closest("button[data-ok],button[data-no]");
       if (!b) return;
       const approve = !!b.dataset.ok;
@@ -313,6 +320,74 @@
     await matches();
   }
 
-  window.RSmods = Object.assign(window.RSmods || {}, { users, finance, sports, loaded: true });
+
+  // ---------- RISCO, KYC E CONTESTAÇÕES ----------
+  const DOC = { rg: "RG", cnh: "CNH", comprovante: "Comprovante de residência", selfie: "Selfie com documento" };
+  async function risk() {
+    const { can, act, ask, table, head, badge } = A();
+    const tabs = [["kyc", "Fila de KYC", "kyc.view"], ["susp", "Apostas suspeitas", "alerts.view"], ["cb", "Contestações (chargeback)", "chargeback.manage"]].filter((t) => can(t[2]));
+    main().innerHTML = head("Risco e KYC") + `<div class="tabs-sm" id="r-tabs">${tabs.map(([v, t], i) => `<button class="chip ${i ? "" : "active"}" data-v="${v}">${t}</button>`).join("")}</div><div id="r-body"></div>`;
+    let view = tabs[0]?.[0], kst = "em_analise";
+    async function kyc() {
+      const { data } = await sb.from("kyc_documents").select("*, profiles(email, kyc_status)").eq("status", kst).order("created_at", { ascending: kst === "em_analise" }).limit(200);
+      RS.$("#r-body").innerHTML = `<div class="filters"><select class="input" id="k-st"><option value="em_analise">Em análise</option><option value="aprovado">Aprovados</option><option value="rejeitado">Rejeitados</option></select>
+        <small class="muted">O KYC do jogador fica aprovado com RG ou CNH + comprovante aprovados. Sem KYC, o saque vai para revisão manual.</small></div>` +
+        table(["#", "Jogador", "Documento", "Enviado em", "Status", "Motivo", ""], (data || []).map((d) => [d.id,
+          `<a href="#" data-open-user="${d.user_id}" style="color:var(--primary)">${esc(d.profiles?.email || "")}</a><br><small>KYC ${esc((d.profiles?.kyc_status || "").replace("_", " "))}</small>`,
+          DOC[d.doc_type] || d.doc_type, RS.date(d.created_at), badge(d.status), `<small>${esc(d.reason || "-")}</small>`,
+          `<button class="btn sm btn-outline" data-view="${esc(d.path)}">Ver arquivo</button>` + (d.status === "em_analise" && can("kyc.manage")
+            ? `<button class="btn sm btn-green" data-kok="${d.id}">Aprovar</button><button class="btn sm danger" data-kno="${d.id}">Rejeitar</button>` : "")]), "Nenhum documento.");
+      RS.$("#k-st").value = kst;
+      RS.$("#k-st").onchange = (e) => { kst = e.target.value; kyc(); };
+    }
+    async function susp() {
+      const rows = await RS.rpc("admin_suspicious_bets", { p_days: 7 }).catch((e) => { RS.toast(e.message, "error"); return []; });
+      RS.$("#r-body").innerHTML = `<p class="muted" style="margin-bottom:8px">Bilhetes dos últimos 7 dias com padrão de risco: múltiplas de odd alta, valor muito acima da média do jogador, apostas nos dois lados do mesmo jogo e contas ligadas (mesmo IP/dispositivo) no mesmo palpite.</p>` +
+        table(["#", "Jogador", "Valor", "Odd", "Retorno", "Status", "Data", "Motivos"], rows.map((b) => [b.id,
+          `<a href="#" data-open-user="${b.user_id}" style="color:var(--primary)">${esc(b.email || "")}</a><br><small>risco ${esc(b.risk_level)}</small>`,
+          M(b.stake), (+b.total_odd).toFixed(2), M(b.potential), badge(b.status), RS.date(b.created_at), b.reasons.map((r) => `<span class="badge b-rejected">${esc(r)}</span>`).join(" ")]), "Nenhuma aposta suspeita.");
+    }
+    async function cb() {
+      const { data } = await sb.from("chargebacks").select("*, profiles(email)").order("created_at", { ascending: false }).limit(200);
+      RS.$("#r-body").innerHTML = `<div class="filters"><button class="btn btn-primary" id="cb-new">Registrar contestação</button>
+        <small class="muted">Ao registrar, o valor é debitado do saldo disponível, o risco do jogador vira Alto e os saques dele vão para revisão manual. Se o caso for ganho pelo jogador, o valor volta ao saldo.</small></div>` +
+        table(["#", "Jogador", "Depósito", "Valor", "Recuperado", "Motivo", "Status", "Data", ""], (data || []).map((c) => [c.id,
+          `<a href="#" data-open-user="${c.user_id}" style="color:var(--primary)">${esc(c.profiles?.email || "")}</a>`, "#" + c.tx_id, M(c.amount), M(c.recovered),
+          `<small>${esc(c.reason)}${c.notes ? "<br>" + esc(c.notes) : ""}</small>`, esc(c.status), RS.date(c.created_at),
+          `<button class="btn sm btn-outline" data-cb="${c.id}" data-st="${c.status}">Atualizar</button>`]), "Nenhuma contestação.");
+      RS.$("#cb-new").onclick = () => openChargeback();
+    }
+    async function openChargeback(tx) {
+      const f = await ask("Registrar contestação de depósito", [{ name: "tx", label: "Nº do depósito", type: "number", value: tx || "", required: true },
+        { name: "reason", label: "Motivo (ex.: PIX contestado no banco, MED)", type: "textarea", required: true }], "Registrar");
+      if (f && await act("admin_chargeback_open", { p_tx: +f.tx, p_reason: f.reason }, "Contestação registrada")) load();
+    }
+    const load = () => (view === "kyc" ? kyc() : view === "susp" ? susp() : view === "cb" ? cb() : (RS.$("#r-body").innerHTML = `<p class="empty">Sem acesso.</p>`));
+    RS.$("#r-tabs").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; view = b.dataset.v; RS.$$("#r-tabs .chip").forEach((x) => x.classList.toggle("active", x === b)); load(); };
+    RS.$("#r-body").onclick = async (e) => {
+      const v = e.target.closest("[data-view]");
+      if (v) {
+        const { data, error } = await sb.storage.from("kyc").createSignedUrl(v.dataset.view, 120);
+        if (error) return RS.toast(error.message, "error");
+        return window.open(data.signedUrl, "_blank", "noopener");
+      }
+      const k = e.target.closest("[data-kok],[data-kno]");
+      if (k) {
+        const ok = !!k.dataset.kok;
+        const f = ok ? {} : await ask("Rejeitar documento", [{ name: "reason", label: "Motivo (o jogador recebe esta mensagem)", type: "textarea", required: true }], "Rejeitar");
+        if (f && await act("admin_kyc_review", { p_id: +(k.dataset.kok || k.dataset.kno), p_approve: ok, p_reason: f.reason || null }, ok ? "Documento aprovado" : "Documento rejeitado")) kyc();
+        return;
+      }
+      const c = e.target.closest("[data-cb]");
+      if (c) {
+        const f = await ask("Atualizar contestação", [{ name: "st", label: "Status", value: c.dataset.st, options: [["aberto", "Aberto"], ["contestado", "Contestado (defesa enviada)"], ["perdido", "Perdido (valor fica com o banco)"], ["ganho", "Ganho pelo jogador (devolve o valor)"]] },
+          { name: "notes", label: "Observação", type: "textarea" }], "Salvar");
+        if (f && await act("admin_chargeback_update", { p_id: +c.dataset.cb, p_status: f.st, p_notes: f.notes }, "Atualizado")) cb();
+      }
+    };
+    await load();
+  }
+
+  window.RSmods = Object.assign(window.RSmods || {}, { users, finance, sports, risk, loaded: true });
   if (window.RSadmin?.ready) window.RSadmin.ready();
 })();
