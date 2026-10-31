@@ -111,6 +111,8 @@ const afGoals = (f: AfFixture) =>
     ? f.score.fulltime : f.goals;
 const AF_PAUSE: Record<string, string> = { SUSP: "Jogo paralisado", INT: "Jogo interrompido", BT: "Intervalo da prorrogação", P: "Disputa de pênaltis" };
 const AF_1X2 = ["Match Winner", "Fulltime Result", "1x2"];
+// a API chama Brasileirão e Itália de "Serie A"/"Serie B": nome único por liga
+const AF_LEAGUE: Record<number, string> = { 71: "Brazil Série A", 72: "Brazil Série B", 73: "Copa do Brasil", 135: "Serie A - Italy" };
 // mercados extras: nomes do pré-jogo (/odds) e do ao vivo (/odds/live)
 const AF_OU = ["Goals Over/Under", "Match Goals"];
 const AF_BTTS = ["Both Teams Score", "Both Teams to Score"];
@@ -203,7 +205,7 @@ function apiFootball(key: string): OddsProvider {
         for (const o of r.response) prices.set(o.fixture.id, (o.bookmakers ?? []).flatMap((b) => b.bets));
       }
       return open.map((f) => ({
-        id: String(f.fixture.id), league: f.league.name, sport: "Futebol", home: f.teams.home.name, away: f.teams.away.name,
+        id: String(f.fixture.id), league: AF_LEAGUE[f.league.id] ?? f.league.name, sport: "Futebol", home: f.teams.home.name, away: f.teams.away.name,
         commence_time: f.fixture.date, odds: pick(prices.get(f.fixture.id) ?? []), markets: extra(prices.get(f.fixture.id) ?? []),
       }));
     },
