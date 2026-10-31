@@ -15,6 +15,7 @@
     me = await RS.profile();
     el.innerHTML = `
       <div class="hdr">
+        ${document.getElementById("lside") ? `<button class="icon-btn hdr-burger" data-open-menu aria-label="Menu">${RS.icon("menu")}</button>` : ""}
         <a href="index.html" class="logo" aria-label="Real Sports"><b class="logo-mark">RS</b><span class="logo-word">Real<em>Sports</em></span></a>
         <nav class="hdr-nav">
           ${navLink("index.html#sports", "Apostas esportivas", "sports")}
