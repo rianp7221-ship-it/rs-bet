@@ -350,12 +350,14 @@
     suspended, setView,
     search(q) { document.querySelector('[data-tabs] [data-tab="sports"]').click(); setView("all", { query: q.trim() }); scrollTo({ top: 0 }); },
     add(sels, stake) {
-      slip.clear();
+      const next = new Map();
       sels.forEach(({ id, pick, market = "1x2" }) => {
         const m = matches.find((x) => x.id === id), odd = oddOf(m, market, pick);
-        if (odd && !suspended(m)) slip.set(id, { market, pick, odd, base: odd });
+        if (odd && !suspended(m)) next.set(id, { market, pick, odd, base: odd });
       });
-      if (!slip.size) { render(); renderSlip(); persist(); return 0; }
+      if (!next.size) return 0;
+      slip.clear();
+      next.forEach((v, k) => slip.set(k, v));
       mode = slip.size > 1 ? "multi" : "single";
       if (stake) stakeVal = String(stake);
       render(); renderSlip(); persist();
