@@ -41,6 +41,7 @@
     if (b.status === "cashout") return ["Cashout recebido", b.cashout_amount];
     if (b.status === "won") return ["Ganhos", b.potential];
     if (b.status === "canceled") return ["Valor devolvido", b.stake];
+    if (b.status === "lost") return ["Ganhos", 0];
     return ["Ganhos Potenciais", b.potential];
   }
   const card = (b) => {
