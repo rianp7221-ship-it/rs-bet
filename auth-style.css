@@ -406,3 +406,35 @@ body.on-casino .bn-switch span { border-color: #0f1424; }
 @keyframes co-flash { from { filter: brightness(1.35); } to { filter: none; } }
 .btn.co-up { background: var(--green); animation: co-flash .8s; }
 .btn.co-down { background: var(--danger); animation: co-flash .8s; }
+/* Minhas apostas */
+.bt-tabs { display: grid; grid-template-columns: 1fr 1fr; background: #fff; border-radius: var(--radius); margin-bottom: 12px; box-shadow: var(--shadow); }
+.bt-tabs button { background: none; border: 0; border-bottom: 3px solid transparent; padding: 13px; font: inherit; font-size: 15px; color: var(--text); cursor: pointer; }
+.bt-tabs button.active { font-weight: 700; border-color: var(--text); }
+.bt-filters { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 12px; }
+.bt-f { flex: none; background: #fff; border: 1.5px solid var(--primary); color: var(--primary); border-radius: 10px; padding: 7px 14px; font: inherit; font-weight: 700; font-size: 13px; cursor: pointer; }
+.bt-f.active { background: var(--primary); color: #fff; }
+.bet-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 12px; overflow: hidden; }
+.bc-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px; cursor: pointer; border-bottom: 1px solid var(--line); }
+.bc-odd { margin-left: auto; font-weight: 700; }
+.bc-chev { width: 9px; height: 9px; border: solid var(--text); border-width: 2px 2px 0 0; transform: rotate(-45deg); margin: 4px 2px 0 12px; }
+.bet-card.closed .bc-chev { transform: rotate(135deg); margin-top: -4px; }
+.bet-card.closed .bc-head { border-bottom: 0; }
+.bet-card.closed .bc-body { display: none; }
+.bc-sel { padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.bc-l1 { display: flex; align-items: center; gap: 8px; }
+.bc-l1 svg.i { width: 18px; height: 18px; color: var(--primary); flex: none; }
+.bc-l1 span { margin-left: auto; font-weight: 700; }
+.bc-mk { color: var(--muted); margin: 4px 0 2px 26px; font-size: 14px; }
+.bc-l3 { display: flex; justify-content: space-between; gap: 8px; margin-left: 26px; font-size: 14px; }
+.bc-l3 span:last-child { color: var(--muted); white-space: nowrap; }
+.bc-row { display: flex; justify-content: space-between; padding: 10px 16px 0; color: var(--muted); }
+.bc-row b { color: var(--text); }
+.bc-win { padding-bottom: 4px; }
+.bc-win span { font-weight: 700; }
+.bc-win b { font-size: 20px; }
+.bet-card .cashout-box { padding: 8px 16px 12px; margin: 0; }
+.btn-co { background: #2c3442; color: #fff; letter-spacing: .3px; }
+.bc-foot { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); }
+.bc-foot button { background: none; border: 0; padding: 12px; font: inherit; font-size: 15px; color: var(--text); cursor: pointer; display: flex; gap: 6px; justify-content: center; align-items: center; }
+.bc-foot svg.i { width: 16px; height: 16px; }
+.only-cash .bet-card:not(.co-ok) { display: none; }
