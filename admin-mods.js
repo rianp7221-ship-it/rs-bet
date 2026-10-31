@@ -207,7 +207,7 @@
     const { can, act, table, head, badge } = A();
     const manage = can("sports.manage");
     main().innerHTML = head("Apostas e jogos") + `
-      <div class="tabs-sm" id="sp-tabs"><button class="chip active" data-v="matches">Jogos</button><button class="chip" data-v="bets">Bilhetes</button></div>
+      <div class="tabs-sm" id="sp-tabs"><button class="chip active" data-v="matches">Jogos</button><button class="chip" data-v="bets">Bilhetes</button><button class="chip" data-v="exp">Exposição</button></div>
       <div id="sp-matches">
         ${manage ? `<div class="panel" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-primary" id="sync-odds">Buscar jogos e odds reais (API)</button>
@@ -223,7 +223,7 @@
           <input name="odd_away" type="number" step="0.01" min="1.01" class="input" placeholder="Odd fora" required>
           <button class="btn btn-primary">Adicionar jogo</button></form>` : ""}
         <div id="m-list"></div></div>
-      <div id="sp-bets" hidden></div>`;
+      <div id="sp-bets" hidden></div><div id="sp-exp" hidden></div>`;
     async function matches() {
       const { data } = await sb.from("matches").select("*").order("starts_at", { ascending: false }).limit(150);
       RS.$("#m-list").innerHTML = table(["Jogo", "Data", "Odds", "Status", manage ? "Ações" : ""], (data || []).map((m) => [
@@ -235,12 +235,13 @@
           <button class="btn sm" data-st="${m.id}" data-v="${m.status === "live" ? "open" : "live"}">${m.status === "live" ? "Tirar do ao vivo" : "Ao vivo"}</button>
           <button class="btn sm ${m.locked ? "" : "danger"}" data-lock="${m.id}" data-v="${m.locked ? "0" : "1"}">${m.locked ? "Liberar" : "Suspender"}</button>
           <button class="btn sm" data-res="${m.id}" data-r="home">Casa</button>${m.odd_draw ? `<button class="btn sm" data-res="${m.id}" data-r="draw">Empate</button>` : ""}<button class="btn sm" data-res="${m.id}" data-r="away">Fora</button>
+          <button class="btn sm danger" data-void="${m.id}">Anular mercado</button>
           <button class="btn sm danger" data-del="${m.id}">Excluir</button>`]), "Nenhum jogo.");
     }
     async function bets() {
       const { data } = await sb.from("bets").select("*, profiles(email), bet_selections(count)").order("created_at", { ascending: false }).limit(150);
-      RS.$("#sp-bets").innerHTML = table(["#", "Usuário", "Jogos", "Aposta", "Odd", "Retorno", "Status", "Data"], (data || []).map((b) => [
-        b.id, `<a href="#users" data-open-user="${b.user_id}" style="color:var(--primary)">${esc(b.profiles?.email || "")}</a>`, b.bet_selections[0]?.count,
+      RS.$("#sp-bets").innerHTML = (manage ? `<div class="filters"><button class="btn btn-outline danger sm" id="b-cancel">Cancelar selecionados (reembolsa)</button></div>` : "") + table(["", "#", "Usuário", "Jogos", "Aposta", "Odd", "Retorno", "Status", "Data"], (data || []).map((b) => [
+        manage && b.status === "pending" ? `<input type="checkbox" data-bc="${b.id}">` : "", b.id, `<a href="#users" data-open-user="${b.user_id}" style="color:var(--primary)">${esc(b.profiles?.email || "")}</a>`, b.bet_selections[0]?.count,
         M(b.stake), b.total_odd, M(b.potential), badge(b.status), RS.date(b.created_at)]), "Nenhum bilhete.");
     }
     RS.$("#sp-tabs").onclick = (e) => {
@@ -249,11 +250,37 @@
       RS.$$("#sp-tabs .chip").forEach((x) => x.classList.toggle("active", x === b));
       RS.$("#sp-matches").hidden = b.dataset.v !== "matches";
       RS.$("#sp-bets").hidden = b.dataset.v !== "bets";
+      RS.$("#sp-exp").hidden = b.dataset.v !== "exp";
       if (b.dataset.v === "bets") bets();
+      if (b.dataset.v === "exp") exposure();
+    };
+    async function exposure() {
+      const rows = await RS.rpc("admin_exposure");
+      RS.$("#sp-exp").innerHTML = `<p class="muted" style="margin-bottom:8px">Quanto a casa paga em cada resultado, somando os bilhetes em aberto. Suspenda ou anule jogos com exposição alta.</p>` +
+        table(["Jogo", "Bilhetes", "Apostado", "Paga se 1", "Paga se X", "Paga se 2", "Pior caso", ""], rows.map((m) => [
+          `<small>${esc(m.league)}</small><br>${esc(m.home)} x ${esc(m.away)} ${badge(m.status)}`, m.bets, M(m.staked), M(m.pay_home), M(m.pay_draw), M(m.pay_away),
+          `<b class="${m.worst > m.staked ? "neg" : ""}">${M(m.worst)}</b>`,
+          manage ? `<button class="btn sm ${m.locked ? "" : "danger"}" data-lock="${m.id}" data-v="${m.locked ? "0" : "1"}">${m.locked ? "Liberar" : "Suspender"}</button>` : ""]), "Nenhum bilhete em aberto.");
+    }
+    RS.$("#sp-exp").onclick = async (e) => {
+      const b = e.target.closest("[data-lock]");
+      if (b && await act("admin_match_set", { p_match: +b.dataset.lock, p_locked: b.dataset.v === "1" }, "Atualizado")) exposure();
+    };
+    RS.$("#sp-bets").onclick = async (e) => {
+      if (e.target.id !== "b-cancel") return;
+      const ids = RS.$$("[data-bc]:checked").map((x) => +x.dataset.bc);
+      if (!ids.length) { RS.toast("Marque os bilhetes", "error"); return; }
+      const v = await A().ask(`Cancelar ${ids.length} bilhete(s)`, [{ name: "r", label: "Motivo (o valor apostado volta para o jogador)", type: "textarea", required: true }]);
+      if (v && await act("admin_cancel_bets", { p_bets: ids, p_reason: v.r }, "Bilhetes cancelados")) bets();
     };
     RS.$("#m-list").onclick = async (e) => {
       const b = e.target.closest("button");
       if (!b) return;
+      if (b.dataset.void) {
+        const v = await A().ask("Anular mercado", [{ name: "r", label: "Motivo (erro de odd, jogo adiado…). Seleções deste jogo viram odd 1; bilhetes simples são reembolsados.", type: "textarea", required: true }]);
+        if (v && await act("admin_void_match", { p_match: +b.dataset.void, p_reason: v.r }, "Mercado anulado")) matches();
+        return;
+      }
       if (b.dataset.res && confirm("Confirmar resultado? Os bilhetes serão pagos agora.") && await act("settle_match", { p_match: +b.dataset.res, p_result: b.dataset.r }, "Jogo liquidado")) matches();
       if (b.dataset.lock && await act("admin_match_set", { p_match: +b.dataset.lock, p_locked: b.dataset.v === "1" }, "Atualizado")) matches();
       if (b.dataset.st && await act("admin_match_set", { p_match: +b.dataset.st, p_status: b.dataset.v }, "Atualizado")) matches();
