@@ -52,13 +52,25 @@
   const isSel = (id, mk, pick) => legsOf(slip.get(id)).some(([k, p]) => k === mk && p === pick);
   const ICON = { Futebol: "⚽", Basquete: "🏀", "Tênis": "🎾", "Vôlei": "🏐", "Futebol Americano": "🏈", Beisebol: "⚾", "Hóquei": "🏒", MMA: "🥊", "E-sports": "🎮" };
   const icon = (s) => ICON[s] || "🏅";
-  const FLAGS = [[/brazil|brasil|brasileir/i, "🇧🇷"], [/epl|premier|england|fa cup|championship/i, "🏴󠁧󠁢󠁥󠁮󠁧󠁿"], [/spain|la ?liga/i, "🇪🇸"],
+  const FLAGS = [[/portugal/i, "🇵🇹"], [/holanda/i, "🇳🇱"], [/bélgica/i, "🇧🇪"], [/turquia/i, "🇹🇷"], [/escócia/i, "🏴󠁧󠁢󠁳󠁣󠁴󠁿"],
+    [/suíça/i, "🇨🇭"], [/áustria/i, "🇦🇹"], [/dinamarca/i, "🇩🇰"], [/noruega/i, "🇳🇴"], [/suécia/i, "🇸🇪"], [/polônia/i, "🇵🇱"],
+    [/tcheca/i, "🇨🇿"], [/grécia/i, "🇬🇷"], [/croácia/i, "🇭🇷"], [/romênia/i, "🇷🇴"], [/sérvia/i, "🇷🇸"], [/ucrânia/i, "🇺🇦"],
+    [/méxico/i, "🇲🇽"], [/colômbia/i, "🇨🇴"], [/chile/i, "🇨🇱"], [/uruguai/i, "🇺🇾"], [/peru/i, "🇵🇪"], [/equador/i, "🇪🇨"],
+    [/japão/i, "🇯🇵"], [/coreia/i, "🇰🇷"], [/saudi/i, "🇸🇦"], [/austrália/i, "🇦🇺"], [/china/i, "🇨🇳"], [/catar/i, "🇶🇦"],
+    [/copa del rey/i, "🇪🇸"], [/pokal/i, "🇩🇪"], [/coppa/i, "🇮🇹"], [/coupe/i, "🇫🇷"], [/inglesa|inglaterra/i, "🏴󠁧󠁢󠁥󠁮󠁧󠁿"],
+    [/brazil|brasil|brasileir/i, "🇧🇷"], [/epl|premier|england|fa cup|championship/i, "🏴󠁧󠁢󠁥󠁮󠁧󠁿"], [/spain|la ?liga/i, "🇪🇸"],
     [/italy/i, "🇮🇹"], [/germany|bundesliga/i, "🇩🇪"], [/france|ligue 1/i, "🇫🇷"], [/portugal/i, "🇵🇹"], [/argentin/i, "🇦🇷"],
-    [/nba|nfl|mlb|nhl|ncaa|usa|mls/i, "🇺🇸"], [/uefa|champions|europa/i, "🇪🇺"], [/libertadores|sudamericana|conmebol/i, "🌎"]];
+    [/nba|nfl|mlb|nhl|ncaa|usa|mls/i, "🇺🇸"], [/uefa|champions|europa|conference/i, "🇪🇺"], [/libertadores|sudamericana|conmebol/i, "🌎"]];
   const flag = (l) => (FLAGS.find(([r]) => r.test(l)) || [null, "🌍"])[1];
   const LEAGUE_PT = { "Brazil Série A": "Brasileirão Série A", "Brazil Série B": "Brasileirão Série B", EPL: "Premier League",
     "UEFA Champions League": "Liga dos Campeões da UEFA", "UEFA Europa League": "Liga Europa da UEFA", "La Liga - Spain": "La Liga", "Serie A - Italy": "Serie A Itália" };
   const lname = (l) => LEAGUE_PT[l] || l;
+  // ligas principais primeiro nas listas; o resto pela quantidade de jogos
+  const TOP = ["Brazil Série A", "UEFA Champions League", "CONMEBOL Libertadores", "Premier League", "La Liga", "Copa do Brasil",
+    "Serie A - Italy", "Bundesliga", "Ligue 1", "Brazil Série B", "CONMEBOL Sudamericana", "UEFA Europa League", "Primeira Liga Portugal",
+    "Liga Profesional Argentina", "UEFA Conference League", "MLS EUA"];
+  const rank = (l) => { const i = TOP.indexOf(l); return i < 0 ? TOP.length : i; };
+  const byTop = (a, b) => rank(a[0]) - rank(b[0]) || b[1].n - a[1].n;
   function shirt(name) {
     let h = 0;
     for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) % 360;
@@ -185,7 +197,7 @@
   function render() {
     const byLeague = {};
     matches.forEach((m) => { (byLeague[m.league] ||= { n: 0, sport: m.sport }).n++; });
-    RS.$("#comp-list").innerHTML = Object.entries(byLeague).sort((a, b) => b[1].n - a[1].n).slice(0, 12).map(([l, v]) =>
+    RS.$("#comp-list").innerHTML = Object.entries(byLeague).sort(byTop).slice(0, 12).map(([l, v]) =>
       `<button class="comp-item ${league === l ? "active" : ""}" data-league="${RS.esc(l)}"><span class="comp-ico">${flag(l)}</span>
         <span><b>${RS.esc(lname(l))}</b><small>${RS.esc(v.sport)}</small></span><em>${v.n}</em></button>`).join("")
       || `<p class="muted small" style="padding:0 6px">Sem competições no momento.</p>`;
@@ -212,7 +224,7 @@
     RS.$("#feat-cards").classList.toggle("hidden", !home || !top.length);
     RS.$("#feat-cards").innerHTML = home ? top.map(feat).join("") : "";
     RS.$("#casino-strip").classList.toggle("hidden", !home);
-    const pop = Object.entries(byLeague).sort((a, b) => b[1].n - a[1].n).slice(0, 10);
+    const pop = Object.entries(byLeague).sort(byTop).slice(0, 10);
     RS.$("#league-sec").classList.toggle("hidden", !home || !pop.length);
     RS.$("#league-chips").innerHTML = home ? pop.map(([l]) =>
       `<button class="league-chip" data-league="${RS.esc(l)}"><span class="comp-ico">${flag(l)}</span>${RS.esc(lname(l))}</button>`).join("") : "";
