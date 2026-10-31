@@ -351,11 +351,16 @@
     search(q) { document.querySelector('[data-tabs] [data-tab="sports"]').click(); setView("all", { query: q.trim() }); scrollTo({ top: 0 }); },
     add(sels, stake) {
       slip.clear();
-      sels.forEach(({ id, pick }) => { const m = matches.find((x) => x.id === id); const odd = oddOf(m, "1x2", pick); slip.set(id, { market: "1x2", pick, odd, base: odd }); });
-      mode = "multi";
+      sels.forEach(({ id, pick, market = "1x2" }) => {
+        const m = matches.find((x) => x.id === id), odd = oddOf(m, market, pick);
+        if (odd && !suspended(m)) slip.set(id, { market, pick, odd, base: odd });
+      });
+      if (!slip.size) { render(); renderSlip(); persist(); return 0; }
+      mode = slip.size > 1 ? "multi" : "single";
       if (stake) stakeVal = String(stake);
       render(); renderSlip(); persist();
       document.body.classList.add("slip-open");
+      return slip.size;
     },
   };
 

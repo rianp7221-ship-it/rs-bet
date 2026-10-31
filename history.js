@@ -9,6 +9,70 @@
   const PICK = { home: "Casa", draw: "Empate", away: "Fora", over: "Mais", under: "Menos", yes: "Sim", no: "Não", "1x": "1X", x2: "X2", "12": "12" };
   const MKT = { dc: "Chance Dupla", ou15: "Gols 1,5", ou25: "Gols 2,5", ou35: "Gols 3,5", btts: "Ambas Marcam", dnb: "Empate Anula" };
   const badge = (s) => `<span class="badge b-${s}">${STATUS[s] || s}</span>`;
+  const TYPE = (n) => (n === 1 ? "Simples" : n === 2 ? "Dupla" : n === 3 ? "Tripla" : "Múltipla");
+  const MNAME = { "1x2": "Resultado Final", ou15: "Total de Gols", ou25: "Total de Gols", ou35: "Total de Gols", btts: "Ambas Marcam", dc: "Chance Dupla", dnb: "Empate Anula" };
+  const LINE = { ou15: "1,5", ou25: "2,5", ou35: "3,5" };
+  let bets = [], betTab = "open", betFilter = "";
+  const folded = new Set();
+
+  function selName(s) {
+    const { home, away } = s.matches, mk = s.market || "1x2";
+    if (LINE[mk]) return `${s.pick === "over" ? "Mais" : "Menos"} de ${LINE[mk]}`;
+    if (mk === "btts") return s.pick === "yes" ? "Sim" : "Não";
+    if (mk === "dc") return { "1x": `${home} ou Empate`, x2: `Empate ou ${away}`, "12": `${home} ou ${away}` }[s.pick] || s.pick;
+    return s.pick === "home" ? home : s.pick === "away" ? away : "Empate";
+  }
+  function when(iso) {
+    const d = new Date(iso), hm = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const days = Math.round((new Date(iso).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 864e5);
+    if (days === 0) return (d.getHours() >= 18 ? "Esta noite " : "Hoje ") + hm;
+    if (days === 1) return "Amanhã " + hm;
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " " + hm;
+  }
+  const isLive = (s) => s.status === "pending" && s.matches.status === "live";
+  const isFar = (s) => s.status === "pending" && new Date(s.matches.starts_at) - Date.now() > 7 * 864e5;
+  function selState(s) {
+    const m = s.matches;
+    if (s.status !== "pending") return badge(s.status);
+    if (isLive(s)) return `<i class="live">${m.minute ? m.minute + "'" : "AO VIVO"}${m.score_home != null ? ` ${m.score_home}-${m.score_away}` : ""}</i>`;
+    return when(m.starts_at);
+  }
+  function winLine(b) {
+    if (b.status === "cashout") return ["Cashout recebido", b.cashout_amount];
+    if (b.status === "won") return ["Ganhos", b.potential];
+    if (b.status === "canceled") return ["Valor devolvido", b.stake];
+    return ["Ganhos Potenciais", b.potential];
+  }
+  const card = (b) => {
+    const sels = b.bet_selections, [wl, wv] = winLine(b);
+    return `<div class="bet-card${folded.has(b.id) ? " closed" : ""}" data-bet="${b.id}">
+      <div class="bc-head" data-fold="${b.id}"><b>${TYPE(sels.length)}</b><span>${RS.money(b.stake)}</span>${b.status !== "pending" ? badge(b.status) : ""}
+        <span class="bc-odd">${Number(b.total_odd).toFixed(2)}</span><i class="bc-chev"></i></div>
+      <div class="bc-body">
+        ${sels.map((s) => `<div class="bc-sel">
+          <div class="bc-l1">${RS.icon("ball")}<b>${RS.esc(selName(s))}</b><span>${Number(s.odd).toFixed(2)}</span></div>
+          <div class="bc-mk">${MNAME[s.market || "1x2"] || RS.esc(s.market)}</div>
+          <div class="bc-l3"><span>${RS.esc(s.matches.home)} - ${RS.esc(s.matches.away)}</span><span>${selState(s)}</span></div></div>`).join("")}
+        <div class="bc-row"><span>Aposta</span><b>${RS.money(b.stake)}</b></div>
+        <div class="bc-row bc-win"><span>${wl}</span><b>${RS.money(wv)}</b></div>
+        ${b.status === "pending" ? `<div class="cashout-box" data-co="${b.id}"><small class="muted">Calculando cash out…</small></div>` : ""}
+        <div class="bc-foot"><button data-rebet="${b.id}">Reapostar ${RS.icon("refresh")}</button><button data-share="${b.id}">Compartilhar ${RS.icon("share")}</button></div>
+      </div></div>`;
+  };
+  function renderBets() {
+    const open = bets.filter((b) => b.status === "pending");
+    let list = betTab === "open" ? open : bets.filter((b) => b.status !== "pending");
+    if (betTab === "open" && betFilter === "live") list = list.filter((b) => b.bet_selections.some(isLive));
+    if (betTab === "open" && betFilter === "long") list = list.filter((b) => b.bet_selections.some(isFar));
+    const empty = betTab === "open" ? "Nenhuma aposta em aberto." : "Nenhuma aposta resolvida.";
+    box.innerHTML = `<div class="bt-tabs"><button data-bt="open" class="${betTab === "open" ? "active" : ""}">Em Aberto (${open.length})</button>
+        <button data-bt="done" class="${betTab === "done" ? "active" : ""}">Resolvidas</button></div>
+      ${betTab === "open" ? `<div class="bt-filters">${[["live", "Ao Vivo"], ["cash", "Cash Out"], ["long", "Apostas a Longo Prazo"]]
+        .map(([k, l]) => `<button class="bt-f${betFilter === k ? " active" : ""}" data-bf="${k}">${l}</button>`).join("")}</div>` : ""}
+      <div class="${betFilter === "cash" && betTab === "open" ? "only-cash" : ""}">${list.map(card).join("") || `<p class="muted">${empty}</p>`}</div>`;
+    loadCashouts();
+  }
+  const selCode = (b) => b.bet_selections.map((s) => `${s.match_id}~${s.market || "1x2"}.${s.pick}`).join(",");
 
   async function load() {
     const u = await RS.user();
@@ -17,21 +81,12 @@
 
     if (kind === "bets") {
       const { data } = await sb.from("bets")
-        .select("*, bet_selections(market, pick, odd, status, matches(home, away, league, status, score_home, score_away, minute))")
+        .select("*, bet_selections(match_id, market, pick, odd, status, matches(home, away, league, status, starts_at, score_home, score_away, minute))")
         .eq("user_id", u.id).order("created_at", { ascending: false }).limit(50);
-      box.innerHTML = data?.length ? data.map((b) => `
-        <div class="hist-card">
-          <div class="hist-top"><b>Bilhete #${b.id}</b>${badge(b.status)}<small>${RS.date(b.created_at)}</small></div>
-          ${b.bet_selections.map((s) => `<div class="hist-sel">
-            <span>${RS.esc(s.matches.home)} x ${RS.esc(s.matches.away)}${s.status === "pending" && s.matches.status === "live" ? ` <i class="live">${s.matches.minute ? s.matches.minute + "'" : "AO VIVO"}${s.matches.score_home != null ? ` ${s.matches.score_home}-${s.matches.score_away}` : ""}</i>` : ""} · <b>${s.market && s.market !== "1x2" ? `${MKT[s.market] || s.market}: ${PICK[s.pick] || s.pick}` : PICK[s.pick]}</b></span>
-            <span>${Number(s.odd).toFixed(2)} ${badge(s.status)}</span></div>`).join("")}
-          <div class="hist-foot"><span>Apostado ${RS.money(b.stake)} · Odd ${Number(b.total_odd).toFixed(2)}</span>
-            <b>${b.status === "cashout" ? "Recebeu " + RS.money(b.cashout_amount) : (b.status === "won" ? "Recebeu " : "Retorno ") + RS.money(b.potential)}</b></div>
-          ${b.status === "pending" ? `<div class="cashout-box" data-co="${b.id}"><small class="muted">Calculando cashout…</small></div>` : ""}
-        </div>`).join("") : `<p class="muted">Você ainda não fez apostas.</p>`;
+      bets = data || [];
+      renderBets();
+      return;
     }
-
-    if (kind === "bets") loadCashouts();
 
     if (kind === "casino") {
       const { data } = await sb.from("casino_games").select("id,game,stake,mines,multiplier,payout,status,created_at")
@@ -61,16 +116,44 @@
       const id = Number(el.dataset.co);
       const { data: q } = await sb.rpc("cashout_quote", { p_bet: id });
       if (cashing) return;
-      if (!q) { el.innerHTML = `<small class="muted">Cashout indisponível no momento</small>`; continue; }
-      if (q.suspended) { el.innerHTML = `<button class="btn w-full" disabled>🔒 Cashout suspenso · ${RS.esc(q.reason)}</button>`; continue; }
+      el.closest(".bet-card")?.classList.toggle("co-ok", !!q);
+      if (!q) { el.innerHTML = `<small class="muted">Cash out indisponível no momento</small>`; continue; }
+      if (q.suspended) { el.innerHTML = `<button class="btn btn-co w-full" disabled>🔒 CASH OUT suspenso · ${RS.esc(q.reason)}</button>`; continue; }
       const prev = lastCo.get(id), trend = prev == null || prev === q.value ? "" : q.value > prev ? "co-up" : "co-down";
       lastCo.set(id, q.value);
-      el.innerHTML = `<button class="btn btn-primary w-full ${trend}" data-cash="${id}" data-v="${q.value}">Cashout ${RS.money(q.value)}${trend ? (trend === "co-up" ? " ▲" : " ▼") : ""}${q.live ? " · ao vivo" : ""}</button>`;
+      el.innerHTML = `<button class="btn btn-co w-full ${trend}" data-cash="${id}" data-v="${q.value}">CASH OUT ${RS.money(q.value)}${trend ? (trend === "co-up" ? " ▲" : " ▼") : ""}${q.live ? " · ao vivo" : ""}</button>`;
     }
   }
   const showingBets = () => kind === "bets" && !RS.$("#history").classList.contains("hidden") && RS.$("[data-co]", box);
   box.addEventListener("click", async (e) => {
-    const b = e.target.closest("[data-cash]");
+    const t = e.target;
+    const tab = t.closest("[data-bt]"), f = t.closest("[data-bf]"), fold = t.closest("[data-fold]");
+    if (tab) { betTab = tab.dataset.bt; renderBets(); return; }
+    if (f) { betFilter = betFilter === f.dataset.bf ? "" : f.dataset.bf; renderBets(); return; }
+    if (fold) {
+      const id = Number(fold.dataset.fold);
+      if (folded.has(id)) folded.delete(id); else folded.add(id);
+      fold.parentElement.classList.toggle("closed", folded.has(id));
+      return;
+    }
+    const rb = t.closest("[data-rebet]"), sh = t.closest("[data-share]");
+    const bet = bets.find((x) => x.id === Number((rb || sh)?.dataset.rebet ?? (rb || sh)?.dataset.share));
+    if (rb && bet) {
+      location.hash = "#sports";
+      const n = window.RSsports?.add(bet.bet_selections.map((s) => ({ id: s.match_id, market: s.market || "1x2", pick: s.pick })), bet.stake) ?? 0;
+      if (!n) RS.toast("Os jogos deste bilhete não estão mais disponíveis.", "error");
+      else if (n < bet.bet_selections.length) RS.toast(`${n} de ${bet.bet_selections.length} seleções ainda disponíveis foram para o bilhete.`);
+      return;
+    }
+    if (sh && bet) {
+      const url = `${location.origin}${location.pathname}?b=${selCode(bet)}#sports`;
+      try {
+        if (navigator.share) await navigator.share({ title: `Meu bilhete Real Sports #${bet.id}`, url });
+        else { await navigator.clipboard.writeText(url); RS.toast("Link do bilhete copiado!", "ok"); }
+      } catch { /* cancelado */ }
+      return;
+    }
+    const b = t.closest("[data-cash]");
     if (!b) return;
     if (!confirm(`Encerrar o bilhete #${b.dataset.cash} e receber ${RS.money(b.dataset.v)} agora?`)) return;
     b.disabled = true; cashing = true;
