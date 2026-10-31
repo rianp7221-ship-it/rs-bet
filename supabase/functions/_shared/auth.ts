@@ -19,7 +19,7 @@ export async function adminClient(req: Request): Promise<SupabaseClient | Respon
   });
   const { data: { user } } = await sb.auth.getUser();
   if (!user) return json({ error: "Faça login" }, 401);
-  const { data: me } = await sb.from("profiles").select("is_admin").eq("id", user.id).single();
-  if (!me?.is_admin) return json({ error: "Apenas administradores" }, 403);
+  const { data: ok } = await sb.rpc("has_perm", { p_perm: "sports.manage" });
+  if (!ok) return json({ error: "Sem permissão" }, 403);
   return sb;
 }

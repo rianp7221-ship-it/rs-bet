@@ -21,7 +21,7 @@
           ${navLink("index.html#proximos", "Próximos jogos", "proximos")}
           ${navLink("index.html#casino", "Cassino", "casino")}
           ${me ? navLink("index.html#history", "Minhas apostas", "history") : ""}
-          ${me?.is_admin ? `<a href="admin.html" class="${page === "admin.html" ? "active" : ""}">Admin</a>` : ""}
+          ${me?.is_admin || me?.staff_role ? `<a href="admin.html" class="${page === "admin.html" ? "active" : ""}">Admin</a>` : ""}
         </nav>
         <div class="hdr-right">
           <button class="icon-btn hide-xs" id="hdr-search" aria-label="Buscar">${RS.icon("search")}</button>
@@ -77,7 +77,7 @@
         <button class="btn btn-outline" data-a="pass" title="Trocar senha" aria-label="Trocar senha">${RS.icon("key")}</button>
         <button class="btn btn-outline" data-a="support" title="Suporte" aria-label="Suporte">${RS.icon("headset")}</button>
       </div>
-      ${me.is_admin ? `<a class="btn btn-primary" href="admin.html" style="margin-bottom:8px">Painel Admin</a>` : ""}
+      ${me.is_admin || me.staff_role ? `<a class="btn btn-primary" href="admin.html" style="margin-bottom:8px">Painel Admin</a>` : ""}
       <button class="btn btn-outline" data-a="logout">Sair</button>`;
     RS.$(".hdr-right", el).appendChild(d);
     d.onclick = async (e) => {
