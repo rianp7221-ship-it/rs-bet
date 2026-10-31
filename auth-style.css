@@ -382,6 +382,8 @@ body.slip-open .overlay, body.menu-open .overlay { display: block; }
 .casino-dark .game-card { background: #1a2136; color: #eef1fb; box-shadow: none; }
 .casino-dark .game-card .muted, .casino-dark .game-card label { color: #aab3cc; }
 .casino-dark .input { background: #0f1424; border-color: #2c3653; color: #fff; }
+.casino-dark .dice-stats { color: #aab3cc; }
+.casino-dark .dice-stats b { color: #fff; }
 .cat-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 14px 0 6px; }
 .cat-chips button { background: none; border: 1px solid #3a4566; color: #dfe4f5; border-radius: 999px; padding: 9px 18px; font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .cat-chips button.active { background: #2a3455; border-color: #2a3455; color: #fff; }
