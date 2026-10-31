@@ -15,7 +15,6 @@
     me = await RS.profile();
     el.innerHTML = `
       <div class="hdr">
-        ${document.getElementById("lside") ? `<button class="icon-btn hdr-burger" data-open-menu aria-label="Menu">${RS.icon("menu")}</button>` : ""}
         <a href="index.html" class="logo" aria-label="Real Sports"><b class="logo-mark">RS</b><span class="logo-word">Real<em>Sports</em></span></a>
         <nav class="hdr-nav">
           ${navLink("index.html#sports", "Apostas esportivas", "sports")}
@@ -35,6 +34,11 @@
         </div>
       </div>`;
     markNav();
+    el.querySelector(".logo").onclick = (e) => {
+      if (!document.getElementById("lside") || !matchMedia("(max-width: 1000px)").matches) return;
+      e.preventDefault();
+      document.body.classList.toggle("menu-open");
+    };
     RS.$("#hdr-search").onclick = search;
     if (!me) return;
     if (me.blocked) RS.toast("Sua conta está bloqueada. Fale com o suporte.", "error");
