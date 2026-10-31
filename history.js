@@ -116,7 +116,7 @@
       const id = Number(el.dataset.co);
       const { data: q } = await sb.rpc("cashout_quote", { p_bet: id });
       if (cashing) return;
-      el.closest(".bet-card")?.classList.toggle("co-ok", !!q);
+      el.closest(".bet-card")?.classList.toggle("co-ok", !!q && !q.suspended);
       if (!q) { el.innerHTML = `<small class="muted">Cash out indisponível no momento</small>`; continue; }
       if (q.suspended) { el.innerHTML = `<button class="btn btn-co w-full" disabled>🔒 CASH OUT suspenso · ${RS.esc(q.reason)}</button>`; continue; }
       const prev = lastCo.get(id), trend = prev == null || prev === q.value ? "" : q.value > prev ? "co-up" : "co-down";
