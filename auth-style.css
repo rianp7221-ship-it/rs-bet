@@ -393,3 +393,13 @@ body.slip-open .overlay, body.menu-open .overlay { display: block; }
 .mk-group { margin-bottom: 10px; }
 .mk-group h4 { font-size: 13px; font-weight: 800; margin: 0 0 6px; }
 .mk-group .odds { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 6px; }
+.bottom-nav { grid-template-columns: repeat(4, 1fr) 76px; align-items: center; }
+.bottom-nav a { position: relative; }
+.bn-badge { position: absolute; top: 3px; left: calc(50% + 6px); min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--green); color: #fff; font-style: normal; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+.bn-badge.hidden, .bn-ball, body.on-casino .bn-chip { display: none !important; }
+.bn-switch span { width: 54px; height: 54px; margin-top: -16px; border-radius: 50%; display: grid; place-items: center; background: var(--primary); color: #fff; border: 3px solid #fff; box-shadow: 0 4px 12px rgba(0,0,0,.25); }
+.bottom-nav .bn-switch svg.i { width: 30px; height: 30px; }
+body.on-casino .bn-ball { display: grid !important; }
+body.on-casino .bottom-nav { background: #0f1424; border-top-color: #2c3653; }
+body.on-casino .bottom-nav a { color: #dfe4f5; }
+body.on-casino .bn-switch span { border-color: #0f1424; }

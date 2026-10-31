@@ -166,9 +166,10 @@
 
   <nav class="bottom-nav">
     <a href="#sports" data-view="all" class="active"><i data-ic="home"></i>Início</a>
-    <a href="#sports" data-view="next"><i data-ic="clock"></i>Próximos</a>
-    <a href="#casino"><i data-ic="dice"></i>Cassino</a>
-    <a href="#" data-open-menu><i data-ic="menu"></i>Menu</a>
+    <a href="#sports" data-view="live"><i data-ic="live"></i>Ao Vivo</a>
+    <a href="#" data-open-menu><i data-ic="grid"></i>Esportes</a>
+    <a href="#history" data-bets><i data-ic="receipt"></i>Apostas<em class="bn-badge hidden" id="bn-count">0</em></a>
+    <a href="#casino" class="bn-switch" id="bn-switch" aria-label="Cassino"><span class="bn-chip"><i data-ic="chip"></i></span><span class="bn-ball"><i data-ic="ball"></i></span></a>
   </nav>
 
   <footer class="footer">
@@ -205,6 +206,7 @@
     // links #sports / #casino / #history / #proximos trocam a aba sem recarregar
     document.addEventListener("click", (e) => {
       const a = e.target.closest("a[href*='#']");
+      if (a?.matches("[data-bets]") && RS.$("#fab-count").textContent !== "0") { e.preventDefault(); document.body.classList.add("slip-open"); return; }
       if (!a || a.origin !== location.origin || !/\/(index\.html)?$/.test(a.pathname)) return;
       let t = a.hash.slice(1);
       if (t !== "proximos" && !TABS.includes(t)) return;
@@ -217,6 +219,16 @@
       else scrollTo({ top: 0, behavior: "smooth" });
       if (a.closest(".bottom-nav")) RS.$$(".bottom-nav a").forEach((x) => x.classList.toggle("active", x === a));
     });
+    // botão redondo da barra: cassino nos esportes, bola de futebol no cassino
+    function navMode(t) {
+      const c = t === "casino", sw = RS.$("#bn-switch");
+      document.body.classList.toggle("on-casino", c);
+      sw.setAttribute("href", c ? "#sports" : "#casino");
+      sw.setAttribute("aria-label", c ? "Esportes" : "Cassino");
+      if (c) { sw.dataset.view = "all"; RS.$$(".bottom-nav a").forEach((x) => x.classList.remove("active")); }
+      else delete sw.dataset.view;
+    }
+    document.addEventListener("click", (e) => { const b = e.target.closest("[data-tabs] [data-tab]"); if (b) navMode(b.dataset.tab); });
     openHash();
   </script>
 </body>

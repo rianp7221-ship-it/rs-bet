@@ -211,6 +211,8 @@
     RS.$("#slip-fab").classList.toggle("hidden", !n);
     RS.$("#fab-odd").textContent = total.toFixed(2);
     RS.$("#fab-count").textContent = n;
+    RS.$("#bn-count").textContent = n;
+    RS.$("#bn-count").classList.toggle("hidden", !n);
     if (!n) document.body.classList.remove("slip-open");
     const multi = mode === "multi" && n > 1;
     RS.$$("#slip-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.mode === (multi ? "multi" : "single")));
