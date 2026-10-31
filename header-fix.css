@@ -68,3 +68,4 @@
 @media (max-width: 380px) { .hdr-right .icon-btn.hide-xs { display: none; } }
 #rs-header .logo span.logo-word { opacity: 1; color: #fff; }
 .logo-word em { font-style: inherit; opacity: .8; }
+.bell-dot { position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: #ffe14d; border: 2px solid var(--primary); }

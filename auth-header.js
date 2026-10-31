@@ -26,6 +26,7 @@
         <div class="hdr-right">
           <button class="icon-btn hide-xs" id="hdr-search" aria-label="Buscar">${RS.icon("search")}</button>
           ${me ? `
+            <button class="icon-btn hide-xs" id="hdr-bell" aria-label="Notificações" style="position:relative">${RS.icon("bell")}<i class="bell-dot" id="bell-dot" hidden></i></button>
             <button class="balance" id="hdr-bal"><small>Saldo</small><b id="hdr-balance">${RS.money(me.balance)}</b></button>
             <button class="btn btn-green" id="btn-deposit">Depositar</button>
             <button class="avatar" id="hdr-avatar" aria-label="Minha conta">${RS.esc(initial(me))}</button>`
@@ -39,6 +40,35 @@
     RS.$("#btn-deposit").onclick = () => moneyModal("deposit");
     RS.$("#hdr-bal").onclick = () => panel("overview");
     RS.$("#hdr-avatar").onclick = togglePop;
+    RS.$("#hdr-bell").onclick = showNotifications;
+    bell();
+    if (!sessionStorage.getItem("rs-login-logged")) {
+      sessionStorage.setItem("rs-login-logged", "1");
+      sb.rpc("log_login", { p_fingerprint: await fingerprint() });
+    }
+  }
+
+  // identificador do aparelho (hash de características do navegador) para detectar multi-contas
+  async function fingerprint() {
+    const raw = [navigator.userAgent, navigator.language, screen.width + "x" + screen.height, screen.colorDepth,
+      Intl.DateTimeFormat().resolvedOptions().timeZone, navigator.hardwareConcurrency, navigator.platform].join("|");
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
+    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
+  }
+
+  // ---------- notificações ----------
+  async function bell() {
+    if (!me) return;
+    const { count } = await sb.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", me.id).is("read_at", null);
+    const d = RS.$("#bell-dot");
+    if (d) d.hidden = !count;
+  }
+  async function showNotifications() {
+    const { data } = await sb.from("notifications").select("*").eq("user_id", me.id).order("created_at", { ascending: false }).limit(30);
+    RS.modal(`<h3>Notificações</h3>${data?.length ? data.map((n) => `<div class="mb-item" style="display:block"><b>${RS.esc(n.title)}</b>${n.read_at ? "" : ' <span class="badge b-pending">nova</span>'}
+      <small>${RS.date(n.created_at)}</small>${n.body ? `<p style="margin:6px 0 0">${RS.esc(n.body)}</p>` : ""}</div>`).join("") : `<p class="muted">Nenhuma notificação.</p>`}`);
+    await sb.rpc("mark_notifications_read");
+    bell();
   }
 
   function markNav() {
@@ -107,7 +137,7 @@
   const TX_ST = { pending: "Pendente", done: "Concluída", rejected: "Recusada" };
   const txRow = (t) => `<div class="mb-item"><div>${RS.esc(t.description || t.type)}<small>${RS.date(t.created_at)} · ${TX_ST[t.status] || t.status}</small></div>
     <b class="${t.amount >= 0 ? "pos" : "neg"}">${RS.money(t.amount)}</b></div>`;
-  const TABS = { overview: ["grid", "Visão geral"], tx: ["card", "Transações"], data: ["user", "Meus dados"] };
+  const TABS = { overview: ["grid", "Visão geral"], tx: ["card", "Transações"], data: ["user", "Meus dados"], limits: ["lock", "Jogo responsável"] };
 
   function panel(tab) {
     RS.$(".acct-panel")?.remove();
@@ -140,6 +170,40 @@
       if (k === "tx") {
         const { data } = await sb.from("transactions").select("*").eq("user_id", p.id).order("created_at", { ascending: false }).limit(50);
         body.innerHTML = `<div class="ap-card ap-list">${data?.length ? data.map(txRow).join("") : `<p class="muted">Nenhuma movimentação.</p>`}</div>`;
+      }
+      if (k === "limits") {
+        const { data: l } = await sb.from("user_limits").select("*").eq("user_id", p.id).maybeSingle();
+        const v = (x) => (l?.[x] != null ? l[x] : "");
+        body.innerHTML = `<div class="ap-card"><h3>Seus limites</h3>
+          <p class="muted small" style="margin-bottom:10px">Diminuir vale na hora. Aumentar ou remover só vale depois de 24 h. Deixe em branco para não ter limite.</p>
+          <form id="lim-f">
+            <div class="ap-field"><label>Depósito por dia (R$)</label><input class="input" name="dd" type="number" min="0" step="1" value="${v("deposit_day")}"></div>
+            <div class="ap-field"><label>Depósito por semana (R$)</label><input class="input" name="dw" type="number" min="0" step="1" value="${v("deposit_week")}"></div>
+            <div class="ap-field"><label>Depósito por mês (R$)</label><input class="input" name="dm" type="number" min="0" step="1" value="${v("deposit_month")}"></div>
+            <div class="ap-field"><label>Perda máxima por dia (R$)</label><input class="input" name="ld" type="number" min="0" step="1" value="${v("loss_day")}"></div>
+            ${l?.pending ? `<p class="small" style="color:var(--gold);margin-bottom:10px">Mudança agendada para ${RS.date(l.pending_at)}.</p>` : ""}
+            <button class="btn btn-dark w-full">Salvar limites</button></form></div>
+          <div class="ap-card"><h3>Pausa (autoexclusão)</h3>
+            ${l?.self_excluded_until && new Date(l.self_excluded_until) > new Date() ? `<p>Sua conta está em pausa até <b>${RS.date(l.self_excluded_until)}</b>.</p>` : `
+            <p class="muted small" style="margin-bottom:10px">Durante a pausa você não consegue apostar nem depositar. Não dá para cancelar antes do fim.</p>
+            <select class="input" id="lim-ex"><option value="1">24 horas</option><option value="7">7 dias</option><option value="30">30 dias</option><option value="180">6 meses</option></select>
+            <button class="btn btn-outline danger w-full" id="lim-ex-go">Pausar minha conta</button>`}</div>`;
+        const num = (x) => (x === "" ? null : Number(x));
+        RS.$("#lim-f", w).onsubmit = async (e) => {
+          e.preventDefault();
+          const f = Object.fromEntries(new FormData(e.target));
+          try {
+            const r = await RS.rpc("set_my_limits", { p_deposit_day: num(f.dd), p_deposit_week: num(f.dw), p_deposit_month: num(f.dm), p_loss_day: num(f.ld), p_exclude_days: null });
+            RS.toast(Object.keys(r.em_24h || {}).length ? "Limites salvos. Os aumentos valem em 24 h." : "Limites salvos.", "ok");
+            show("limits");
+          } catch (err) { RS.toast(err.message, "error"); }
+        };
+        RS.$("#lim-ex-go", w)?.addEventListener("click", async () => {
+          const d = Number(RS.$("#lim-ex", w).value);
+          if (!confirm("Tem certeza? A pausa não pode ser cancelada.")) return;
+          try { await RS.rpc("set_my_limits", { p_deposit_day: num(v("deposit_day")), p_deposit_week: num(v("deposit_week")), p_deposit_month: num(v("deposit_month")), p_loss_day: num(v("loss_day")), p_exclude_days: d }); RS.toast("Conta pausada.", "ok"); show("limits"); }
+          catch (err) { RS.toast(err.message, "error"); }
+        });
       }
       if (k === "data") {
         body.innerHTML = `<div class="ap-card"><h3>Informações gerais</h3>
@@ -213,6 +277,11 @@
       if (b) { b.textContent = RS.money(p.balance); b.classList.add("flash"); setTimeout(() => b.classList.remove("flash"), 600); }
     }
   });
-  sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_IN" || ev === "SIGNED_OUT") render(); });
+  sb.channel("my-notif").on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, (e) => {
+    if (me && e.new.user_id === me.id) { RS.toast("🔔 " + e.new.title, "info"); bell(); }
+  }).subscribe();
+  sb.auth.onAuthStateChange((ev) => {
+    if (ev === "SIGNED_IN") sessionStorage.removeItem("rs-login-logged"); if (ev === "SIGNED_IN" || ev === "SIGNED_OUT") render();
+  });
   render();
 })();
