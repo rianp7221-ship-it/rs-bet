@@ -1,6 +1,6 @@
 # App Android (TWA)
 
-Abre https://realsports.online em tela cheia pelo Chrome (Trusted Web Activity), com WebView como reserva.
+Abre https://www.realsports.online (o domínio sem www redireciona com 308, e o Android não segue redirect ao verificar o assetlinks) em tela cheia pelo Chrome (Trusted Web Activity), com WebView como reserva.
 O APK publicado fica em `/app/realsports.apk` e a verificação do domínio em `/.well-known/assetlinks.json`.
 
 ## Gerar nova versão

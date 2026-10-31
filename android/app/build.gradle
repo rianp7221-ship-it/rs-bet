@@ -7,9 +7,9 @@ android {
         applicationId "online.realsports.app"
         minSdk 21
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
-        manifestPlaceholders = [hostName: "realsports.online", defaultUrl: "https://realsports.online/index.html"]
+        versionCode 2
+        versionName "1.1"
+        manifestPlaceholders = [hostName: "www.realsports.online", defaultUrl: "https://www.realsports.online/index.html"]
     }
     signingConfigs {
         release {
