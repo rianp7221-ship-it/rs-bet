@@ -154,7 +154,7 @@
   async function finance() {
     const { can, act, ask, table, head, badge, csv } = A();
     main().innerHTML = head("Financeiro") + `
-      <div class="tabs-sm" id="f-tabs"><button class="chip active" data-v="queue">Fila de saques</button><button class="chip" data-v="all">Depósitos e saques</button><button class="chip" data-v="rec">Reconciliação</button></div>
+      <div class="tabs-sm" id="f-tabs"><button class="chip active" data-v="queue">Fila de saques</button><button class="chip" data-v="all">Depósitos e saques</button><button class="chip" data-v="rec">Reconciliação</button><button class="chip" data-v="auto">Automação</button></div>
       <div id="f-body"></div>`;
     let view = "queue";
     async function queue() {
@@ -166,8 +166,8 @@
           `<a href="#" data-open-user="${t.user_id}" style="color:var(--primary)">${esc(t.profiles?.email || "")}</a><br><small>risco ${esc(t.profiles?.risk_level || "")}</small>`,
           `<b>${M(Math.abs(t.amount))}</b>`, RS.date(t.created_at),
           `<span class="badge ${(LEVEL[t.review_level] || ["", ""])[1]}">${(LEVEL[t.review_level] || ["Manual"])[0]}</span>${t.first_approver ? "<br><small>1ª aprovação feita</small>" : ""}`,
-          `<small>${esc(t.review_notes || "-")}</small>${t.pix_key ? `<br><small>PIX (${esc(t.pix_key_type)}): <b>${esc(t.pix_key)}</b></small> <button class="btn sm btn-outline" data-copy="${esc(t.pix_key)}">Copiar</button>` : "<br><small>sem chave PIX informada</small>"}`,
-          can("finance.manage") ? `<button class="btn sm btn-green" data-ok="${t.id}">${t.review_level === "dupla" && !t.first_approver ? "1ª aprovação" : "Aprovar e pagar"}</button><button class="btn sm danger" data-no="${t.id}">Recusar</button>` : ""]),
+          `<small>${esc(t.review_notes || "-")}</small>${t.payout_status ? `<br><span class="badge ${t.payout_status === "failed" ? "b-lost" : "b-pending"}">${PAYOUT[t.payout_status]}</span>${t.payout_error ? ` <small>${esc(t.payout_error)}</small>` : ""}` : ""}${t.pix_key ? `<br><small>PIX (${esc(t.pix_key_type)}): <b>${esc(t.pix_key)}</b></small> <button class="btn sm btn-outline" data-copy="${esc(t.pix_key)}">Copiar</button>` : "<br><small>sem chave PIX informada</small>"}`,
+          t.payout_status === "sending" ? "<small>Enviando pelo gateway…</small>" : can("finance.manage") ? `<button class="btn sm btn-green" data-ok="${t.id}">${t.review_level === "dupla" && !t.first_approver ? "1ª aprovação" : "Aprovar e pagar"}</button><button class="btn sm danger" data-no="${t.id}">Recusar</button>` : ""]),
           "Nenhum saque na fila.");
     }
     async function all() {
@@ -191,7 +191,43 @@
       RS.$("#rec-csv").onclick = () => csv("reconciliacao.csv", [["dia", "depositos", "qtd_depositos", "saques", "qtd_saques", "taxas", "liquido"],
         ...r.days.map((d) => [d.day, d.deposits, d.deposits_n, d.withdrawals, d.withdrawals_n, d.fees, d.net])]);
     }
-    const load = () => (view === "queue" ? queue() : view === "all" ? all() : rec());
+    const PAYOUT = { queued: "Automático: na fila do gateway", sending: "Automático: enviando", sent: "Automático: pago", failed: "Automático falhou: pagar manualmente" };
+    const AUTO_KEYS = ["withdraw_auto", "withdraw_auto_max", "bet_alert_email", "bet_alert_amount"];
+    async function auto() {
+      const [{ data: st }, { data: a, error }] = await Promise.all([sb.from("settings").select("key, value").in("key", AUTO_KEYS), sb.rpc("admin_automation")]);
+      if (error) { RS.$("#f-body").innerHTML = `<div class="panel">${esc(error.message)}</div>`; return; }
+      const v = Object.fromEntries((st || []).map((x) => [x.key, x.value]));
+      const pay = a.status?.payout || {}, mail = a.status?.email || {}, edit = can("settings.manage");
+      const dis = edit ? "" : "disabled";
+      RS.$("#f-body").innerHTML = `<div class="panel"><h3>Saque automático</h3>
+          <p class="small">Saques sem risco (fila rápida) até o valor abaixo são enviados por PIX pelo gateway, sem aprovação manual. Os outros continuam na fila.</p>
+          <label class="small">Ligado</label><select class="input" id="au-on" ${dis}><option value="true" ${v.withdraw_auto ? "selected" : ""}>Sim</option><option value="false" ${!v.withdraw_auto ? "selected" : ""}>Não</option></select>
+          <label class="small">Valor máximo automático (R$)</label><input class="input" id="au-max" type="number" min="0" step="1" value="${Number(v.withdraw_auto_max ?? 0)}" ${dis}>
+          <p class="small">Gateway de saque: <b>${pay.provider ? esc(pay.provider) : "não configurado"}</b>${pay.provider ? "" : " — os saques automáticos ficam aguardando na fila até um gateway ser ligado."}${pay.error ? ` <span class="badge b-lost">${esc(pay.error)}</span>` : ""}<br>
+            Na fila automática: <b>${a.queued}</b> · Pagos automaticamente (24 h): <b>${a.sent_today}</b></p></div>
+        <div class="panel"><h3>Alerta de aposta por e-mail</h3>
+          <p class="small">Cada aposta a partir do valor abaixo manda um e-mail com jogador, valor, odd e seleções.</p>
+          <label class="small">E-mail (vários: separe por vírgula)</label><input class="input" id="au-mail" type="text" placeholder="voce@exemplo.com" value="${esc(v.bet_alert_email || "")}" ${dis}>
+          <label class="small">Aposta a partir de (R$)</label><input class="input" id="au-amt" type="number" min="0" step="1" value="${Number(v.bet_alert_amount ?? 0)}" ${dis}>
+          <p class="small">Envio de e-mail: <b>${mail.configured ? "Resend ligado" : "não configurado"}</b>${mail.configured ? "" : " — os alertas ficam guardados e saem quando a chave do Resend for salva."}</p>
+          ${edit ? `<button class="btn btn-green" id="au-save">Salvar</button> <button class="btn btn-outline" id="au-test">Enviar e-mail de teste</button>` : ""}</div>
+        <div class="panel"><h3>Últimos e-mails</h3>${table(["Data", "Para", "Assunto", "Status"], a.emails.map((e) => [new Date(e.created_at).toLocaleString("pt-BR"), esc(e.to_email), esc(e.subject),
+          e.sent_at ? `<span class="badge b-won">Enviado</span>` : e.error ? `<span class="badge b-lost">Erro</span> <small>${esc(e.error)}</small>` : `<span class="badge b-pending">Pendente</span>`]))}</div>`;
+      if (!edit) return;
+      RS.$("#au-save").onclick = async () => {
+        const mailv = RS.$("#au-mail").value.trim();
+        if (mailv && !mailv.split(",").every((m) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m.trim()))) { RS.toast("E-mail inválido", "error"); return; }
+        const vals = { withdraw_auto: RS.$("#au-on").value === "true", withdraw_auto_max: Number(RS.$("#au-max").value) || 0, bet_alert_email: mailv, bet_alert_amount: Number(RS.$("#au-amt").value) || 0 };
+        for (const [k, val] of Object.entries(vals)) {
+          if (JSON.stringify(v[k]) === JSON.stringify(val)) continue;
+          const { error: er } = await sb.rpc("admin_set_setting", { p_key: k, p_value: val });
+          if (er) { RS.toast(er.message, "error"); return; }
+        }
+        RS.toast("Automação salva", "ok"); auto();
+      };
+      RS.$("#au-test").onclick = async () => { if (await act("admin_email_test", {}, "E-mail de teste na fila (sai em até 1 min)")) auto(); };
+    }
+    const load = () => (view === "queue" ? queue() : view === "all" ? all() : view === "auto" ? auto() : rec());
     RS.$("#f-tabs").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; view = b.dataset.v; RS.$$("#f-tabs .chip").forEach((x) => x.classList.toggle("active", x === b)); load(); };
     RS.$("#f-body").onclick = async (e) => {
       const cbt = e.target.closest("[data-cbtx]");

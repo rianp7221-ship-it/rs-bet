@@ -101,3 +101,23 @@ export function paymentProvider(): PaymentProvider {
   if (!make) throw new Error(`Gateway PIX desconhecido: ${name}`);
   return make();
 }
+
+// ---------- Envio de PIX (saque automático) ----------
+// Para ligar: implemente PayoutProvider, registre em PAYOUTS e defina o secret PAYOUT_PROVIDER com o nome.
+// Sem PAYOUT_PROVIDER, os saques automáticos ficam na fila até um gateway ser configurado.
+export type SendPix = { reference: string; amount: number; key: string; keyType: string; description: string };
+export type PayoutResult = { id: string | null; ok: boolean; detail: string };
+export interface PayoutProvider {
+  name: string;
+  sendPix(p: SendPix): Promise<PayoutResult>;
+}
+
+const PAYOUTS: Record<string, () => PayoutProvider> = {};
+
+export function payoutProvider(): PayoutProvider | null {
+  const name = Deno.env.get("PAYOUT_PROVIDER");
+  if (!name) return null;
+  const make = PAYOUTS[name];
+  if (!make) throw new Error(`Gateway de saque desconhecido: ${name}`);
+  return make();
+}
