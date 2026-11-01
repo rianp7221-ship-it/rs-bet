@@ -479,7 +479,9 @@
   let pend;
   sb.channel("matches").on("postgres_changes", { event: "*", schema: "public", table: "matches" },
     () => { clearTimeout(pend); pend = setTimeout(load, 400); }).subscribe();
-  setInterval(() => { if (!document.hidden) render(); }, 30000);
+  // o celular derruba o tempo real em segundo plano: confere sozinho a cada 15 s e ao voltar para a aba
+  setInterval(() => { if (!document.hidden) load(); }, 15000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
 
   (async () => {
     await load();
