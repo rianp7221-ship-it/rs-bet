@@ -94,7 +94,10 @@
   const slip = new Map(); // match_id -> { market, pick, odd, base }
   const favs = new Set(JSON.parse(localStorage.getItem("rs-favs") || "[]"));
   const live = (m) => m.status === "live";
-  const suspended = (m) => !!m && (m.locked || (m.suspended_until && new Date(m.suspended_until) > new Date()));
+  // ao vivo sem odds novas do feed ao vivo: cadeado (o servidor recusa igual)
+  const staleLive = (m) => !!m.external_id && (m.status === "live" || new Date(m.starts_at) <= new Date())
+    && (!m.odds_at || Date.now() - new Date(m.odds_at) > 45_000);
+  const suspended = (m) => !!m && (m.locked || (m.suspended_until && new Date(m.suspended_until) > new Date()) || staleLive(m));
   const sameDay = (d, off) => { const a = new Date(d), b = new Date(); b.setDate(b.getDate() + off); return a.toDateString() === b.toDateString(); };
   const hhmm = (d) => new Date(d).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const ddmm = (d) => new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });

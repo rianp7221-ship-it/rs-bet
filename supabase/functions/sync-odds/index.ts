@@ -133,6 +133,7 @@ Deno.serve(async (req) => {
           const o = applyMargin(u.odds, margin("odds_margin_live"));
           jumped = oddsJump(m, o, margin("odds_jump_pct"));
           patch.odd_home = o.home; patch.odd_draw = o.draw; patch.odd_away = o.away;
+          patch.odds_at = patch.synced_at;
         }
         if (u.markets !== undefined) patch.markets = marginMarkets(u.markets, margin("odds_margin_live"));
         if (scoreChanged(m, u.home, u.away) && !u.completed) {
@@ -210,6 +211,8 @@ Deno.serve(async (req) => {
         priced.add(row.external_id);
         const cur = byExt.get(row.external_id);
         if (cur && !["open", "live"].includes(cur.status)) continue;
+        // jogo já começou: odds só do feed ao vivo; o /odds de pré-jogo segue mandando as odds de antes do jogo
+        if (cur && isLive && feed.live) continue;
         const { error } = cur
           ? await sb.from("matches").update(row).eq("id", cur.id)
           : await sb.from("matches").insert(row);
@@ -217,7 +220,7 @@ Deno.serve(async (req) => {
         else updated++;
       }
       // jogo ao vivo sem odds nas casas = mercado suspenso lá (lance perigoso, VAR...) => suspende aqui também
-      const gone = (startedBySport.get(sport) ?? []).filter((m) => !priced.has(m.external_id)).map((m) => m.id);
+      const gone = feed.live ? [] : (startedBySport.get(sport) ?? []).filter((m) => !priced.has(m.external_id)).map((m) => m.id);
       if (gone.length) {
         await sb.from("matches").update({
           suspended_until: new Date(now + 60_000).toISOString(), suspend_reason: "Mercado suspenso nas casas",
