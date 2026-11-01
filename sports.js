@@ -229,6 +229,7 @@
     RS.$("#feat-cards").classList.toggle("hidden", !home || !top.length);
     RS.$("#feat-cards").innerHTML = home ? top.map(feat).join("") : "";
     RS.$("#casino-strip").classList.toggle("hidden", !home);
+    document.body.classList.toggle("is-home", home);
     const pop = Object.entries(byLeague).sort(byTop).slice(0, 10);
     RS.$("#league-sec").classList.toggle("hidden", !home || !pop.length);
     RS.$("#league-chips").innerHTML = home ? pop.map(([l]) =>

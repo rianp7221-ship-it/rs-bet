@@ -541,6 +541,8 @@
       if (b) { b.textContent = RS.money(p.balance); b.classList.add("flash"); setTimeout(() => b.classList.remove("flash"), 600); }
     }
   });
+  // banners e outros atalhos pedem o depósito por evento
+  document.addEventListener("rs:deposit", () => (me ? panel("overview") : (location.href = "login.html?cadastro")));
   sb.channel("my-notif").on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, (e) => {
     if (me && e.new.user_id === me.id) { RS.toast("🔔 " + e.new.title, "info"); bell(); }
   }).subscribe();

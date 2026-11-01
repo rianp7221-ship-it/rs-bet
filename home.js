@@ -20,6 +20,43 @@
     top.onclick = () => scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  // ---------- Banners do Início (Admin → Bônus e marketing → Banners) ----------
+  const promo = RS.$("#promo");
+  if (promo) {
+    const track = RS.$("#promo-track"), dots = RS.$("#promo-dots");
+    let idx = 0, timer = 0, count = 0;
+    const go = (i, smooth = true) => {
+      if (!count) return;
+      idx = (i + count) % count;
+      track.scrollTo({ left: idx * track.clientWidth, behavior: smooth ? "smooth" : "auto" });
+      RS.$$("button", dots).forEach((d, j) => d.classList.toggle("on", j === idx));
+    };
+    const auto = () => { clearInterval(timer); timer = setInterval(() => { if (!document.hidden) go(idx + 1); }, 6000); };
+    const linkOf = (b) => {
+      const l = b.link || "";
+      if (l.startsWith("view:")) return `href="#sports" data-view="${RS.esc(l.slice(5))}"`;
+      if (l === "deposit") return `href="#" data-promo-dep`;
+      return `href="${RS.esc(/^(https?:|#|\/|[a-z0-9-]+\.html)/i.test(l) ? l : "#sports")}"`;
+    };
+    (async () => {
+      const { data } = await sb.from("banners").select("*").order("sort").order("id");
+      count = data?.length || 0;
+      promo.classList.toggle("hidden", !count);
+      if (!count) return;
+      track.innerHTML = data.map((b) => `<a class="pb pb-${RS.esc(b.theme)}${b.image_url ? " pb-img" : ""}" ${linkOf(b)}
+          ${b.image_url ? `style="background-image:linear-gradient(90deg,rgba(0,0,0,.65),rgba(0,0,0,.05) 70%),url('${RS.esc(b.image_url)}')"` : ""}>
+          <div class="pb-txt"><small class="pb-brand">REAL SPORTS</small><b>${RS.esc(b.title)}</b>${b.subtitle ? `<span>${RS.esc(b.subtitle)}</span>` : ""}
+            ${b.cta ? `<em class="pb-cta">${RS.esc(b.cta)}</em>` : ""}</div>
+          ${b.image_url ? "" : `<i class="pb-art">${RS.icon(b.icon || "ball")}</i>`}</a>`).join("");
+      dots.innerHTML = count > 1 ? data.map((_, i) => `<button aria-label="Banner ${i + 1}" class="${i ? "" : "on"}"></button>`).join("") : "";
+      dots.onclick = (e) => { const d = e.target.closest("button"); if (d) { go([...dots.children].indexOf(d)); auto(); } };
+      let st;
+      track.addEventListener("scroll", () => { clearTimeout(st); st = setTimeout(() => { idx = Math.round(track.scrollLeft / track.clientWidth); RS.$$("button", dots).forEach((d, j) => d.classList.toggle("on", j === idx)); }, 120); });
+      track.addEventListener("click", (e) => { if (e.target.closest("[data-promo-dep]")) { e.preventDefault(); document.dispatchEvent(new Event("rs:deposit")); } });
+      if (count > 1) auto();
+    })();
+  }
+
   // ---------- Minhas apostas (coluna da direita) ----------
   const mbList = RS.$("#mybets-list");
   let mb = "open";

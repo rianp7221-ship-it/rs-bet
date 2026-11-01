@@ -432,7 +432,7 @@
   const BST = { aguardando_deposito: "Aguardando depósito", ativo: "Ativo", concluido: "Liberado", expirado: "Expirado", cancelado: "Cancelado" };
   async function bonus() {
     const { can, act, ask, table, head } = A();
-    const tabs = [["camp", "Campanhas e cupons", "bonus.view"], ["ub", "Bônus dos jogadores", "bonus.view"], ["aff", "Afiliados", "affiliates.manage"], ["ref", "Indicações", "bonus.view"]].filter((t) => can(t[2]));
+    const tabs = [["camp", "Campanhas e cupons", "bonus.view"], ["ub", "Bônus dos jogadores", "bonus.view"], ["aff", "Afiliados", "affiliates.manage"], ["ref", "Indicações", "bonus.view"], ["ban", "Banners do site", "bonus.view"]].filter((t) => can(t[2]));
     main().innerHTML = head("Bônus e marketing") + `<div class="tabs-sm" id="b-tabs">${tabs.map(([v, t], i) => `<button class="chip ${i ? "" : "active"}" data-v="${v}">${t}</button>`).join("")}</div><div id="b-body"></div>`;
     let view = tabs[0]?.[0];
     const body = () => RS.$("#b-body");
@@ -501,7 +501,81 @@
         table(["Quem indicou", "Convidados", "Com 1º depósito", "Bônus recebido"], rows.map((r) => [`<a href="#" data-open-user="${r.id}" style="color:var(--primary)">${esc(r.email || "")}</a>`,
           r.invited, r.qualified, M(r.earned)]), "Nenhuma indicação ainda.");
     }
-    const load = () => ({ camp, ub, aff, ref })[view]?.() ?? (body().innerHTML = `<p class="empty">Sem acesso.</p>`);
+    // banners do Início
+    const THEMES = [["orange", "Laranja"], ["navy", "Azul-marinho"], ["green", "Verde"], ["purple", "Roxo"], ["dark", "Escuro"]];
+    const ICONS = [["ball", "Bola"], ["live", "Ao vivo"], ["star", "Estrela"], ["wallet", "Carteira"], ["gift", "Presente"], ["dice", "Dado"], ["chip", "Ficha"], ["phone", "Celular"]];
+    const LINKS = [["view:all", "Jogos (Início)"], ["view:live", "Ao vivo"], ["view:today", "Jogos de hoje"], ["#casino", "Cassino"], ["deposit", "Abrir depósito"], ["#history", "Minhas apostas"], ["/app/realsports.apk", "Baixar app"]];
+    const local = (d) => (d ? new Date(new Date(d).getTime() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16) : "");
+    async function banForm(b = {}) {
+      const opt = (list, v) => list.map(([k, t]) => `<option value="${k}" ${k === v ? "selected" : ""}>${t}</option>`).join("");
+      const custom = b.link && !LINKS.some(([k]) => k === b.link);
+      const m = RS.modal(`<h3>${b.id ? "Editar banner" : "Novo banner"}</h3><form id="bn-f">
+        <label>Título<input class="input" name="title" maxlength="80" required value="${esc(b.title || "")}"></label>
+        <label>Texto<textarea class="input" name="subtitle" maxlength="160" rows="2">${esc(b.subtitle || "")}</textarea></label>
+        <label>Texto do botão<input class="input" name="cta" maxlength="30" value="${esc(b.cta || "")}" placeholder="Ex.: Apostar agora"></label>
+        <label>Ao tocar, abrir<select class="input" name="linksel">${opt(LINKS, custom ? "" : b.link || "view:all")}<option value="" ${custom ? "selected" : ""}>Outro link…</option></select></label>
+        <label id="bn-custom" style="display:${custom ? "block" : "none"}">Link<input class="input" name="linkc" maxlength="300" value="${esc(custom ? b.link : "")}" placeholder="https://… ou #casino"></label>
+        <label>Cor<select class="input" name="theme">${opt(THEMES, b.theme || "orange")}</select></label>
+        <label>Desenho (sem imagem)<select class="input" name="icon">${opt(ICONS, b.icon || "ball")}</select></label>
+        <label>Imagem própria (opcional, JPG/PNG/WebP até 3 MB, ideal 1200×400)<input class="input" type="file" name="file" accept="image/jpeg,image/png,image/webp"></label>
+        ${b.image_url ? `<label class="check"><input type="checkbox" name="noimg"> Remover a imagem atual</label>` : ""}
+        <label>Começa em (opcional)<input class="input" type="datetime-local" name="starts_at" value="${local(b.starts_at)}"></label>
+        <label>Termina em (opcional)<input class="input" type="datetime-local" name="ends_at" value="${local(b.ends_at)}"></label>
+        <button class="btn btn-primary w-full">Salvar banner</button></form>`);
+      const f = RS.$("#bn-f", m);
+      f.linksel.onchange = () => (RS.$("#bn-custom", m).style.display = f.linksel.value ? "none" : "block");
+      f.onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = f.querySelector("button"); btn.disabled = true;
+        try {
+          let image_url = f.noimg?.checked ? "" : b.image_url || "";
+          const file = f.file.files[0];
+          if (file) {
+            if (file.size > 3 * 1024 * 1024) throw new Error("Imagem maior que 3 MB");
+            const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${file.type.split("/")[1]}`;
+            const { error } = await sb.storage.from("banners").upload(path, file, { contentType: file.type });
+            if (error) throw error;
+            image_url = sb.storage.from("banners").getPublicUrl(path).data.publicUrl;
+          }
+          const iso = (v) => (v ? new Date(v).toISOString() : "");
+          const p = { id: b.id || "", title: f.title.value.trim(), subtitle: f.subtitle.value.trim(), cta: f.cta.value.trim(),
+            link: f.linksel.value || f.linkc.value.trim(), theme: f.theme.value, icon: f.icon.value, image_url,
+            starts_at: iso(f.starts_at.value), ends_at: iso(f.ends_at.value) };
+          await RS.rpc("admin_save_banner", { p });
+          RS.toast("Banner salvo", "ok"); m.remove(); ban();
+        } catch (err) { RS.toast(err.message, "error"); btn.disabled = false; }
+      };
+    }
+    async function ban() {
+      const { data } = await sb.from("banners").select("*").order("sort").order("id");
+      const list = data || [];
+      const live = (b) => b.active && (!b.starts_at || new Date(b.starts_at) <= new Date()) && (!b.ends_at || new Date(b.ends_at) > new Date());
+      body().innerHTML = (can("bonus.manage") ? `<div class="filters"><button class="btn btn-primary" id="bn-new">Novo banner</button>
+          <small class="muted">Os banners aparecem em carrossel no topo do Início, na ordem abaixo.</small></div>` : "") +
+        table(["Ordem", "Prévia", "Abre", "Período", "Status", ""], list.map((b, i) => [
+          i + 1, `<div class="pb pb-${esc(b.theme)} pb-mini"${b.image_url ? ` style="background-image:url('${esc(b.image_url)}');background-size:cover"` : ""}><div class="pb-txt"><b>${esc(b.title)}</b><span>${esc(b.subtitle || "")}</span></div></div>`,
+          esc((LINKS.find(([k]) => k === b.link) || [, b.link || "-"])[1]),
+          b.starts_at || b.ends_at ? `${b.starts_at ? RS.date(b.starts_at) : "agora"} → ${b.ends_at ? RS.date(b.ends_at) : "sem fim"}` : "Sempre",
+          live(b) ? `<span class="badge b-done">No ar</span>` : b.active ? `<span class="badge b-pending">Agendado/expirado</span>` : `<span class="badge b-canceled">Pausado</span>`,
+          can("bonus.manage") ? `<button class="btn sm btn-outline" data-bup="${i}" ${i ? "" : "disabled"}>↑</button><button class="btn sm btn-outline" data-bdown="${i}" ${i < list.length - 1 ? "" : "disabled"}>↓</button>
+            <button class="btn sm" data-bed="${b.id}">Editar</button><button class="btn sm btn-outline" data-bon="${b.id}" data-v="${b.active ? 0 : 1}">${b.active ? "Pausar" : "Ativar"}</button>
+            <button class="btn sm danger" data-bdel="${b.id}">Excluir</button>` : ""]), "Nenhum banner ainda.");
+      RS.$("#bn-new")?.addEventListener("click", () => banForm());
+      body().onclick = async (e) => {
+        const t = e.target.closest("button"); if (!t) return;
+        const swap = async (i, j) => {
+          await act("admin_save_banner", { p: { id: list[i].id, sort: j + 1 } });
+          await act("admin_save_banner", { p: { id: list[j].id, sort: i + 1 } });
+          ban();
+        };
+        if (t.dataset.bup) { const i = +t.dataset.bup; await swap(i, i - 1); }
+        if (t.dataset.bdown) { const i = +t.dataset.bdown; await swap(i, i + 1); }
+        if (t.dataset.bed) banForm(list.find((b) => b.id === +t.dataset.bed));
+        if (t.dataset.bon && await act("admin_save_banner", { p: { id: +t.dataset.bon, active: t.dataset.v === "1" } }, "Banner atualizado")) ban();
+        if (t.dataset.bdel && confirm("Excluir este banner?") && await act("admin_delete_banner", { p_id: +t.dataset.bdel }, "Banner excluído")) ban();
+      };
+    }
+    const load = () => ({ camp, ub, aff, ref, ban })[view]?.() ?? (body().innerHTML = `<p class="empty">Sem acesso.</p>`);
     RS.$("#b-tabs").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; view = b.dataset.v; RS.$$("#b-tabs .chip").forEach((x) => x.classList.toggle("active", x === b)); load(); };
     body().onclick = async (e) => {
       const t = e.target.closest("[data-tg]"), cb = e.target.closest("[data-cb]"), bx = e.target.closest("[data-bx]"), af = e.target.closest("[data-af]");
