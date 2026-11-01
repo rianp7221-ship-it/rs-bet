@@ -23,7 +23,8 @@
     if (mk === "dc") return { "1x": `${home} ou Empate`, x2: `Empate ou ${away}`, "12": `${home} ou ${away}` }[s.pick] || s.pick;
     return s.pick === "home" ? home : s.pick === "away" ? away : "Empate";
   }
-  const legs = (s) => s.pick.split("|").map((l) => { const [market, pick] = l.split(":"); return RS.esc(selName({ ...s, market, pick })); }).join(" · ");
+  const legList = (s) => s.pick.split("|").map((l) => { const [market, pick] = l.split(":");
+    return `<li><b>${RS.esc(selName({ ...s, market, pick }))}</b><small>${MNAME[market] || RS.esc(market)}</small></li>`; }).join("");
   function when(iso) {
     const d = new Date(iso), hm = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     const days = Math.round((new Date(iso).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 864e5);
@@ -33,12 +34,29 @@
   }
   const isLive = (s) => s.status === "pending" && s.matches.status === "live";
   const isFar = (s) => s.status === "pending" && new Date(s.matches.starts_at) - Date.now() > 7 * 864e5;
+  // relógio do jogo: minuto da fonte + segundos contados aqui desde que esse minuto chegou
+  const seen = new Map();
+  function clock(m) {
+    if (m.minute == null) return "AO VIVO";
+    const v = seen.get(m.id);
+    if (!v || v.min !== m.minute) seen.set(m.id, { min: m.minute, t: Date.now() });
+    const sec = Math.floor((Date.now() - seen.get(m.id).t) / 1000);
+    return sec > 75 ? `${m.minute}'` : `${m.minute}:${String(Math.min(sec, 59)).padStart(2, "0")}`;
+  }
+  const scoreCol = (m) => (m.score_home != null ? `<span class="bc-score"><b>${m.score_home}</b><b>${m.score_away}</b></span>` : "");
   function selState(s) {
     const m = s.matches;
-    if (s.status !== "pending") return badge(s.status);
-    if (isLive(s)) return `<i class="live">${m.minute ? m.minute + "'" : "AO VIVO"}${m.score_home != null ? ` ${m.score_home}-${m.score_away}` : ""}</i>`;
-    return when(m.starts_at);
+    if (isLive(s)) return `<span class="bc-clock">⚡<b data-clock="${s.match_id}">${clock({ ...m, id: s.match_id })}</b></span>${scoreCol(m)}`;
+    if (s.status !== "pending" || m.status !== "open") return scoreCol(m) || badge(s.status);
+    return `<span class="bc-when">${when(m.starts_at)}</span>`;
   }
+  setInterval(() => {
+    for (const el of RS.$$("[data-clock]", box)) {
+      const s = bets.flatMap((b) => b.bet_selections).find((x) => x.match_id === Number(el.dataset.clock));
+      if (s) el.textContent = clock({ ...s.matches, id: s.match_id });
+    }
+  }, 1000);
+  const mark = (s) => (s.status === "won" ? `<i class="leg-ok" title="Ganhou">✓</i>` : s.status === "lost" ? `<i class="leg-ko" title="Perdeu">✕</i>` : "");
   function winLine(b) {
     if (b.status === "cashout") return ["Cashout recebido", b.cashout_amount];
     if (b.status === "won") return ["Ganhos", b.potential];
@@ -53,9 +71,10 @@
         <span class="bc-odd">${Number(b.total_odd).toFixed(2)}</span><i class="bc-chev"></i></div>
       <div class="bc-body">
         ${sels.map((s) => `<div class="bc-sel">
-          <div class="bc-l1">${RS.icon("ball")}<b>${RS.esc(selName(s))}</b><span>${Number(s.odd).toFixed(2)}</span></div>
-          <div class="bc-mk">${s.market === "bb" ? legs(s) : MNAME[s.market || "1x2"] || RS.esc(s.market)}</div>
-          <div class="bc-l3"><span>${RS.esc(s.matches.home)} - ${RS.esc(s.matches.away)}</span><span data-st="${s.match_id}">${selState(s)}</span></div></div>`).join("")}
+          <div class="bc-l1">${RS.icon("ball")}<b${s.market === "bb" ? ' class="bc-bb"' : ""}>${RS.esc(selName(s))}</b>${mark(s)}<span>${Number(s.odd).toFixed(2)}</span></div>
+          ${s.market === "bb" ? "" : `<div class="bc-mk">${MNAME[s.market || "1x2"] || RS.esc(s.market)}</div>`}
+          <div class="bc-l3"><span class="bc-teams">${RS.esc(s.matches.home)}<br>${RS.esc(s.matches.away)}</span><span class="bc-st" data-st="${s.match_id}">${selState(s)}</span></div>
+          ${s.market === "bb" ? `<ul class="bc-legs">${legList(s)}</ul>` : ""}</div>`).join("")}
         <div class="bc-row"><span>Aposta</span><b>${RS.money(b.stake)}</b></div>
         <div class="bc-row bc-win"><span>${wl}</span><b>${RS.money(wv)}</b></div>
         ${b.status === "pending" ? `<div class="cashout-box" data-co="${b.id}"><small class="muted">Calculando cash out…</small></div>` : ""}
@@ -172,7 +191,7 @@
     }
     const b = t.closest("[data-cash]");
     if (!b) return;
-    if (!confirm(`Encerrar o bilhete #${b.dataset.cash} e receber ${RS.money(b.dataset.v)} agora?`)) return;
+    if (localStorage.getItem("rs-co-confirm") !== "0" && !confirm(`Encerrar o bilhete #${b.dataset.cash} e receber ${RS.money(b.dataset.v)} agora?`)) return;
     b.disabled = true; cashing = true;
     b.textContent = "Confirmando cashout…";
     try {

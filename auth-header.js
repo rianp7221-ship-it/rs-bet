@@ -30,7 +30,7 @@
             <button class="balance" id="hdr-bal"><small>Saldo</small><b id="hdr-balance">${RS.money(me.balance)}</b></button>
             <button class="btn btn-green" id="btn-deposit">Depositar</button>
             <button class="avatar" id="hdr-avatar" aria-label="Minha conta">${RS.esc(initial(me))}</button>`
-          : `<a class="btn btn-hdr-out" href="login.html">Cadastre-se</a><a class="btn btn-green" href="login.html">Entrar</a>`}
+          : `<a class="btn btn-hdr-out" href="login.html?cadastro">Cadastre-se</a><a class="btn btn-green" href="login.html">Entrar</a>`}
         </div>
       </div>`;
     markNav();
