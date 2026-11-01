@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@700;900&display=swap" rel="stylesheet">
   <link rel="preload" as="image" href="assets/leao/hero.webp">
+  <link rel="preload" as="image" href="assets/leao/m-idle.webp">
   <link rel="stylesheet" href="leao.css">
   <link rel="icon" type="image/png" href="/icons/favicon.png">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -32,8 +33,17 @@
 
   <main class="lz-stage" id="lz-stage">
     <div class="lz-hero" id="lz-hero">
-      <img src="assets/leao/hero.webp" alt="">
       <div class="lz-sign">LEÃO<span>DA SORTE</span></div>
+      <div class="lz-lion" id="lz-lion" role="button" aria-label="Leão">
+        <div class="lz-glow"></div>
+        <div class="lz-body"><div class="lz-nod">
+          <img data-p="idle" class="on" src="assets/leao/m-idle.webp" alt="">
+          <img data-p="hope" src="assets/leao/m-hope.webp" alt="">
+          <img data-p="cheer" src="assets/leao/m-cheer.webp" alt="">
+          <img data-p="rich" src="assets/leao/m-rich.webp" alt="">
+          <img data-p="roar" src="assets/leao/m-roar.webp" alt="">
+        </div></div>
+      </div>
       <div class="lz-bubble hidden" id="lz-bubble"></div>
     </div>
     <div class="lz-frame" id="lz-frame">
@@ -64,8 +74,8 @@
   </footer>
 
   <canvas class="lz-coins" id="lz-coins"></canvas>
-  <div class="lz-over hidden" id="lz-big"><div class="lz-big"><div class="lz-rays"></div><img src="assets/leao/w.webp" alt=""><small id="lz-bigt">GRANDE GANHO</small><b id="lz-bigv"></b><em>toque para continuar</em></div></div>
-  <div class="lz-over hidden" id="lz-feat"><div class="lz-feat"><img src="assets/leao/w.webp" alt=""><b>RUGIDO DO LEÃO!</b><small>Os símbolos iguais e os coringas ficam presos. O resto gira até formar prêmio. Tela cheia paga 10x!</small></div></div>
+  <div class="lz-over hidden" id="lz-big"><div class="lz-big"><div class="lz-rays"></div><img class="lz-mas" src="assets/leao/m-rich.webp" alt=""><small id="lz-bigt">GRANDE GANHO</small><b id="lz-bigv"></b><em>toque para continuar</em></div></div>
+  <div class="lz-over hidden" id="lz-feat"><div class="lz-feat"><img class="lz-mas" src="assets/leao/m-roar.webp" alt=""><b>RUGIDO DO LEÃO!</b><small>Os símbolos iguais e os coringas ficam presos. O resto gira até formar prêmio. Tela cheia paga 10x!</small></div></div>
   <div class="lz-over hidden" id="lz-pay"><div class="lz-paybox" id="lz-paybox"></div></div>
   <div class="lz-over sheet hidden" id="lz-menu-o"><div class="lz-sheet">
     <h3>Leão da Sorte</h3>
