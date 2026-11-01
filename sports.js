@@ -71,6 +71,13 @@
     "Liga Profesional Argentina", "UEFA Conference League", "MLS EUA"];
   const rank = (l) => { const i = TOP.indexOf(l); return i < 0 ? TOP.length : i; };
   const byTop = (a, b) => rank(a[0]) - rank(b[0]) || b[1].n - a[1].n;
+  // escudo do time (API-Football); sem escudo, camisa com a cor do nome
+  const safeUrl = (u) => (/^https:\/\/[\w.-]+\//.test(u || "") ? u : "");
+  const crest = (m, side) => { const u = safeUrl(m[side + "_logo"]);
+    return u ? `<img class="crest" src="${RS.esc(u)}" alt="" loading="lazy" onerror="this.replaceWith(document.createRange().createContextualFragment(window.RSshirt(this.dataset.n)))" data-n="${RS.esc(m[side])}">` : shirt(m[side]); };
+  const leagueLogo = (l) => { const m = matches.find((x) => x.league === l && x.league_logo); return m ? safeUrl(m.league_logo) : ""; };
+  const lico = (l) => { const u = leagueLogo(l); return u ? `<img class="lg-logo" src="${RS.esc(u)}" alt="" loading="lazy">` : flag(l); };
+  window.RSshirt = (n) => shirt(n);
   function shirt(name) {
     let h = 0;
     for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) % 360;
@@ -124,8 +131,8 @@
 
   const row = (m) => `<div class="row">
       <div class="row-time">${live(m) ? `<i class="live">${m.minute ? m.minute + "'" : "AO VIVO"}</i>${score(m)}` : `${ddmm(m.starts_at)} <br>${hhmm(m.starts_at)}`}</div>
-      <div class="row-teams"><span>${shirt(m.home)}${RS.esc(m.home)}</span><span>${shirt(m.away)}${RS.esc(m.away)}</span>
-        <small>${flag(m.league)} ${RS.esc(lname(m.league))}</small></div>
+      <div class="row-teams"><span>${crest(m, "home")}${RS.esc(m.home)}</span><span>${crest(m, "away")}${RS.esc(m.away)}</span>
+        <small>${lico(m.league)} ${RS.esc(lname(m.league))}</small></div>
       <div class="row-odds">${odds(m)}</div>
       <button class="fav ${favs.has(m.id) ? "on" : ""}" data-fav="${m.id}" aria-label="Favoritar">${RS.icon("star")}</button>
       ${extras(m).length ? `<button class="more-mk" data-more="${m.id}">+${extras(m).length} mercados</button>` : ""}
@@ -161,9 +168,9 @@
       : new Date(m.starts_at).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" }) + " " + hhmm(m.starts_at);
     const sc = m.score_home != null ? `<b class="mv-score">${m.score_home} - ${m.score_away}</b>` : `<i class="mv-vs">x</i>`;
     const keep = el.querySelector(".mv-body")?.scrollTop || 0;
-    el.innerHTML = `<div class="mv-head"><button class="mv-back" data-mvclose aria-label="Voltar">←</button><small>${flag(m.league)} ${RS.esc(lname(m.league))}</small></div>
+    el.innerHTML = `<div class="mv-head"><button class="mv-back" data-mvclose aria-label="Voltar">←</button><small>${lico(m.league)} ${RS.esc(lname(m.league))}</small></div>
       <div class="mv-match"><div class="mv-date">${top}</div>
-        <div class="mv-teams"><span>${shirt(m.home)}${RS.esc(m.home)}</span>${sc}<span>${RS.esc(m.away)}${shirt(m.away)}</span></div></div>
+        <div class="mv-teams"><span>${crest(m, "home")}${RS.esc(m.home)}</span>${sc}<span>${RS.esc(m.away)}${crest(m, "away")}</span></div></div>
       <div class="mv-bar"><div class="mv-tabs">${Object.entries(MV_TABS).map(([k, l]) => `<button class="${mvTab === k ? "on" : ""}" data-mvtab="${k}">${l}</button>`).join("")}</div>
         <button class="mv-all" data-mvall title="${allClosed ? "Abrir todos" : "Fechar todos"}">${allClosed ? "⇕" : "⇳"}</button>
         ${canBB ? `<button class="bb-toggle ${bb ? "on" : ""}" data-bb="${m.id}" aria-pressed="${bb}">CRIAR<br>APOSTA</button>` : ""}</div>
@@ -180,8 +187,10 @@
     const top = live(m)
       ? `<i class="live">${m.minute ? m.minute + "' AO VIVO" : "AO VIVO"}</i>${m.score_home != null ? ` ${m.score_home} - ${m.score_away}` : ""}`
       : `${RS.icon("clock")} ${dayLabel(m.starts_at)} ${hhmm(m.starts_at)}`;
-    return `<div class="feat-card ${sp}"><div class="feat-top">${top}</div>
-      <div class="feat-teams"><b>${shirt(m.home)}${RS.esc(m.home)}</b><b>${shirt(m.away)}${RS.esc(m.away)}</b></div>${odds(m)}</div>`;
+    const big = safeUrl(m.home_logo) && safeUrl(m.away_logo)
+      ? `<div class="feat-crests"><img src="${RS.esc(m.home_logo)}" alt="" loading="lazy"><img src="${RS.esc(m.away_logo)}" alt="" loading="lazy"></div>` : "";
+    return `<div class="feat-card ${sp}${big ? " has-crests" : ""}"><div class="feat-top">${top}</div>${big}
+      <div class="feat-teams"><b>${crest(m, "home")}${RS.esc(m.home)}</b><b>${crest(m, "away")}${RS.esc(m.away)}</b></div>${odds(m)}</div>`;
   }
 
   function visible() {
@@ -203,7 +212,7 @@
     const byLeague = {};
     matches.forEach((m) => { (byLeague[m.league] ||= { n: 0, sport: m.sport }).n++; });
     RS.$("#comp-list").innerHTML = Object.entries(byLeague).sort(byTop).slice(0, 12).map(([l, v]) =>
-      `<button class="comp-item ${league === l ? "active" : ""}" data-league="${RS.esc(l)}"><span class="comp-ico">${flag(l)}</span>
+      `<button class="comp-item ${league === l ? "active" : ""}" data-league="${RS.esc(l)}"><span class="comp-ico">${lico(l)}</span>
         <span><b>${RS.esc(lname(l))}</b><small>${RS.esc(v.sport)}</small></span><em>${v.n}</em></button>`).join("")
       || `<p class="muted small" style="padding:0 6px">Sem competições no momento.</p>`;
 
@@ -233,13 +242,13 @@
     const pop = Object.entries(byLeague).sort(byTop).slice(0, 10);
     RS.$("#league-sec").classList.toggle("hidden", !home || !pop.length);
     RS.$("#league-chips").innerHTML = home ? pop.map(([l]) =>
-      `<button class="league-chip" data-league="${RS.esc(l)}"><span class="comp-ico">${flag(l)}</span>${RS.esc(lname(l))}</button>`).join("") : "";
+      `<button class="league-chip" data-league="${RS.esc(l)}"><span class="comp-ico">${lico(l)}</span>${RS.esc(lname(l))}</button>`).join("") : "";
     const lh = RS.$("#league-head");
     lh.classList.toggle("hidden", !league);
     RS.$(".action-head").classList.toggle("hidden", !!league);
     if (league) {
       const inL = matches.filter((m) => m.league === league), nLive = inL.filter(live).length;
-      lh.innerHTML = `<div class="lh-top"><span class="lh-ico">${flag(league)}</span><h1>${RS.esc(lname(league))}</h1></div>
+      lh.innerHTML = `<div class="lh-top"><span class="lh-ico">${lico(league)}</span><h1>${RS.esc(lname(league))}</h1></div>
         <div class="lh-tabs"><button class="${lt === "games" ? "active" : ""}" data-lt="games">Jogos <em>${inL.length}</em></button>
           <button class="${lt === "live" ? "active" : ""}" data-lt="live">Ao vivo <em>${nLive}</em></button>
           <button data-view="all">Todas as ligas</button></div>`;

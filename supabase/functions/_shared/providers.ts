@@ -7,6 +7,7 @@ export type Markets = Record<string, Record<string, number>>;
 export type FeedEvent = {
   id: string; league: string; sport: string; home: string; away: string;
   commence_time: string; odds: MatchOdds | null; markets?: Markets | null;
+  home_logo?: string; away_logo?: string; league_logo?: string;
 };
 export type FeedScore = { id: string; home: number; away: number; completed: boolean };
 
@@ -91,8 +92,8 @@ function theOddsApi(key: string): OddsProvider {
 // "sport" = id da liga (71 Brasileirão, 39 Premier, 2 Champions...). external_id = "af<liga>:<fixture>".
 type AfFixture = {
   fixture: { id: number; date: string; status: { short: string; elapsed: number | null; extra?: number | null } };
-  league: { id: number; name: string; country: string };
-  teams: { home: { name: string }; away: { name: string } };
+  league: { id: number; name: string; country: string; logo?: string };
+  teams: { home: { name: string; logo?: string }; away: { name: string; logo?: string } };
   goals: { home: number | null; away: number | null };
   score?: { fulltime?: { home: number | null; away: number | null } };
   events?: { time: { elapsed: number; extra: number | null }; type: string; detail: string }[];
@@ -225,6 +226,7 @@ function apiFootball(key: string): OddsProvider {
       return open.map((f) => ({
         id: String(f.fixture.id), league: AF_LEAGUE[f.league.id] ?? f.league.name, sport: "Futebol", home: f.teams.home.name, away: f.teams.away.name,
         commence_time: f.fixture.date, odds: pick(prices.get(f.fixture.id) ?? []), markets: extra(prices.get(f.fixture.id) ?? []),
+        home_logo: f.teams.home.logo, away_logo: f.teams.away.logo, league_logo: f.league.logo,
       }));
     },
     async scores(league) {

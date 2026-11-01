@@ -167,6 +167,7 @@ Deno.serve(async (req) => {
           starts_at: ev.commence_time, odd_home: odds.home, odd_draw: odds.draw, odd_away: odds.away,
           status: isLive ? "live" : "open",
           ...(ev.markets !== undefined ? { markets: marginMarkets(ev.markets, margin(isLive ? "odds_margin_live" : "odds_margin_pre")) } : {}),
+          ...(ev.home_logo ? { home_logo: ev.home_logo, away_logo: ev.away_logo ?? null, league_logo: ev.league_logo ?? null } : {}),
           synced_at: new Date().toISOString(),
         };
         priced.add(row.external_id);
