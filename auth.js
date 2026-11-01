@@ -19,9 +19,11 @@
     RS.$("#row-password").classList.toggle("hidden", m === "reset");
     title.textContent = { login: "Entrar na sua conta", signup: "Criar conta", reset: "Recuperar senha" }[m];
     submit.textContent = { login: "Entrar", signup: "Cadastrar", reset: "Enviar link" }[m];
+    RS.$("#auth-have").innerHTML = m === "signup" ? `Já tem uma conta? <a href="#" data-go="login">Faça login aqui</a>` : `Ainda não tem conta? <a href="#" data-go="signup">Cadastre-se</a>`;
   }
   RS.$$(".auth-switch button").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
-  RS.$("#forgot").addEventListener("click", (e) => { e.preventDefault(); setMode("reset"); });
+  RS.$("#auth-have").addEventListener("click", (e) => { const g = e.target.closest("[data-go]"); if (g) { e.preventDefault(); setMode(g.dataset.go); } });
+    RS.$("#forgot").addEventListener("click", (e) => { e.preventDefault(); setMode("reset"); });
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -67,5 +69,5 @@
     }
   });
 
-  setMode("login");
+  setMode(/cadastro|signup/.test(location.search + location.hash) ? "signup" : "login");
 })();

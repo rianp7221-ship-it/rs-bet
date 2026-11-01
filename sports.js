@@ -77,7 +77,12 @@
     return `<svg class="shirt" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3 3 6l2 4 2-1v12h10V9l2 1 2-4-5-3c-.8 1.6-2.2 2.4-4 2.4S8.8 4.6 8 3z" fill="hsl(${h},55%,42%)"/></svg>`;
   }
 
-  let matches = [], sport = "Popular", view = "all", league = null, lt = "games", query = "", dayOff = 0, mode = "multi", stakeVal = "";
+  let matches = [], sport = "Popular", view = "all", league = null, lt = "games", query = "", dayOff = 0, mode = "multi", stakeVal = localStorage.getItem("rs-def-stake") || "", sysK = 2;
+  // Sistema: cada combinação de k seleções vira uma múltipla separada
+  const MAXC = 40;
+  const nCk = (n, k) => { let r = 1; for (let i = 1; i <= k; i++) r = (r * (n - k + i)) / i; return Math.round(r); };
+  const kComb = (arr, k) => { const out = []; const go = (i, cur) => { if (cur.length === k) { out.push(cur); return; } for (let j = i; j < arr.length; j++) go(j + 1, [...cur, arr[j]]); }; go(0, []); return out; };
+  const KNAME = { 2: "Duplas", 3: "Triplas", 4: "Quádruplas" };
   const slip = new Map(); // match_id -> { market, pick, odd, base }
   const favs = new Set(JSON.parse(localStorage.getItem("rs-favs") || "[]"));
   const live = (m) => m.status === "live";
@@ -309,8 +314,11 @@
     RS.$("#bn-count").textContent = n;
     RS.$("#bn-count").classList.toggle("hidden", !n);
     if (!n) document.body.classList.remove("slip-open");
-    const multi = mode === "multi" && n > 1;
-    RS.$$("#slip-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.mode === (multi ? "multi" : "single")));
+    const sys = mode === "system" && n >= 3;
+    const multi = !sys && mode !== "single" && n > 1;
+    if (sys) { sysK = Math.min(Math.max(sysK, 2), n - 1); while (sysK > 2 && nCk(n, sysK) > MAXC) sysK--; }
+    const combos = sys ? kComb(items.map(([, x]) => x.odd), sysK) : [];
+    RS.$$("#slip-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.mode === (sys ? "system" : multi ? "multi" : "single")));
     if (!n) {
       slipEl.innerHTML = `<div class="slip-empty">Seu bilhete está vazio.${saved ? `<br><button class="btn btn-outline sm" id="slip-load" style="margin-top:10px">Carregar bilhete guardado</button>` : ""}</div>`;
       return;
@@ -333,11 +341,14 @@
           : `<span>${s.odd.toFixed(2)}</span>`}</div>
         <button class="slip-x" data-rm="${id}" aria-label="Remover">${RS.icon("trash")}</button></div>`;
     }).join("") + `
-      <div class="stake-row"><span>${multi ? `Múltipla ${n} seleções` : n > 1 ? `Simples · ${n} apostas` : "Simples"}</span>${multi ? `<b>${total.toFixed(2)}</b>` : ""}
+      ${mode === "system" && n < 3 ? `<p class="muted small sys-hint">Sistema precisa de pelo menos 3 seleções.</p>` : ""}
+      ${sys ? `<div class="sys-row"><span>Combinações</span><select class="input" id="sys-k">${Array.from({ length: n - 2 }, (_, i) => i + 2).filter((k) => nCk(n, k) <= MAXC)
+        .map((k) => `<option value="${k}" ${k === sysK ? "selected" : ""}>${KNAME[k] || k + " seleções"} ${k}/${n} · ${nCk(n, k)} apostas</option>`).join("")}</select></div>` : ""}
+      <div class="stake-row"><span>${sys ? `Sistema ${sysK}/${n} · valor por aposta` : multi ? `Múltipla ${n} seleções` : n > 1 ? `Simples · ${n} apostas` : "Simples"}</span>${multi ? `<b>${total.toFixed(2)}</b>` : ""}
         <label class="stake"><i>R$</i><input id="stake" type="text" inputmode="${mobile() ? "none" : "decimal"}" autocomplete="off" placeholder="0,00" value="${stakeVal}"></label></div>
       <div class="quick"><button data-stake="10">+10</button><button data-stake="50">+50</button><button data-stake="200">+200</button><button data-stake="max">MÁX</button></div>
       <div class="keypad">${KP.map((k) => `<button data-kp="${k}">${k === "del" ? "⌫" : k}</button>`).join("")}</div>
-      ${!multi && n > 1 ? `<div class="slip-total"><span>Total apostado</span><b id="slip-total"></b></div>` : ""}
+      ${sys || (!multi && n > 1) ? `<div class="slip-total"><span>Total apostado</span><b id="slip-total"></b></div>` : ""}
       <button class="btn btn-green w-full" id="place" ${anySusp ? "disabled" : ""}>
         <b>${anySusp ? "Seleção suspensa" : `Apostar agora <span id="pl-stake"></span>`}</b>
         <small>Ganhos potenciais <span id="slip-return"></span></small></button>`;
@@ -346,11 +357,13 @@
     const upd = () => {
       stakeVal = stake.value;
       const v = num(stake.value);
-      RS.$("#slip-return").textContent = RS.money(multi ? v * Number(total.toFixed(2)) : items.reduce((a, [, s]) => a + v * s.odd, 0));
+      RS.$("#slip-return").textContent = RS.money(sys ? combos.reduce((a, c) => a + v * Number(c.reduce((x, o) => x * o, 1).toFixed(2)), 0)
+        : multi ? v * Number(total.toFixed(2)) : items.reduce((a, [, s]) => a + v * s.odd, 0));
+      const bets = sys ? combos.length : multi ? 1 : n;
       const ps = RS.$("#pl-stake");
-      if (ps) ps.textContent = RS.money(multi ? v : v * n);
+      if (ps) ps.textContent = RS.money(v * bets);
       const t = RS.$("#slip-total");
-      if (t) t.textContent = RS.money(v * n);
+      if (t) t.textContent = RS.money(v * bets);
     };
     stake.oninput = upd;
     upd();
@@ -358,7 +371,7 @@
       if (c.dataset.stake === "max") {
         const p = await RS.profile();
         if (!p) { location.href = "login.html"; return; }
-        stake.value = Math.floor((Number(p.balance) / (multi ? 1 : n)) * 100) / 100;
+        stake.value = Math.floor((Number(p.balance) / (sys ? combos.length : multi ? 1 : n)) * 100) / 100;
       } else stake.value = Math.round((num(stake.value) + Number(c.dataset.stake)) * 100) / 100;
       upd();
     }));
@@ -368,23 +381,26 @@
       upd();
     }));
     RS.$$("[data-rm]", slipEl).forEach((c) => (c.onclick = () => { slip.delete(Number(c.dataset.rm)); render(); renderSlip(); persist(); }));
-    RS.$("#place").onclick = () => place(multi);
+    const sk = RS.$("#sys-k");
+    if (sk) sk.onchange = () => { sysK = Number(sk.value); renderSlip(); };
+    RS.$("#place").onclick = () => place(multi, sys ? sysK : 0);
   }
 
-  async function place(multi) {
+  async function place(multi, k = 0) {
     if (!(await RS.user())) { location.href = "login.html"; return; }
     const btn = RS.$("#place");
     const stake = num(RS.$("#stake").value);
     if (!(stake > 0)) { RS.toast("Digite o valor da aposta.", "error"); return; }
     btn.disabled = true;
     const sel = [...slip.entries()].map(([match_id, s]) => ({ match_id, market: s.market, pick: s.pick }));
-    const groups = multi ? [sel] : sel.map((s) => [s]);
+    const groups = k ? kComb(sel, k) : multi ? [sel] : sel.map((s) => [s]);
     const ok = [];
     try {
       for (const g of groups) {
         ok.push(await RS.rpc("place_bet", { p_selections: g, p_stake: stake }));
-        g.forEach((s) => slip.delete(s.match_id));
+        if (!k) g.forEach((s) => slip.delete(s.match_id));
       }
+      if (k) slip.clear();
       RS.toast(ok.length > 1 ? `${ok.length} apostas feitas! Boa sorte.` : `Aposta #${ok[0]} feita! Boa sorte.`, "ok");
       document.body.classList.remove("slip-open");
     } catch (e) {
