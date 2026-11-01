@@ -35,12 +35,16 @@
 .acct-pop .btn-dark { margin-bottom: 8px; }
 /* painel da conta */
 .acct-panel { position: fixed; inset: 0; z-index: 105; background: rgba(10,14,30,.5); display: flex; justify-content: flex-end; }
-.ap-box { width: 100%; max-width: 480px; height: 100%; background: var(--bg); display: flex; flex-direction: column; }
+.ap-box { width: 100%; max-width: 760px; height: 100%; background: var(--bg); display: flex; flex-direction: column; }
 .ap-head { background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; height: 64px; font-size: 19px; font-weight: 700; }
 .ap-head .icon-btn { background: rgba(255,255,255,.2); border-radius: 50%; width: 38px; height: 38px; color: #fff; }
-.ap-tabs { display: flex; gap: 6px; background: #fff; padding: 10px 12px; overflow-x: auto; }
-.ap-tabs button { display: inline-flex; align-items: center; gap: 8px; background: none; border: none; padding: 10px 12px; border-radius: 8px; font: inherit; font-size: 15px; cursor: pointer; white-space: nowrap; color: var(--text); }
-.ap-tabs button.active { background: #ffe1d4; color: var(--primary); font-weight: 700; }
+.ap-head #ap-title { flex: 1; margin-left: 10px; }
+.ap-main { flex: 1; display: flex; min-height: 0; position: relative; }
+.ap-side { width: 230px; flex: none; background: #fff; border-right: 1px solid var(--line); padding: 10px 8px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.ap-side button { display: flex; align-items: center; gap: 12px; background: none; border: none; padding: 11px 12px; border-radius: 10px; font: inherit; font-size: 15px; cursor: pointer; color: var(--text); text-align: left; }
+.ap-side button svg.i { width: 20px; height: 20px; color: var(--primary); flex: none; }
+.ap-side button.active { background: #ffe1d4; color: var(--primary); font-weight: 700; }
+.ap-head .ap-menu { display: none; }
 .ap-body { flex: 1; overflow-y: auto; padding: 14px; }
 .ap-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
 .ap-card h3 { font-size: 17px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
@@ -64,6 +68,10 @@
   .hdr-right .btn { padding: 9px 12px; font-size: 13px; }
   .acct-pop { position: fixed; top: auto; bottom: 0; left: 0; right: 0; width: auto; border-radius: 18px 18px 0 0; padding: 22px 18px 28px; }
   .ap-box { max-width: none; }
+  .ap-head .ap-menu { display: inline-flex; }
+  .ap-side { position: absolute; top: 0; bottom: 0; left: 0; width: 78%; max-width: 300px; z-index: 2; transform: translateX(-102%); transition: transform .25s; box-shadow: 4px 0 20px rgba(0,0,0,.18); }
+  .ap-box.side-open .ap-side { transform: none; }
+  .ap-box.side-open .ap-body { filter: brightness(.6); }
 }
 @media (max-width: 380px) { .hdr-right .icon-btn.hide-xs { display: none; } }
 @media (max-width: 400px) { .hdr-right.logged #hdr-search { display: none; } }
