@@ -153,7 +153,7 @@
       if (a === "refresh") { RS.refreshBalance(); RS.toast("Saldo atualizado.", "ok"); return; }
       d.remove();
       if (a === "refer") RS.refer();
-      if (a === "panel") panel("overview");
+      if (a === "panel") panel("data");
       if (a === "data") panel("data");
       if (a === "pass") resetPass();
       if (a === "support") RS.support();
@@ -364,12 +364,34 @@
         };
       }
       if (k === "data") {
+        const { data: pix } = await sb.rpc("my_last_pix_key");
+        const cpfMask = (c) => c.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+        const KYC = { aprovado: "Verificada", em_analise: "Em análise", recusado: "Recusada", pendente: "Não verificada" };
+        const KT = { cpf: "CPF", cnpj: "CNPJ", email: "E-mail", telefone: "Celular", aleatoria: "Chave aleatória" };
+        const f = (l, v) => `<div class="ap-field"><label>${l}</label><input class="input" readonly value="${RS.esc(v)}"></div>`;
         body.innerHTML = `<div class="ap-card"><h3>Informações gerais</h3>
-          <div class="ap-field"><label>ID</label><input class="input" readonly value="${p.id}"></div>
-          <div class="ap-field"><label>Nome de usuário</label><input class="input" readonly value="${RS.esc(p.username || "")}"></div>
-          <div class="ap-field"><label>E-mail</label><input class="input" readonly value="${RS.esc(p.email || "")}"></div>
-          <p class="muted small">Para corrigir nome ou e-mail, fale com o suporte.</p>
-          <button class="btn btn-outline sm" data-ap="pass" style="margin-top:12px">${RS.icon("key")} Trocar senha</button></div>`;
+            ${f("ID", p.id)}${f("Nome de usuário", p.username || "")}${f("E-mail", p.email || "")}
+            ${f("Membro desde", new Date(p.created_at).toLocaleDateString("pt-BR"))}
+            <p class="muted small">Para corrigir nome ou e-mail, fale com o suporte.</p></div>
+          <div class="ap-card"><h3>Documento</h3>
+            ${p.cpf ? f("CPF", cpfMask(p.cpf)) : `<div class="ap-field"><label>CPF</label><input class="input" id="dp-cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00"></div>
+              <button class="btn btn-dark w-full" id="dp-cpf-save">Salvar CPF</button>`}
+            <p class="muted small" style="margin-top:8px">O CPF precisa ser o mesmo da conta bancária do saque. Depois de salvo, só o suporte corrige.</p>
+            <div class="ap-field" style="margin-top:12px"><label>Verificação da conta</label>
+              <div><span class="badge b-${p.kyc_status || "pendente"}">${KYC[p.kyc_status] || KYC.pendente}</span> <button class="btn btn-outline sm" data-t="kyc">Ver verificação</button></div></div></div>
+          <div class="ap-card"><h3>Chave PIX para saque</h3>
+            ${pix?.key ? f(KT[pix.type] || "Chave", pix.key) : `<p class="muted small">Nenhuma chave ainda. Ela fica salva no seu primeiro saque.</p>`}
+            <p class="muted small" style="margin-top:6px">Para trocar, informe outra chave no próximo saque.</p>
+            <button class="btn btn-outline sm" data-ap="withdraw" style="margin-top:10px">Sacar</button></div>
+          <button class="btn btn-outline sm" data-ap="pass">${RS.icon("key")} Trocar senha</button>`;
+        const inp = RS.$("#dp-cpf", body);
+        if (inp) {
+          inp.oninput = () => (inp.value = cpfMask(inp.value.replace(/\D/g, "").slice(0, 11)));
+          RS.$("#dp-cpf-save", body).onclick = async () => {
+            try { await RS.rpc("set_my_cpf", { p_cpf: inp.value }); RS.toast("CPF salvo.", "ok"); show("data"); }
+            catch (err) { RS.toast(err.message, "error"); }
+          };
+        }
       }
     }
     w.addEventListener("click", (e) => {
