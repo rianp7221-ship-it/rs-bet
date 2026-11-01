@@ -56,6 +56,7 @@
       if (s) el.textContent = clock({ ...s.matches, id: s.match_id });
     }
   }, 1000);
+  const logo = (u) => (/^https:\/\/[\w.-]+\//.test(u || "") ? `<img class="crest" src="${RS.esc(u)}" alt="" loading="lazy">` : "");
   const mark = (s) => (s.status === "won" ? `<i class="leg-ok" title="Ganhou">✓</i>` : s.status === "lost" ? `<i class="leg-ko" title="Perdeu">✕</i>` : "");
   function winLine(b) {
     if (b.status === "cashout") return ["Cashout recebido", b.cashout_amount];
@@ -73,7 +74,7 @@
         ${sels.map((s) => `<div class="bc-sel">
           <div class="bc-l1">${RS.icon("ball")}<b${s.market === "bb" ? ' class="bc-bb"' : ""}>${RS.esc(selName(s))}</b>${mark(s)}<span>${Number(s.odd).toFixed(2)}</span></div>
           ${s.market === "bb" ? "" : `<div class="bc-mk">${MNAME[s.market || "1x2"] || RS.esc(s.market)}</div>`}
-          <div class="bc-l3"><span class="bc-teams">${RS.esc(s.matches.home)}<br>${RS.esc(s.matches.away)}</span><span class="bc-st" data-st="${s.match_id}">${selState(s)}</span></div>
+          <div class="bc-l3"><span class="bc-teams">${logo(s.matches.home_logo)}${RS.esc(s.matches.home)}<br>${logo(s.matches.away_logo)}${RS.esc(s.matches.away)}</span><span class="bc-st" data-st="${s.match_id}">${selState(s)}</span></div>
           ${s.market === "bb" ? `<ul class="bc-legs">${legList(s)}</ul>` : ""}</div>`).join("")}
         <div class="bc-row"><span>Aposta</span><b>${RS.money(b.stake)}</b></div>
         <div class="bc-row bc-win"><span>${wl}</span><b>${RS.money(wv)}</b></div>
@@ -103,7 +104,7 @@
 
     if (kind === "bets") {
       const { data } = await sb.from("bets")
-        .select("*, bet_selections(match_id, market, pick, odd, status, matches(home, away, league, status, starts_at, score_home, score_away, minute))")
+        .select("*, bet_selections(match_id, market, pick, odd, status, matches(home, away, league, status, starts_at, score_home, score_away, minute, home_logo, away_logo))")
         .eq("user_id", u.id).order("created_at", { ascending: false }).limit(50);
       bets = data || [];
       renderBets();
