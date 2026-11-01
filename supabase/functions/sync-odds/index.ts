@@ -208,6 +208,8 @@ Deno.serve(async (req) => {
           ...(ev.home_logo ? { home_logo: await mirrorLogo(sb, ev.home_logo), away_logo: await mirrorLogo(sb, ev.away_logo), league_logo: await mirrorLogo(sb, ev.league_logo) } : {}),
           synced_at: new Date().toISOString(),
         };
+        // feed sem ao vivo (The Odds API): o /odds já traz as odds em jogo
+        if (isLive && !feed.live) Object.assign(row, { odds_at: row.synced_at });
         priced.add(row.external_id);
         const cur = byExt.get(row.external_id);
         if (cur && !["open", "live"].includes(cur.status)) continue;
