@@ -43,7 +43,7 @@
     drawerAcct();
     if (!me) return;
     if (me.blocked) RS.toast("Sua conta está bloqueada. Fale com o suporte.", "error");
-    RS.$("#btn-deposit").onclick = () => moneyModal("deposit");
+    RS.$("#btn-deposit").onclick = () => panel("overview");
     RS.$("#hdr-bal").onclick = () => panel("overview");
     RS.$("#hdr-avatar").onclick = togglePop;
     RS.$("#hdr-bell").onclick = showNotifications;
@@ -194,9 +194,10 @@
     const w = document.createElement("div");
     w.className = "acct-panel";
     w.innerHTML = `<div class="ap-box">
-      <div class="ap-head"><span id="ap-title"></span><button class="icon-btn" data-x aria-label="Fechar">${RS.icon("x")}</button></div>
-      <div class="ap-tabs">${Object.entries(TABS).map(([k, [ic, t]]) => `<button data-t="${k}">${RS.icon(ic)} ${t}</button>`).join("")}</div>
-      <div class="ap-body" id="ap-body"></div></div>`;
+      <div class="ap-head"><button class="icon-btn ap-menu" data-side aria-label="Menu da conta">${RS.icon("menu")}</button><span id="ap-title"></span>
+        <button class="icon-btn" data-x aria-label="Fechar">${RS.icon("x")}</button></div>
+      <div class="ap-main"><nav class="ap-side">${Object.entries(TABS).map(([k, [ic, t]]) => `<button data-t="${k}">${RS.icon(ic)}<span>${t}</span></button>`).join("")}</nav>
+        <div class="ap-body" id="ap-body"></div></div></div>`;
     document.body.appendChild(w);
     let cur = tab;
     async function show(k) {
@@ -374,7 +375,9 @@
     w.addEventListener("click", (e) => {
       if (e.target === w || e.target.closest("[data-x]")) { w.remove(); return; }
       const t = e.target.closest("[data-t]");
-      if (t) { show(t.dataset.t); return; }
+      if (e.target.closest("[data-side]")) { RS.$(".ap-box", w).classList.toggle("side-open"); return; }
+      if (e.target.closest(".ap-main") && !e.target.closest(".ap-side")) RS.$(".ap-box", w).classList.remove("side-open");
+      if (t) { RS.$(".ap-box", w).classList.remove("side-open"); show(t.dataset.t); return; }
       const a = e.target.closest("[data-ap]")?.dataset.ap;
       if (a === "refresh") { RS.refreshBalance(); show("overview"); }
       if (a === "deposit" || a === "withdraw") moneyModal(a);
