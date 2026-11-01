@@ -13,6 +13,8 @@
   const STEPS = [0.5, 1, 2, 3, 5, 10, 20, 50, 100, 200, 500, 1000];
   const TIERS = [[10, "GRANDE GANHO"], [30, "MEGA GANHO"], [100, "SUPER MEGA GANHO"]];
   const CHEERS = ["Que sorte!", "Rugiu alto!", "É ouro!", "Boa, campeão!", "Mais um!"];
+  const TAPS = ["Gira comigo!", "Hoje é dia!", "Sinto ouro…", "Vamos rugir!", "Bora!"];
+  const HOT = new Set(["W", "I", "L"]);
 
   const $ = RS.$, $$ = RS.$$, SFX = window.LeaoAudio;
   const stage = $("#lz-stage"), frame = $("#lz-frame"), reels = $("#lz-reels"), lines = $("#lz-lines");
@@ -26,16 +28,34 @@
   // ---------- estado ----------
   let steps = STEPS, bet = Number(localStorage.lzBet) || 1, bal = null, busy = false, auto = 0, enabled = true, slam = false;
   let turbo = localStorage.lzTurbo === "1";
-  let cur = Array.from({ length: 9 }, rnd);
+  let cur = Array.from({ length: 9 }, rnd), lastAct = Date.now();
   // espera interrompível pelo "parar rápido" (toque no girar durante o giro)
   const nap = async (ms) => { const t = performance.now(); while (!slam && performance.now() - t < ms) await sleep(25); };
+
+  // ---------- leão: poses e reações ----------
+  const lion = $("#lz-lion"), nodEl = lion.querySelector(".lz-nod"), poses = [...nodEl.children];
+  let poseT = 0;
+  function pose(p = "idle", act = "", ms = 0) {
+    clearTimeout(poseT);
+    poses.forEach((im) => im.classList.toggle("on", im.dataset.p === p));
+    lion.className = `lz-lion ${act}`;
+    if (ms) poseT = setTimeout(() => pose(), ms);
+  }
+  function nod() { nodEl.classList.remove("go"); void nodEl.offsetWidth; nodEl.classList.add("go"); }
+  function ring() {
+    const r = document.createElement("i");
+    r.className = "lz-ring"; hero.appendChild(r);
+    setTimeout(() => r.remove(), 850);
+  }
+  function shake() { frame.classList.remove("shake"); void frame.offsetWidth; frame.classList.add("shake"); }
+  const lionAt = () => { const b = lion.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height * 0.35 }; };
 
   // ---------- layout: banner e grade cabem na altura da tela ----------
   function layout() {
     const H = stage.clientHeight, W = stage.clientWidth - 40, rest = 52;
-    let hh = Math.max(72, Math.min(200, H * 0.27));
-    let fs = Math.min(W, 400, H - hh - rest);
-    if (fs < 240) { hh = Math.max(60, H - rest - 240); fs = Math.min(W, 400, H - hh - rest); }
+    let hh = Math.max(90, Math.min(240, H * 0.3));
+    let fs = Math.min(W, 400, H - hh * 0.9 - rest);
+    if (fs < 250) { hh = Math.max(80, (H - rest - 250) / 0.9); fs = Math.min(W, 400, H - hh * 0.9 - rest); }
     stage.style.setProperty("--hh", `${Math.round(hh)}px`);
     frame.style.setProperty("--fs", `${Math.round(Math.max(170, fs))}px`);
   }
@@ -44,12 +64,12 @@
   // ---------- moedas ----------
   const cv = $("#lz-coins"), cx = cv.getContext("2d");
   let coins = [], coinRaf = 0;
-  function rain(n, burst) {
+  function rain(n, burst, at) {
     const dpr = devicePixelRatio || 1;
     cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; cx.setTransform(dpr, 0, 0, dpr, 0, 0);
     for (let i = 0; i < n; i++) {
       coins.push(burst
-        ? { x: innerWidth / 2, y: innerHeight * 0.45, vx: (Math.random() - 0.5) * 14, vy: -Math.random() * 16 - 6, r: 9 + Math.random() * 9, a: Math.random() * 6, va: 0.2 + Math.random() * 0.3, d: Math.random() * 20 }
+        ? { x: at ? at.x : innerWidth / 2, y: at ? at.y : innerHeight * 0.45, vx: (Math.random() - 0.5) * 14, vy: -Math.random() * 16 - 6, r: 9 + Math.random() * 9, a: Math.random() * 6, va: 0.2 + Math.random() * 0.3, d: Math.random() * 20 }
         : { x: Math.random() * innerWidth, y: -30 - Math.random() * innerHeight * 0.8, vx: (Math.random() - 0.5) * 2, vy: 2 + Math.random() * 4, r: 9 + Math.random() * 9, a: Math.random() * 6, va: 0.15 + Math.random() * 0.3, d: 0 });
     }
     if (!coinRaf) coinRaf = requestAnimationFrame(drawCoins);
@@ -108,13 +128,22 @@
     catch (e) { clearInterval(tick); cur.forEach((s, i) => setStatic(i, s)); throw e; }
     const dur = () => (turbo || slam ? 200 : 420);
     const left = new Set(moving);
+    // suspense: par de símbolos altos nas 2 primeiras colunas segura a última
+    const pair = (a, b) => (target[a] === target[b] || target[a] === "W" || target[b] === "W") && (HOT.has(target[a]) || HOT.has(target[b]));
+    const tease = !keep.size && !turbo && LINES.some(([a, b]) => pair(a, b));
     for (const c of [0, 1, 2]) {
       const col = slam ? [...left] : [c, c + 3, c + 6].filter((i) => left.has(i));
       if (!col.length) continue;
+      if (c === 2 && tease && !slam) {
+        col.forEach((i) => cells[i].classList.add("tease"));
+        pose("hope", "tense"); play("tease");
+        await nap(1100);
+        col.forEach((i) => cells[i].classList.remove("tease"));
+      }
       const hard = slam;
       col.forEach((i) => { stopCell(i, target[i], dur()); left.delete(i); });
       await nap(dur() * 0.55);
-      play(hard ? "slam" : "stop");
+      play(hard ? "slam" : "stop"); nod();
       if (!left.size) break;
       await nap(turbo ? 40 : slow ? 260 : 120);
     }
@@ -167,7 +196,7 @@
     $$(".lz-nums b").forEach((b) => b.classList.remove("on"));
     winv.textContent = RS.money(0);
     $("#lz-wbox").classList.remove("pop");
-    hero.classList.remove("cheer", "roar");
+    pose("idle");
   }
 
   // ---------- linhas vencedoras ----------
@@ -244,7 +273,8 @@
 
   // ---------- rodada bônus ----------
   async function roar(r) {
-    document.body.classList.add("roar"); hero.classList.add("roar"); frame.classList.add("feat");
+    document.body.classList.add("roar"); frame.classList.add("feat");
+    pose("roar", "roar"); ring(); shake(); setTimeout(ring, 250);
     $("#lz-ftag").classList.remove("hidden");
     SFX.mode("feat"); play("roar"); play("gong");
     const fo = $("#lz-feat");
@@ -256,16 +286,17 @@
       const prev = r.frames[k - 1];
       const keep = new Set(prev.map((s, i) => (s === r.symbol || s === "W" ? i : -1)).filter((i) => i >= 0));
       keep.forEach((i) => cells[i].classList.add("lock"));
-      play("lock");
+      play("lock"); pose("roar", "roar"); ring(); shake();
       await sleep(turbo ? 120 : 300);
       await spinRound(Promise.resolve(r.frames[k]), keep, true);
+      pose("hope", "hop");
     }
     r.frames.at(-1).forEach((s, i) => { if (s === r.symbol || s === "W") cells[i].classList.add("lock"); });
     await sleep(turbo ? 150 : 400);
     endRoar();
   }
   function endRoar() {
-    document.body.classList.remove("roar"); hero.classList.remove("roar"); frame.classList.remove("feat");
+    document.body.classList.remove("roar"); frame.classList.remove("feat");
     $("#lz-ftag").classList.add("hidden");
     SFX.mode("base");
   }
@@ -276,7 +307,7 @@
     if (!(await RS.user())) { location.href = "login.html"; return; }
     if (bal != null && bal < bet) { RS.toast("Saldo insuficiente", "error"); auto = 0; ui(); return; }
     busy = true; slam = false; clearWin(); ui();
-    say("Boa sorte!");
+    say("Boa sorte!"); pose("hope", "hop"); lastAct = Date.now();
     if (bal != null) { bal -= bet; showBal(); }
     const req = RS.rpc("leao_spin", { p_stake: bet });
     try {
@@ -286,7 +317,9 @@
       if (r.feature) await roar(r);
       const g = r.frames.at(-1), m = Number(r.m);
       if (r.payout > 0) {
-        hero.classList.add("cheer");
+        const huge = r.full || m >= 10;
+        pose(huge ? "rich" : "cheer", huge ? "dance" : "jump");
+        rain(huge ? 40 : Math.min(30, 8 + m * 4), true, lionAt()); play("boing");
         bubble(r.full ? "TELA CHEIA!" : CHEERS[Math.floor(Math.random() * CHEERS.length)]);
         play(r.full ? "full" : "win");
         if (m >= 2) rain(Math.min(60, 12 + m * 3), false);
@@ -295,17 +328,18 @@
         await countUp(r.payout, turbo ? 300 : 800);
         await bigWin(m, r.payout);
         await lp;
-      } else say("Tente de novo!");
+        pose("cheer", "jump", 1600);
+      } else { say("Tente de novo!"); pose("idle"); nod(); }
       bal = Number(r.balance); showBal();
       if (r.payout > 0) RS.refreshBalance?.();
     } catch (e) {
-      endRoar();
+      endRoar(); pose("idle");
       RS.toast(e.message, "error");
       say(e.message);
       auto = 0;
       bal = null; loadBal();
     }
-    busy = false;
+    busy = false; lastAct = Date.now();
     if (auto > 0) { auto--; ui(); if (auto > 0) { await sleep(turbo ? 250 : 700); if (auto > 0) return spin(); } }
     ui();
   }
@@ -359,6 +393,17 @@
     modal("#lz-bet-pick");
   }
 
+  lion.onclick = () => {
+    if (busy) return;
+    lastAct = Date.now();
+    pose("cheer", "jump", 1500); play("boing"); bubble(TAPS[Math.floor(Math.random() * TAPS.length)]);
+  };
+  setInterval(() => {
+    if (busy || Date.now() - lastAct < 8000 || !$("#lz-splash").classList.contains("hidden")) return;
+    lastAct = Date.now();
+    Math.random() < 0.5 ? (pose("cheer", "jump", 1500), bubble(TAPS[Math.floor(Math.random() * TAPS.length)])) : (pose("hope", "hop", 1400), nod());
+  }, 1000);
+
   // ---------- controles ----------
   spinBtn.onclick = () => {
     if (auto > 0) { auto = 0; ui(); return; }
@@ -390,7 +435,7 @@
   });
 
   // ---------- abertura: carrega as imagens e libera o som no toque ----------
-  const assets = [...KEYS.map(IMG), "assets/leao/hero.webp", "assets/leao/bg.webp"];
+  const assets = [...KEYS.map(IMG), ...["hero", "bg2", "m-idle", "m-hope", "m-cheer", "m-rich", "m-roar"].map((n) => `assets/leao/${n}.webp`)];
   let loaded = 0;
   Promise.all(assets.map((src) => new Promise((res) => {
     const im = new Image(); im.onload = im.onerror = () => { loaded++; $("#lz-loadbar").style.width = `${(loaded / assets.length) * 100}%`; res(); }; im.src = src;

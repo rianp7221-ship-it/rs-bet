@@ -50,6 +50,8 @@ window.LeaoAudio = (() => {
     coin: (t) => note(fxBus, 1900 + Math.random() * 900, t, 0.07, "sine", 0.05),
     roar: (t) => { hit(fxBus, t, 1.1, 0.6, "lowpass", 500); note(fxBus, 200, t, 1, "sawtooth", 0.18, 55); note(fxBus, 150, t + 0.05, 0.9, "sawtooth", 0.12, 45); },
     gong: (t) => { [55, 82.4, 110, 164.8].forEach((f, i) => note(fxBus, f, t, 2.4 - i * 0.4, "sine", 0.16 / (i + 1))); hit(fxBus, t, 0.5, 0.15, "bandpass", 300, 2); },
+    tease: (t) => { for (let i = 0; i < 10; i++) note(fxBus, 600 + i * 90, t + i * 0.08, 0.07, "triangle", 0.05); },
+    boing: (t) => note(fxBus, 260, t, 0.22, "sine", 0.16, 620),
     full: (t) => [79, 83, 86, 91, 95].forEach((n, i) => note(fxBus, midi(n), t + i * 0.07, 0.5, "square", 0.07)),
   };
   const fx = (k) => {
