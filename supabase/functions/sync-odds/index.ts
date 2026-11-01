@@ -114,9 +114,10 @@ Deno.serve(async (req) => {
         if (u.markets !== undefined) patch.markets = marginMarkets(u.markets, margin("odds_margin_live"));
         if (scoreChanged(m, u.home, u.away) && !u.completed) {
           patch.suspended_until = new Date(Date.now() + GOAL_LOCK_MS).toISOString(); patch.suspend_reason = "Gol";
-        } else if (jumped && !u.completed && lockedUntil < Date.now() + JUMP_LOCK_MS) {
-          patch.suspended_until = new Date(Date.now() + JUMP_LOCK_MS).toISOString(); patch.suspend_reason = "Odds em movimento brusco";
         } else if (u.cancelled) { patch.suspended_until = new Date(Date.now() + 600_000).toISOString(); patch.suspend_reason = "Jogo adiado ou cancelado"; }
+        else if (jumped && !u.completed && lockedUntil < Date.now() + JUMP_LOCK_MS) {
+          patch.suspended_until = new Date(Date.now() + JUMP_LOCK_MS).toISOString(); patch.suspend_reason = "Odds em movimento brusco";
+        }
         else if (lockedUntil > Date.now() + 30_000) { /* mantém a suspensão mais longa */ }
         else if (u.suspended) { patch.suspended_until = new Date(Date.now() + 30_000).toISOString(); patch.suspend_reason = u.suspended; }
         else if (!u.odds && !u.completed) { patch.suspended_until = new Date(Date.now() + 30_000).toISOString(); patch.suspend_reason = "Mercado suspenso nas casas"; }
