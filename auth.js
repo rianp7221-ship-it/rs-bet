@@ -15,6 +15,7 @@
     mode = m;
     RS.$$(".auth-switch button").forEach((b) => b.classList.toggle("active", b.dataset.mode === m));
     nameRow.classList.toggle("hidden", m !== "signup");
+    ["#row-fullname", "#row-cpf"].forEach((r) => RS.$(r).classList.toggle("hidden", m !== "signup"));
     ageRow.classList.toggle("hidden", m !== "signup");
     RS.$("#row-password").classList.toggle("hidden", m === "reset");
     title.textContent = { login: "Entrar na sua conta", signup: "Criar conta", reset: "Recuperar senha" }[m];
@@ -24,6 +25,8 @@
   RS.$$(".auth-switch button").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
   RS.$("#auth-have").addEventListener("click", (e) => { const g = e.target.closest("[data-go]"); if (g) { e.preventDefault(); setMode(g.dataset.go); } });
     RS.$("#forgot").addEventListener("click", (e) => { e.preventDefault(); setMode("reset"); });
+
+  form.cpf.addEventListener("input", () => (form.cpf.value = RS.cpfMask(form.cpf.value)));
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -38,9 +41,14 @@
       } else if (mode === "signup") {
         if (!form.age.checked) throw new Error("Você precisa ter 18 anos ou mais");
         if (password.length < 8) throw new Error("A senha precisa de pelo menos 8 caracteres");
+        const fullName = form.full_name.value.trim().replace(/\s+/g, " ");
+        if (!/\S+\s+\S+/.test(fullName)) throw new Error("Informe seu nome completo");
+        const cpf = RS.cpf(form.cpf.value);
+        if (!cpf) throw new Error("CPF inválido");
+        if (!(await RS.rpc("cpf_available", { p_cpf: cpf }))) throw new Error("Este CPF já tem conta. Faça login.");
         const { data, error } = await sb.auth.signUp({
           email, password,
-          options: { data: { username: form.username.value.trim(), ref: localStorage.getItem("rs-ref") || undefined, aff: localStorage.getItem("rs-aff") || undefined }, emailRedirectTo: location.origin + "/index.html" },
+          options: { data: { full_name: fullName, cpf, username: form.username.value.trim(), ref: localStorage.getItem("rs-ref") || undefined, aff: localStorage.getItem("rs-aff") || undefined }, emailRedirectTo: location.origin + "/index.html" },
         });
         if (error) throw error;
         if (data.session) location.href = "index.html";
@@ -57,6 +65,7 @@
         "User already registered": "Este email já tem conta. Faça login.",
         "email rate limit exceeded": "Muitas tentativas. Aguarde alguns minutos e tente de novo.",
         "Unable to validate email address: invalid format": "Email inválido",
+        "Database error saving new user": "Não foi possível criar a conta. Confira o CPF e o nome completo.",
       };
       RS.toast(pt[m] || (/rate limit|security purposes/i.test(m) ? pt["email rate limit exceeded"] : m), "error");
     } finally {

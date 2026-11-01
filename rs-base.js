@@ -37,6 +37,18 @@ const RS = {
     const { data } = await sb.auth.getSession();
     return data.session?.user || null;
   },
+  // CPF: só dígitos se os dígitos verificadores batem, senão null
+  cpf(v) {
+    const d = String(v || "").replace(/\D/g, "");
+    if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return null;
+    for (const k of [9, 10]) {
+      let s = 0;
+      for (let i = 0; i < k; i++) s += +d[i] * (k + 1 - i);
+      if ((s * 10) % 11 % 10 !== +d[k]) return null;
+    }
+    return d;
+  },
+  cpfMask: (v) => String(v || "").replace(/\D/g, "").slice(0, 11).replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2"),
   async profile() {
     const u = await RS.user();
     if (!u) return null;
