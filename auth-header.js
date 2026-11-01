@@ -11,6 +11,29 @@
   const initial = (p) => (nameOf(p) || "?").trim()[0];
   const navLink = (href, txt, key) => `<a href="${href}" data-nav="${key}">${txt}</a>`;
 
+  // contas criadas antes do CPF obrigatório: completa CPF e nome antes de continuar
+  function askIdentity(p) {
+    if (document.getElementById("id-form")) return;
+    const m = RS.modal(`<h3>Complete seu cadastro</h3><p class="muted small">Para continuar, informe seu nome completo e CPF. O CPF precisa ser o mesmo da conta bancária do saque e só o suporte corrige depois.</p>
+      <form id="id-form">
+        ${p.full_name ? "" : `<label>Nome completo<input name="n" class="input" maxlength="120" autocomplete="name" required></label>`}
+        ${p.cpf ? "" : `<label>CPF<input name="c" class="input" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" required></label>`}
+        <button class="btn btn-green w-full" style="margin-top:12px">Salvar</button></form>`);
+    m.querySelector(".rs-modal-x").remove();
+    m.addEventListener("click", (e) => { if (e.target === m) e.stopImmediatePropagation(); }, true);
+    const f = RS.$("#id-form", m);
+    if (f.c) f.c.oninput = () => (f.c.value = RS.cpfMask(f.c.value));
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      if (f.c && !RS.cpf(f.c.value)) { RS.toast("CPF inválido", "error"); return; }
+      if (f.n && !/\S+\s+\S+/.test(f.n.value.trim())) { RS.toast("Informe seu nome completo", "error"); return; }
+      try {
+        await RS.rpc("set_my_identity", { p_cpf: f.c ? f.c.value : null, p_name: f.n ? f.n.value : null });
+        m.remove(); RS.toast("Cadastro completo.", "ok");
+      } catch (err) { RS.toast(RS.err(err), "error"); }
+    };
+  }
+
   async function render() {
     me = await RS.profile();
     el.innerHTML = `
@@ -43,6 +66,7 @@
     drawerAcct();
     if (!me) return;
     if (me.blocked) RS.toast("Sua conta está bloqueada. Fale com o suporte.", "error");
+    if ((!me.cpf || !me.full_name) && page !== "admin.html") askIdentity(me);
     RS.$("#btn-deposit").onclick = () => panel("overview");
     RS.$("#hdr-bal").onclick = () => panel("overview");
     RS.$("#hdr-avatar").onclick = togglePop;
@@ -370,7 +394,7 @@
         const KT = { cpf: "CPF", cnpj: "CNPJ", email: "E-mail", telefone: "Celular", aleatoria: "Chave aleatória" };
         const f = (l, v) => `<div class="ap-field"><label>${l}</label><input class="input" readonly value="${RS.esc(v)}"></div>`;
         body.innerHTML = `<div class="ap-card"><h3>Informações gerais</h3>
-            ${f("ID", p.id)}${f("Nome de usuário", p.username || "")}${f("E-mail", p.email || "")}
+            ${f("ID", p.id)}${p.full_name ? f("Nome completo", p.full_name) : ""}${f("Nome de usuário", p.username || "")}${f("E-mail", p.email || "")}
             ${f("Membro desde", new Date(p.created_at).toLocaleDateString("pt-BR"))}
             <p class="muted small">Para corrigir nome ou e-mail, fale com o suporte.</p></div>
           <div class="ap-card"><h3>Documento</h3>

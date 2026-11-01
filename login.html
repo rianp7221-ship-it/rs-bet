@@ -33,6 +33,8 @@
     </div>
     <h2 id="auth-title">Entrar na sua conta</h2>
     <form id="auth-form">
+      <label id="row-fullname" class="hidden">Nome completo<input name="full_name" class="input" maxlength="120" autocomplete="name"></label>
+      <label id="row-cpf" class="hidden">CPF<input name="cpf" class="input" inputmode="numeric" maxlength="14" placeholder="000.000.000-00"></label>
       <label id="row-username" class="hidden">Nome de usuário<input name="username" class="input" maxlength="30"></label>
       <label>Email<input name="email" type="email" class="input" required autocomplete="email"></label>
       <label id="row-password">Senha<input name="password" type="password" class="input" autocomplete="current-password"></label>
