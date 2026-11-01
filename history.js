@@ -146,21 +146,45 @@
       if (s) el.innerHTML = selState(s);
     }
   }
+  // uma chamada cota todos os bilhetes; nunca duas ao mesmo tempo; valor velho trava o botão
+  let coBusy = false, coAgain = false, coAt = 0, coSeq = 0;
+  const CO_MAX_AGE = 8000;
+  function coButton(el, q, id) {
+    const card = el.closest(".bet-card");
+    card?.classList.toggle("co-ok", !!q && !q.suspended);
+    if (!q) { el.innerHTML = `<small class="muted">Cash out indisponível no momento</small>`; return; }
+    if (q.suspended) { el.innerHTML = `<button class="btn btn-co w-full" disabled>🔒 CASH OUT suspenso · ${RS.esc(q.reason)}</button>`; return; }
+    const prev = lastCo.get(id), trend = prev == null || prev === q.value ? "" : q.value > prev ? "co-up" : "co-down";
+    lastCo.set(id, q.value);
+    const label = `CASH OUT ${RS.money(q.value)}${trend ? (trend === "co-up" ? " ▲" : " ▼") : ""}${q.live ? " · ao vivo" : ""}`;
+    let btn = el.querySelector("[data-cash]");
+    if (!btn) { el.innerHTML = `<button class="btn btn-co w-full" data-cash="${id}"></button>`; btn = el.firstChild; }
+    btn.dataset.v = q.value; btn.disabled = false; btn.textContent = label;
+    if (trend) { btn.classList.remove("co-up", "co-down"); void btn.offsetWidth; btn.classList.add(trend); }
+  }
   async function loadCashouts() {
     if (cashing) return;
-    await refreshLive();
-    for (const el of RS.$$("[data-co]", box)) {
-      const id = Number(el.dataset.co);
-      const { data: q } = await sb.rpc("cashout_quote", { p_bet: id });
-      if (cashing) return;
-      el.closest(".bet-card")?.classList.toggle("co-ok", !!q && !q.suspended);
-      if (!q) { el.innerHTML = `<small class="muted">Cash out indisponível no momento</small>`; continue; }
-      if (q.suspended) { el.innerHTML = `<button class="btn btn-co w-full" disabled>🔒 CASH OUT suspenso · ${RS.esc(q.reason)}</button>`; continue; }
-      const prev = lastCo.get(id), trend = prev == null || prev === q.value ? "" : q.value > prev ? "co-up" : "co-down";
-      lastCo.set(id, q.value);
-      el.innerHTML = `<button class="btn btn-co w-full ${trend}" data-cash="${id}" data-v="${q.value}">CASH OUT ${RS.money(q.value)}${trend ? (trend === "co-up" ? " ▲" : " ▼") : ""}${q.live ? " · ao vivo" : ""}</button>`;
+    if (coBusy) { coAgain = true; return; }
+    coBusy = true;
+    const seq = ++coSeq, late = (ms) => new Promise((ok) => setTimeout(() => ok({ error: "timeout" }), ms));
+    try {
+      await Promise.race([refreshLive(), late(4000)]);
+      const els = RS.$$("[data-co]", box), ids = els.map((el) => Number(el.dataset.co));
+      if (!ids.length) return;
+      const { data, error } = await Promise.race([sb.rpc("cashout_quotes", { p_bets: ids }), late(6000)]);
+      if (cashing || error || !data || seq !== coSeq) return;
+      coAt = Date.now();
+      els.forEach((el, i) => el.isConnected && coButton(el, data[ids[i]], ids[i]));
+    } finally {
+      coBusy = false;
+      if (coAgain) { coAgain = false; loadCashouts(); }
     }
   }
+  // sem cotação nova há mais de 8 s (rede caiu, app em segundo plano): botão trava até atualizar
+  setInterval(() => {
+    if (cashing || !coAt || Date.now() - coAt < CO_MAX_AGE) return;
+    for (const btn of RS.$$("[data-cash]:not([disabled])", box)) { btn.disabled = true; btn.textContent = "Atualizando cash out…"; }
+  }, 1000);
   const showingBets = () => kind === "bets" && !RS.$("#history").classList.contains("hidden") && RS.$("[data-co]", box);
   box.addEventListener("click", async (e) => {
     const t = e.target;
@@ -213,12 +237,14 @@
     } catch (err) { RS.toast(err.message, "error"); }
     cashing = false; load();
   });
-  // valor e suspensão do cashout acompanham o jogo: tempo real + checagem a cada 5s
+  // valor e suspensão do cashout acompanham o jogo: tempo real + checagem a cada 3s
   let pend;
   sb.channel("hist-odds").on("postgres_changes", { event: "UPDATE", schema: "public", table: "matches" },
     () => { clearTimeout(pend); pend = setTimeout(() => { if (showingBets()) loadCashouts(); }, 300); }).subscribe();
-  setInterval(() => { if (showingBets() && !document.hidden) loadCashouts(); }, 5000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && showingBets()) load(); });
+  setInterval(() => { if (showingBets() && !document.hidden) loadCashouts(); }, 3000);
+  const wake = () => { if (!document.hidden && showingBets()) { coAt = 1; loadCashouts(); } };
+  document.addEventListener("visibilitychange", wake);
+  addEventListener("pageshow", wake); addEventListener("focus", wake); addEventListener("online", wake);
 
   RS.$$("[data-hist]").forEach((b) => (b.onclick = () => {
     kind = b.dataset.hist;
