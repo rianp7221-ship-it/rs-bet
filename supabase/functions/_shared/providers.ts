@@ -17,6 +17,7 @@ export type LiveUpdate = {
   cancelled: boolean; // adiado ou cancelado: trava o mercado
   voided: boolean; // cancelado de vez: anula as seleções
   odds: MatchOdds | null; markets?: Markets | null;
+  home_logo?: string; away_logo?: string; league_logo?: string;
   minute?: number | null; // minuto de jogo
   suspended: string | null; // motivo de suspensão (lance perigoso, pênalti, mercado travado...)
 };
@@ -261,6 +262,7 @@ function apiFootball(key: string): OddsProvider {
         const g = afGoals(f);
         out.push({
           id: String(f.fixture.id), home: g.home, away: g.away,
+          home_logo: f.teams.home.logo, away_logo: f.teams.away.logo, league_logo: f.league.logo,
           completed: AF_DONE.includes(st), cancelled: AF_CANCEL.includes(st), voided: AF_VOID.includes(st),
           odds: lo ? pick(lo.odds) : null, markets: lo && !locked ? extra(lo.odds) : null,
           minute: f.fixture.status.elapsed != null ? f.fixture.status.elapsed + (f.fixture.status.extra ?? 0) : null, suspended,
