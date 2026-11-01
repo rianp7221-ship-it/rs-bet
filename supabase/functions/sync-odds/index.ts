@@ -41,7 +41,7 @@ async function mirrorLogo(sb: any, url?: string | null): Promise<string | null> 
   try {
     const img = await fetch(url);
     if (!img.ok) return url;
-    const { error } = await sb.storage.from("logos").upload(path, await img.arrayBuffer(), { contentType: "image/png", upsert: true });
+    const { error } = await sb.storage.from("logos").upload(path, await img.arrayBuffer(), { contentType: "image/png", upsert: true, cacheControl: "31536000" });
     if (error) return url;
     mirrored.add(path);
     return pub;

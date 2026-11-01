@@ -73,8 +73,9 @@
   const byTop = (a, b) => rank(a[0]) - rank(b[0]) || b[1].n - a[1].n;
   // escudo do time (API-Football); sem escudo, camisa com a cor do nome
   const safeUrl = (u) => (/^https:\/\/[\w.-]+\//.test(u || "") ? u : "");
+  const badLogo = (window.RSbadLogo ||= new Set());
   const crest = (m, side) => { const u = safeUrl(m[side + "_logo"]);
-    return u ? `<img class="crest" src="${RS.esc(u)}" alt="" loading="lazy" onerror="this.replaceWith(document.createRange().createContextualFragment(window.RSshirt(this.dataset.n)))" data-n="${RS.esc(m[side])}">` : shirt(m[side]); };
+    return u && !badLogo.has(u) ? `<img class="crest" src="${RS.esc(u)}" alt="" loading="lazy" onerror="window.RSbadLogo.add(this.getAttribute('src'));this.replaceWith(document.createRange().createContextualFragment(window.RSshirt(this.dataset.n)))" data-n="${RS.esc(m[side])}">` : shirt(m[side]); };
   const leagueLogo = (l) => { const m = matches.find((x) => x.league === l && x.league_logo); return m ? safeUrl(m.league_logo) : ""; };
   const lico = (l) => { const u = leagueLogo(l); return u ? `<img class="lg-logo" src="${RS.esc(u)}" alt="" loading="lazy">` : flag(l); };
   window.RSshirt = (n) => shirt(n);
@@ -168,7 +169,7 @@
       : new Date(m.starts_at).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" }) + " " + hhmm(m.starts_at);
     const sc = m.score_home != null ? `<b class="mv-score">${m.score_home} - ${m.score_away}</b>` : `<i class="mv-vs">x</i>`;
     const keep = el.querySelector(".mv-body")?.scrollTop || 0;
-    el.innerHTML = `<div class="mv-head"><button class="mv-back" data-mvclose aria-label="Voltar">←</button><small>${lico(m.league)} ${RS.esc(lname(m.league))}</small></div>
+    RS.morph(el, `<div class="mv-head"><button class="mv-back" data-mvclose aria-label="Voltar">←</button><small>${lico(m.league)} ${RS.esc(lname(m.league))}</small></div>
       <div class="mv-match"><div class="mv-date">${top}</div>
         <div class="mv-teams"><span>${crest(m, "home")}${RS.esc(m.home)}</span>${sc}<span>${RS.esc(m.away)}${crest(m, "away")}</span></div></div>
       <div class="mv-bar"><div class="mv-tabs">${Object.entries(MV_TABS).map(([k, l]) => `<button class="${mvTab === k ? "on" : ""}" data-mvtab="${k}">${l}</button>`).join("")}</div>
@@ -178,7 +179,7 @@
       <div class="mv-body">${groups.map((g) => `<div class="mv-acc ${mvClosed.has(g.key) ? "closed" : ""}">
         <button class="mv-acc-h" data-mvacc="${g.key}"><span>${g.name}</span>${canBB && g.ca !== false ? `<i class="ca">CA</i>` : ""}<i class="mv-chev"></i></button>
         <div class="mv-acc-b">${g.html.map((r) => `<div class="odds">${r}</div>`).join("")}</div></div>`).join("")
-        || `<p class="empty">Nenhum mercado disponível nesta aba.</p>`}</div>`;
+        || `<p class="empty">Nenhum mercado disponível nesta aba.</p>`}</div>`);
     el.querySelector(".mv-body").scrollTop = keep;
   }
 
@@ -188,7 +189,7 @@
       ? `<i class="live">${m.minute ? m.minute + "' AO VIVO" : "AO VIVO"}</i>${m.score_home != null ? ` ${m.score_home} - ${m.score_away}` : ""}`
       : `${RS.icon("clock")} ${dayLabel(m.starts_at)} ${hhmm(m.starts_at)}`;
     const big = safeUrl(m.home_logo) && safeUrl(m.away_logo)
-      ? `<div class="feat-crests"><img src="${RS.esc(m.home_logo)}" alt="" loading="lazy"><img src="${RS.esc(m.away_logo)}" alt="" loading="lazy"></div>` : "";
+      ? `<div class="feat-crests"><img src="${RS.esc(m.home_logo)}" alt=""><img src="${RS.esc(m.away_logo)}" alt=""></div>` : "";
     return `<div class="feat-card ${sp}${big ? " has-crests" : ""}"><div class="feat-top">${top}</div>${big}
       <div class="feat-teams"><b>${crest(m, "home")}${RS.esc(m.home)}</b><b>${crest(m, "away")}${RS.esc(m.away)}</b></div>${odds(m)}</div>`;
   }
@@ -211,10 +212,10 @@
   function render() {
     const byLeague = {};
     matches.forEach((m) => { (byLeague[m.league] ||= { n: 0, sport: m.sport }).n++; });
-    RS.$("#comp-list").innerHTML = Object.entries(byLeague).sort(byTop).slice(0, 12).map(([l, v]) =>
+    RS.morph(RS.$("#comp-list"), Object.entries(byLeague).sort(byTop).slice(0, 12).map(([l, v]) =>
       `<button class="comp-item ${league === l ? "active" : ""}" data-league="${RS.esc(l)}"><span class="comp-ico">${lico(l)}</span>
         <span><b>${RS.esc(lname(l))}</b><small>${RS.esc(v.sport)}</small></span><em>${v.n}</em></button>`).join("")
-      || `<p class="muted small" style="padding:0 6px">Sem competições no momento.</p>`;
+      || `<p class="muted small" style="padding:0 6px">Sem competições no momento.</p>`);
 
     const count = {};
     matches.filter((m) => (view === "live" ? live(m) : view !== "all" || league || query || !live(m))).forEach((m) => (count[m.sport] = (count[m.sport] || 0) + 1));
@@ -236,30 +237,30 @@
     const home = view === "all" && sport === "Popular" && !league && !query;
     const top = matches.filter((m) => !live(m) && !suspended(m)).slice(0, 6);
     RS.$("#feat-cards").classList.toggle("hidden", !home || !top.length);
-    RS.$("#feat-cards").innerHTML = home ? top.map(feat).join("") : "";
+    RS.morph(RS.$("#feat-cards"), home ? top.map(feat).join("") : "");
     RS.$("#casino-strip").classList.toggle("hidden", !home);
     document.body.classList.toggle("is-home", home);
     const pop = Object.entries(byLeague).sort(byTop).slice(0, 10);
     RS.$("#league-sec").classList.toggle("hidden", !home || !pop.length);
-    RS.$("#league-chips").innerHTML = home ? pop.map(([l]) =>
-      `<button class="league-chip" data-league="${RS.esc(l)}"><span class="comp-ico">${lico(l)}</span>${RS.esc(lname(l))}</button>`).join("") : "";
+    RS.morph(RS.$("#league-chips"), home ? pop.map(([l]) =>
+      `<button class="league-chip" data-league="${RS.esc(l)}"><span class="comp-ico">${lico(l)}</span>${RS.esc(lname(l))}</button>`).join("") : "");
     const lh = RS.$("#league-head");
     lh.classList.toggle("hidden", !league);
     RS.$(".action-head").classList.toggle("hidden", !!league);
     if (league) {
       const inL = matches.filter((m) => m.league === league), nLive = inL.filter(live).length;
-      lh.innerHTML = `<div class="lh-top"><span class="lh-ico">${lico(league)}</span><h1>${RS.esc(lname(league))}</h1></div>
+      RS.morph(lh, `<div class="lh-top"><span class="lh-ico">${lico(league)}</span><h1>${RS.esc(lname(league))}</h1></div>
         <div class="lh-tabs"><button class="${lt === "games" ? "active" : ""}" data-lt="games">Jogos <em>${inL.length}</em></button>
           <button class="${lt === "live" ? "active" : ""}" data-lt="live">Ao vivo <em>${nLive}</em></button>
-          <button data-view="all">Todas as ligas</button></div>`;
+          <button data-view="all">Todas as ligas</button></div>`);
     }
     RS.$("#list-title").textContent = query ? `Busca: "${query}"` : league ? lname(league) : view === "live" ? `Jogos ao vivo (${matches.filter(live).length})` : TITLE[view];
     RS.$$("[data-view]").forEach((a) => a.classList.toggle("active", a.dataset.view === view && !league && !query));
 
     const rows = visible();
     const reset = home ? "" : `<div class="filter-bar"><button class="btn btn-outline sm" data-view="all">Ver todos os jogos</button></div>`;
-    list.innerHTML = reset + (rows.length ? rows.map(row).join("")
-      : `<p class="empty">${view === "fav" ? "Toque na estrela de um jogo para salvá-lo nos favoritos." : "Nenhum jogo disponível no momento."}</p>`);
+    RS.morph(list, reset + (rows.length ? rows.map(row).join("")
+      : `<p class="empty">${view === "fav" ? "Toque na estrela de um jogo para salvá-lo nos favoritos." : "Nenhum jogo disponível no momento."}</p>`));
     renderMv();
   }
 
