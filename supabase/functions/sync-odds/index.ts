@@ -94,6 +94,7 @@ Deno.serve(async (req) => {
         if (u.home != null && u.away != null) { patch.score_home = u.home; patch.score_away = u.away; }
         if (!u.completed && !u.cancelled) patch.status = "live";
         if (u.minute != null) patch.minute = u.minute;
+        if (u.home_logo) { patch.home_logo = u.home_logo; patch.away_logo = u.away_logo ?? null; patch.league_logo = u.league_logo ?? null; }
         // uma suspensão nova nunca encurta a que já está valendo (ex.: 90 s do gol)
         const lockedUntil = Date.parse(m.suspended_until ?? "") || 0;
         if (u.odds) {

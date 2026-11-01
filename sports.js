@@ -341,10 +341,10 @@
       const up = s.odd > s.base;
       return `<div class="slip-item">
         <div class="si-main">${s.market === "bb"
-          ? `<b class="si-bb">${RS.icon("ball")} Criar Aposta</b><small>${RS.esc(m.home)} - ${RS.esc(m.away)}</small>
+          ? `<b class="si-bb">${RS.icon("ball")} Criar Aposta</b><small>${crest(m, "home")} ${RS.esc(m.home)} - ${RS.esc(m.away)} ${crest(m, "away")}</small>
             <ul class="si-legs">${legsOf(s).map(([k, p]) => `<li><b>${RS.esc(name(k, p))}</b><small>${mkName(k)}</small></li>`).join("")}</ul>`
           : `<b>${icon(m.sport)} ${RS.esc(name(s.market, s.pick))}</b><small class="si-mkt">${mkName(s.market)}</small>
-          <small>${RS.esc(m.home)}<br>${RS.esc(m.away)}</small>`}
+          <small class="si-teams">${crest(m, "home")}${RS.esc(m.home)}<br>${crest(m, "away")}${RS.esc(m.away)}</small>`}
           ${suspended(m) ? `<small class="si-lock">${RS.icon("lock")} Mercado suspenso</small>` : ""}</div>
         <div class="si-odd">${s.odd !== s.base
           ? `<s>${s.base.toFixed(2)}</s><span class="${up ? "up" : "down"}">${up ? "▲" : "▼"} ${s.odd.toFixed(2)}</span>`

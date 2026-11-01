@@ -609,3 +609,4 @@ body.mv-open { overflow: hidden; }
 .mv-teams .crest { width: 34px; height: 34px; }
 .row-teams small .lg-logo { width: 14px; height: 14px; vertical-align: -2px; }
 .bc-teams .crest { width: 15px; height: 15px; vertical-align: -3px; margin-right: 5px; }
+.si-teams .crest, .si-bb + small .crest { width: 14px; height: 14px; vertical-align: -2px; margin-right: 5px; }
