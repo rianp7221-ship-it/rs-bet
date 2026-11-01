@@ -25,6 +25,12 @@ function marginMarkets(mk: Markets | null | undefined, marginPct: number): Marke
   }));
 }
 
+type Started = { id: number; external_id: string; home: string; away: string; score_home: number | null; score_away: number | null; suspended_until: string | null };
+// placar mudou desde a última leitura = gol (o evento de gol da API às vezes chega depois do placar)
+const GOAL_LOCK_MS = 90_000;
+const scoreChanged = (m: Started, home?: number | null, away?: number | null) =>
+  home != null && away != null && m.score_home != null && m.score_away != null && (home !== m.score_home || away !== m.score_away);
+
 // para de consultar ao vivo quando a cota está acabando (reserva 20% para a busca completa)
 const liveReserve = (limit: number) => Math.max(20, Math.floor(limit * 0.2));
 
@@ -41,9 +47,9 @@ Deno.serve(async (req) => {
   if (feed.prefix && !only) await sb.rpc("sync_orphan_matches", { p_prefix: feed.prefix });
 
   // jogos já iniciados e ainda não liquidados (ao vivo)
-  const { data: started } = await sb.from("matches").select("id, external_id, home, away")
+  const { data: started } = await sb.from("matches").select("id, external_id, home, away, score_home, score_away, suspended_until")
     .in("status", ["open", "live"]).lt("starts_at", new Date().toISOString()).not("external_id", "is", null);
-  const startedBySport = new Map<string, { id: number; external_id: string; home: string; away: string }[]>();
+  const startedBySport = new Map<string, Started[]>();
   const sportOf = (ext: string) => {
     const k = ext.split(":")[0];
     return k.startsWith(feed.prefix) ? k.slice(feed.prefix.length) : null;
@@ -88,12 +94,17 @@ Deno.serve(async (req) => {
         if (u.home != null && u.away != null) { patch.score_home = u.home; patch.score_away = u.away; }
         if (!u.completed && !u.cancelled) patch.status = "live";
         if (u.minute != null) patch.minute = u.minute;
+        // uma suspensão nova nunca encurta a que já está valendo (ex.: 90 s do gol)
+        const lockedUntil = Date.parse(m.suspended_until ?? "") || 0;
         if (u.odds) {
           const o = applyMargin(u.odds, margin("odds_margin_live"));
           patch.odd_home = o.home; patch.odd_draw = o.draw; patch.odd_away = o.away;
         }
         if (u.markets !== undefined) patch.markets = marginMarkets(u.markets, margin("odds_margin_live"));
-        if (u.cancelled) { patch.suspended_until = new Date(Date.now() + 600_000).toISOString(); patch.suspend_reason = "Jogo adiado ou cancelado"; }
+        if (scoreChanged(m, u.home, u.away) && !u.completed) {
+          patch.suspended_until = new Date(Date.now() + GOAL_LOCK_MS).toISOString(); patch.suspend_reason = "Gol";
+        } else if (u.cancelled) { patch.suspended_until = new Date(Date.now() + 600_000).toISOString(); patch.suspend_reason = "Jogo adiado ou cancelado"; }
+        else if (lockedUntil > Date.now() + 30_000) { /* mantém a suspensão mais longa */ }
         else if (u.suspended) { patch.suspended_until = new Date(Date.now() + 30_000).toISOString(); patch.suspend_reason = u.suspended; }
         else if (!u.odds && !u.completed) { patch.suspended_until = new Date(Date.now() + 30_000).toISOString(); patch.suspend_reason = "Mercado suspenso nas casas"; }
         const { error } = await sb.from("matches").update(patch).eq("id", m.id);
@@ -189,7 +200,9 @@ Deno.serve(async (req) => {
       for (const m of list) {
         const s = byExt.get(m.external_id);
         if (!s) continue;
-        await sb.from("matches").update({ score_home: s.home, score_away: s.away, ...(s.completed ? {} : { status: "live" }) }).eq("id", m.id);
+        const goal = !s.completed && scoreChanged(m, s.home, s.away)
+          ? { suspended_until: new Date(Date.now() + GOAL_LOCK_MS).toISOString(), suspend_reason: "Gol" } : {};
+        await sb.from("matches").update({ score_home: s.home, score_away: s.away, ...goal, ...(s.completed ? {} : { status: "live" }) }).eq("id", m.id);
         if (!s.completed) continue;
         const result = s.home > s.away ? "home" : s.home < s.away ? "away" : "draw";
         const { error } = await sb.rpc("settle_match", { p_match: m.id, p_result: result });
