@@ -253,7 +253,8 @@ function apiFootball(key: string): OddsProvider {
         // a fonte reprecifica a cada 5–60 s: odds paradas há mais de 90 s com o jogo rolando não servem para cashout
         const at = Date.parse(lo?.update ?? "");
         const stale = lo && at > 0 && Date.now() - at > 90_000 && !AF_DONE.includes(st) && st !== "HT" ? "Odds desatualizadas na fonte" : null;
-        const locked = !!(lo?.status?.blocked || lo?.status?.stopped);
+        // no intervalo a fonte marca "stopped" (bola parada), mas segue com odds válidas: só "blocked" trava
+        const locked = !!(lo?.status?.blocked || (lo?.status?.stopped && st !== "HT"));
         const suspended = AF_PAUSE[st] ?? (locked ? "Mercado travado na fonte" : hotWhy ?? stale);
         const g = afGoals(f);
         out.push({
