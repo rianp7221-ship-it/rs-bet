@@ -177,7 +177,7 @@
     <b class="${t.amount >= 0 ? "pos" : "neg"}">${RS.money(t.amount)}</b></div>`;
   const TABS = { overview: ["grid", "Visão geral"], tx: ["card", "Transações"], data: ["user", "Dados pessoais"], security: ["key", "Login & Segurança"],
     betcfg: ["receipt", "Configurações de apostas"], limits: ["lock", "Proteção do jogador"], kyc: ["id", "Processo de verificação"], bonus: ["gift", "Bônus"], privacy: ["lock", "Privacidade"] };
-  const TX_NAME = { deposit: "Depósito", withdraw: "Saque", bet: "Aposta", win: "Prêmio", cashout: "Cash out", casino_bet: "Aposta cassino", casino_win: "Prêmio cassino", adjust: "Ajuste", bonus: "Bônus" };
+  const TX_NAME = { deposit: "Depósito", withdraw: "Saque", bet: "Aposta", win: "Prêmio", cashout: "Cash out", casino_bet: "Aposta cassino", casino_win: "Prêmio cassino", adjust: "Ajuste", bonus: "Bônus", bet_refund: "Reembolso" };
   const txCard = (t) => `<div class="tx-card">
       <div class="tx-h"><span class="tx-ic ${t.amount >= 0 ? "in" : "out"}">${RS.icon(t.amount >= 0 ? "wallet" : "back")}</span>
         <div><b>${TX_NAME[t.type] || RS.esc(t.type)}</b><small>${t.type === "deposit" || t.type === "withdraw" ? "Pix" : RS.esc(t.description || "")}</small></div>

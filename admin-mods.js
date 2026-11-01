@@ -285,9 +285,54 @@
     }
     async function bets() {
       const { data } = await sb.from("bets").select("*, profiles(email), bet_selections(count)").order("created_at", { ascending: false }).limit(150);
-      RS.$("#sp-bets").innerHTML = (manage ? `<div class="filters"><button class="btn btn-outline danger sm" id="b-cancel">Cancelar selecionados (reembolsa)</button></div>` : "") + table(["", "#", "Usuário", "Jogos", "Aposta", "Odd", "Retorno", "Status", "Data"], (data || []).map((b) => [
+      RS.$("#sp-bets").innerHTML = (manage ? `<div class="filters"><button class="btn btn-outline danger sm" id="b-cancel">Cancelar selecionados (reembolsa)</button></div>` : "") + table(["", "#", "Usuário", "Jogos", "Aposta", "Odd", "Retorno", "Status", "Data", ""], (data || []).map((b) => [
         manage && b.status === "pending" ? `<input type="checkbox" data-bc="${b.id}">` : "", b.id, `<a href="#users" data-open-user="${b.user_id}" style="color:var(--primary)">${esc(b.profiles?.email || "")}</a>`, b.bet_selections[0]?.count,
-        M(b.stake), b.total_odd, M(b.potential), badge(b.status), RS.date(b.created_at)]), "Nenhum bilhete.");
+        M(b.stake), b.total_odd, M(b.potential), badge(b.status), RS.date(b.created_at), `<button class="btn sm" data-bv="${b.id}">Abrir</button>`]), "Nenhum bilhete.");
+    }
+    const MKN = { "1x2": "Resultado Final", dc: "Chance Dupla", ou15: "Gols 1,5", ou25: "Gols 2,5", ou35: "Gols 3,5", btts: "Ambas Marcam", dnb: "Empate Anula", bb: "Criar Aposta" };
+    const PICK = { draw: "Empate", over: "Mais", under: "Menos", yes: "Sim", no: "Não", "1x": "Casa ou empate", "12": "Casa ou fora", x2: "Empate ou fora" };
+    const pickName = (mk, p, m) => mk === "bb"
+      ? p.split("|").map((l) => { const [k, v] = l.split(":"); return `${MKN[k] || k}: ${pickName(k, v, m)}`; }).join(" + ")
+      : p === "home" ? m.home : p === "away" ? m.away : PICK[p] || p;
+    const SEL = [["pending", "Pendente"], ["won", "Ganhou"], ["lost", "Perdeu"], ["canceled", "Devolvida (odd 1)"]];
+    async function openBet(id) {
+      const { data: b, error } = await sb.from("bets").select("*, profiles(email), bet_selections(*, matches(home, away, league, status, score_home, score_away, result, starts_at))").eq("id", id).single();
+      if (error || !b) { RS.toast("Bilhete não encontrado", "error"); return; }
+      const sels = b.bet_selections.sort((x, y) => x.id - y.id), edit = manage && b.status !== "cashout";
+      const m = RS.modal(`<h3>Bilhete #${b.id} ${badge(b.status)}</h3>
+        <p class="muted">${esc(b.profiles?.email || "")} · ${RS.date(b.created_at)}${b.status === "cashout" ? ` · cash out de ${M(b.cashout_amount)}` : ""}</p>
+        <p>Aposta <b>${M(b.stake)}</b> · Odd <b>${b.total_odd}</b> · Retorno <b>${M(b.potential)}</b></p>
+        <div class="bv-list">${sels.map((s) => { const g = s.matches || {}; return `<div class="bv-sel" style="border:1px solid var(--line,#e3e6ee);border-radius:10px;padding:10px;margin:8px 0">
+          <small class="muted">${esc(g.league || "")} · ${RS.date(g.starts_at)} · ${badge(g.status)}${g.score_home != null ? ` ${g.score_home} x ${g.score_away}` : ""}</small>
+          <div><b>${esc(g.home || "")} x ${esc(g.away || "")}</b></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px">
+            <span>${MKN[s.market] || s.market}: <b>${esc(pickName(s.market, s.pick, g))}</b> @ <b>${s.odd}</b></span>
+            ${edit ? `<select class="input" data-sel="${s.id}" data-odd="${s.odd}" data-was="${s.status}" style="width:auto">${SEL.map(([v, t]) => `<option value="${v}" ${v === s.status ? "selected" : ""}>${t}</option>`).join("")}</select>` : badge(s.status === "canceled" ? "canceled" : s.status, s.status === "canceled" ? "Devolvida" : null)}
+          </div></div>`; }).join("")}</div>
+        ${edit ? `<p id="bv-prev" class="muted" style="margin:10px 0"></p>
+          <form id="bv-f"><label>Motivo (fica na auditoria e o jogador recebe aviso)<textarea class="input" name="r" rows="2" required></textarea></label>
+          <button class="btn btn-primary w-full" id="bv-save" disabled>Salvar correção</button></form>` : ""}`);
+      if (!edit) return;
+      const paid = b.status === "won" ? +b.potential : b.status === "canceled" ? +b.stake : 0;
+      const calc = () => {
+        const st = RS.$$("[data-sel]", m).map((x) => [x.value, +x.dataset.odd]);
+        const live = st.filter(([v]) => v !== "canceled");
+        const odd = live.reduce((a, [, o]) => a * o, 1), pot = live.length ? Math.round(b.stake * odd * 100) / 100 : +b.stake;
+        const status = !live.length ? "canceled" : st.some(([v]) => v === "lost") ? "lost" : st.some(([v]) => v === "pending") ? "pending" : "won";
+        const now = status === "won" ? pot : status === "canceled" ? +b.stake : 0, diff = Math.round((now - paid) * 100) / 100;
+        RS.$("#bv-prev", m).innerHTML = `Novo: ${badge(status)} · Odd <b>${odd.toFixed(2)}</b> · Retorno <b>${M(pot)}</b> · Saldo do jogador: <b class="${diff < 0 ? "neg" : ""}">${diff > 0 ? "+" : ""}${M(diff)}</b>`;
+        RS.$("#bv-save", m).disabled = !RS.$$("[data-sel]", m).some((x) => x.value !== x.dataset.was);
+      };
+      m.addEventListener("change", (e) => { if (e.target.dataset.sel) calc(); });
+      calc();
+      RS.$("#bv-f", m).onsubmit = async (e) => {
+        e.preventDefault();
+        const changes = RS.$$("[data-sel]", m).filter((x) => x.value !== x.dataset.was).map((x) => ({ id: +x.dataset.sel, status: x.value }));
+        if (!changes.length || !confirm("Salvar a correção? O saldo do jogador será ajustado agora.")) return;
+        RS.$("#bv-save", m).disabled = true;
+        if (await act("admin_bet_edit", { p_bet: b.id, p_changes: changes, p_reason: e.target.r.value }, "Bilhete corrigido")) { m.remove(); bets(); }
+        else RS.$("#bv-save", m).disabled = false;
+      };
     }
     RS.$("#sp-tabs").onclick = (e) => {
       const b = e.target.closest("[data-v]");
@@ -312,6 +357,8 @@
       if (b && await act("admin_match_set", { p_match: +b.dataset.lock, p_locked: b.dataset.v === "1" }, "Atualizado")) exposure();
     };
     RS.$("#sp-bets").onclick = async (e) => {
+      const bv = e.target.closest("[data-bv]");
+      if (bv) return openBet(+bv.dataset.bv);
       if (e.target.id !== "b-cancel") return;
       const ids = RS.$$("[data-bc]:checked").map((x) => +x.dataset.bc);
       if (!ids.length) { RS.toast("Marque os bilhetes", "error"); return; }
