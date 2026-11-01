@@ -25,8 +25,31 @@ function marginMarkets(mk: Markets | null | undefined, marginPct: number): Marke
   }));
 }
 
+// escudos: copiados da API para o Storage do site (bucket público "logos"); o site nunca carrega a imagem da API direto
+const LOGO_RE = /^https:\/\/media\.api-sports\.io\/football\/(teams|leagues)\/(\d+)\.png$/;
+const mirrored = new Set<string>();
+// deno-lint-ignore no-explicit-any
+async function mirrorLogo(sb: any, url?: string | null): Promise<string | null> {
+  if (!url) return null;
+  const m = url.match(LOGO_RE);
+  if (!m) return url;
+  const path = `${m[1]}/${m[2]}.png`;
+  const pub = sb.storage.from("logos").getPublicUrl(path).data.publicUrl as string;
+  if (mirrored.has(path)) return pub;
+  const head = await fetch(pub, { method: "HEAD" }).catch(() => null);
+  if (head?.ok) { mirrored.add(path); return pub; }
+  try {
+    const img = await fetch(url);
+    if (!img.ok) return url;
+    const { error } = await sb.storage.from("logos").upload(path, await img.arrayBuffer(), { contentType: "image/png", upsert: true });
+    if (error) return url;
+    mirrored.add(path);
+    return pub;
+  } catch { return url; }
+}
+
 type Started = { id: number; external_id: string; home: string; away: string; score_home: number | null; score_away: number | null; suspended_until: string | null;
-  odd_home: number | null; odd_draw: number | null; odd_away: number | null };
+  odd_home: number | null; odd_draw: number | null; odd_away: number | null; home_logo?: string | null };
 // odd que salta de uma leitura para a outra costuma ser lance (gol, pênalti, expulsão) antes de o placar chegar
 const JUMP_LOCK_MS = 45_000;
 const oddsJump = (m: Started, o: { home?: number | null; draw?: number | null; away?: number | null }, pct: number) =>
@@ -55,7 +78,7 @@ Deno.serve(async (req) => {
   if (feed.prefix && !only) await sb.rpc("sync_orphan_matches", { p_prefix: feed.prefix });
 
   // jogos já iniciados e ainda não liquidados (ao vivo)
-  const { data: started } = await sb.from("matches").select("id, external_id, home, away, score_home, score_away, suspended_until, odd_home, odd_draw, odd_away")
+  const { data: started } = await sb.from("matches").select("id, external_id, home, away, score_home, score_away, suspended_until, odd_home, odd_draw, odd_away, home_logo")
     .in("status", ["open", "live"]).lt("starts_at", new Date().toISOString()).not("external_id", "is", null);
   const startedBySport = new Map<string, Started[]>();
   const sportOf = (ext: string) => {
@@ -102,7 +125,7 @@ Deno.serve(async (req) => {
         if (u.home != null && u.away != null) { patch.score_home = u.home; patch.score_away = u.away; }
         if (!u.completed && !u.cancelled) patch.status = "live";
         if (u.minute != null) patch.minute = u.minute;
-        if (u.home_logo) { patch.home_logo = u.home_logo; patch.away_logo = u.away_logo ?? null; patch.league_logo = u.league_logo ?? null; }
+        if (u.home_logo && !m.home_logo?.includes("/storage/v1/object/public/logos/")) { patch.home_logo = await mirrorLogo(sb, u.home_logo); patch.away_logo = await mirrorLogo(sb, u.away_logo); patch.league_logo = await mirrorLogo(sb, u.league_logo); }
         // uma suspensão nova nunca encurta a que já está valendo (ex.: 90 s do gol)
         const lockedUntil = Date.parse(m.suspended_until ?? "") || 0;
         let jumped = false;
@@ -181,7 +204,7 @@ Deno.serve(async (req) => {
           starts_at: ev.commence_time, odd_home: odds.home, odd_draw: odds.draw, odd_away: odds.away,
           status: isLive ? "live" : "open",
           ...(ev.markets !== undefined ? { markets: marginMarkets(ev.markets, margin(isLive ? "odds_margin_live" : "odds_margin_pre")) } : {}),
-          ...(ev.home_logo ? { home_logo: ev.home_logo, away_logo: ev.away_logo ?? null, league_logo: ev.league_logo ?? null } : {}),
+          ...(ev.home_logo ? { home_logo: await mirrorLogo(sb, ev.home_logo), away_logo: await mirrorLogo(sb, ev.away_logo), league_logo: await mirrorLogo(sb, ev.league_logo) } : {}),
           synced_at: new Date().toISOString(),
         };
         priced.add(row.external_id);
