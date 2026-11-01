@@ -1,0 +1,102 @@
+/* Leão da Sorte — slot 3x3 próprio da Real Sports */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+button { cursor: pointer; font-family: inherit; }
+.hidden { display: none !important; }
+body.lz {
+  font-family: Roboto, system-ui, sans-serif; color: #fff; min-height: 100dvh; overflow: hidden;
+  display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+  background:
+    radial-gradient(60% 35% at 50% 18%, rgba(255, 200, 60, .35), transparent 70%),
+    radial-gradient(120% 75% at 50% 0%, #d4141c 0%, #8a0710 48%, #340105 100%);
+}
+body.lz::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .14;
+  background: repeating-conic-gradient(from 0deg at 50% 22%, #ffd76a 0 6deg, transparent 6deg 18deg);
+}
+body.roar::before { opacity: .35; animation: lzSpinBg 6s linear infinite; }
+.lz-top { display: flex; align-items: center; padding: calc(env(safe-area-inset-top) + 8px) 12px 2px; position: relative; z-index: 1; }
+.lz-back { color: #ffd76a; text-decoration: none; font-size: 22px; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: rgba(0, 0, 0, .3); }
+.lz-top b { flex: 1; text-align: center; margin-right: 38px; font: 900 12px 'Roboto Condensed', sans-serif; letter-spacing: 2px; color: rgba(255, 230, 160, .8); }
+
+.lz-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 0 14px; position: relative; z-index: 1; }
+.lz-hero { display: flex; align-items: center; gap: 10px; }
+.lz-lion { font-size: clamp(50px, 9dvh, 76px); line-height: 1; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .45)); animation: lzBob 3s ease-in-out infinite; }
+.roar .lz-lion { animation: lzRoar .45s ease-in-out infinite; }
+.lz-sign { display: flex; flex-direction: column; font: 900 clamp(28px, 5dvh, 40px)/.9 'Roboto Condensed', sans-serif;
+  background: linear-gradient(#fff7c8, #f7c42b 55%, #b57800); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 0 #5a0000) drop-shadow(0 4px 8px rgba(0, 0, 0, .4)); }
+.lz-sign span { font-size: .55em; letter-spacing: 3px; }
+.lz-msg { font: 700 14px Roboto, sans-serif; color: #ffe9a8; min-height: 18px; text-align: center; text-shadow: 0 1px 2px rgba(0, 0, 0, .5); }
+
+.lz-frame { position: relative; width: min(92vw, 400px, 50dvh); aspect-ratio: 1; padding: 10px; border-radius: 24px;
+  background: linear-gradient(145deg, #fff0a8, #d4950f 35%, #ffe48a 55%, #9c6400);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .55), inset 0 0 0 3px #7a4500; }
+.lz-reels { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 6px; height: 100%;
+  background: linear-gradient(#5a0409, #2c0104); border-radius: 15px; padding: 6px; box-shadow: inset 0 4px 14px rgba(0, 0, 0, .7); }
+.lz-cell { display: grid; place-items: center; position: relative; border-radius: 12px; overflow: hidden;
+  background: radial-gradient(circle at 50% 32%, #fffaf0, #f4dcab 68%, #d8a659); box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .18), inset 0 2px 0 #fff; transition: opacity .2s; }
+.lz-cell i { font-style: normal; font-size: clamp(32px, 10.5vw, 58px); line-height: 1; display: grid; place-items: center; width: 78%; height: 78%; }
+.lz-cell i svg { width: 100%; height: auto; }
+.lz-cell em { position: absolute; bottom: 4px; font: 900 10px 'Roboto Condensed', sans-serif; font-style: normal; letter-spacing: 1px;
+  color: #fff; background: linear-gradient(#ff3b30, #b0000c); padding: 1px 7px; border-radius: 6px; box-shadow: 0 1px 0 #600; }
+.lz-cell.s-W { background: radial-gradient(circle at 50% 32%, #fff6b8, #f6b91d 65%, #c27c00); }
+.lz-cell.blur i { filter: blur(2.5px); transform: translateY(8px) scaleY(1.15); opacity: .85; }
+.lz-cell.land i { animation: lzLand .28s ease-out; }
+.lz-cell.lock { box-shadow: 0 0 0 3px #ffd84a, 0 0 18px #ffcc00, inset 0 -4px 0 rgba(0, 0, 0, .18); }
+.lz-cell.win { animation: lzPulse .55s ease-in-out infinite alternate; box-shadow: 0 0 0 3px #fff36b, 0 0 20px #ffde00; z-index: 1; }
+.lz-cell.dim { opacity: .4; }
+.lz-lines { position: absolute; inset: 16px; width: calc(100% - 32px); height: calc(100% - 32px); pointer-events: none; z-index: 2; }
+.lz-lines polyline { fill: none; stroke: #fff36b; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; opacity: .85;
+  filter: drop-shadow(0 0 4px #ff9d00); stroke-dasharray: 600; stroke-dashoffset: 600; animation: lzDraw .45s ease-out forwards; }
+
+.lz-win { text-align: center; min-height: 46px; }
+.lz-win small { display: block; font: 700 11px Roboto, sans-serif; color: #ffd76a; letter-spacing: 3px; }
+.lz-win b { font: 900 26px 'Roboto Condensed', sans-serif; text-shadow: 0 2px 0 #7a0000; }
+.lz-win.pop b { animation: lzPop .4s ease-out; color: #fff36b; }
+
+.lz-ctrl { position: relative; z-index: 1; padding: 6px 14px calc(env(safe-area-inset-bottom) + 12px); background: linear-gradient(transparent, rgba(0, 0, 0, .5) 35%); }
+.lz-row { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.lz-sm { width: 50px; height: 50px; border-radius: 50%; border: 2px solid rgba(255, 215, 106, .65); background: rgba(0, 0, 0, .35);
+  color: #ffd76a; font-size: 18px; line-height: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.lz-sm small { font: 900 8px 'Roboto Condensed', sans-serif; letter-spacing: .5px; }
+.lz-sm.on { background: #ffd76a; color: #7a0a0a; }
+.lz-pm { width: 44px; height: 44px; border-radius: 50%; border: none; background: linear-gradient(#ffe48a, #c88a10); color: #5a0000; font: 900 26px/1 Roboto, sans-serif; box-shadow: 0 3px 0 #7a4500; }
+.lz-pm:active { transform: translateY(2px); box-shadow: 0 1px 0 #7a4500; }
+.lz-pm:disabled { opacity: .45; }
+.lz-spin { width: 88px; height: 88px; border-radius: 50%; border: 4px solid #ffe48a; color: #fff; font-size: 44px; line-height: 1;
+  background: radial-gradient(circle at 50% 32%, #ff6a3c, #c40d16 58%, #7a0008); box-shadow: 0 6px 0 #5a0000, 0 10px 24px rgba(0, 0, 0, .5); }
+.lz-spin span { display: inline-block; }
+.lz-spin:active { transform: translateY(3px); box-shadow: 0 3px 0 #5a0000; }
+.lz-spin.busy span { animation: lzRot .6s linear infinite; }
+.lz-spin.auto { border-color: #fff36b; }
+.lz-row2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px; font: 500 13px Roboto, sans-serif; color: #ffe2b0; }
+.lz-row2 b { color: #fff; font-weight: 900; }
+.lz-row2 button { background: none; border: 1px solid rgba(255, 215, 106, .6); color: #ffd76a; border-radius: 20px; padding: 5px 12px; font: 700 12px Roboto, sans-serif; }
+
+.lz-over { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; text-align: center; background: rgba(40, 0, 0, .78); animation: lzFade .25s; }
+.lz-big small { display: block; font: 900 30px 'Roboto Condensed', sans-serif; letter-spacing: 2px;
+  background: linear-gradient(#fff7c8, #f7c42b 55%, #b57800); -webkit-background-clip: text; background-clip: text; color: transparent; animation: lzPulse .5s infinite alternate; }
+.lz-big b { display: block; margin-top: 8px; font: 900 46px 'Roboto Condensed', sans-serif; text-shadow: 0 3px 0 #a00, 0 0 24px #ffb700; }
+.lz-feat span { display: block; font-size: 96px; animation: lzRoar .4s infinite; }
+.lz-feat b { display: block; font: 900 32px 'Roboto Condensed', sans-serif; color: #ffd76a; text-shadow: 0 3px 0 #7a0000; }
+.lz-feat small { display: block; max-width: 280px; margin: 8px auto 0; font: 500 14px Roboto, sans-serif; }
+.lz-paybox { width: min(92vw, 400px); max-height: 82dvh; overflow: auto; text-align: left; border-radius: 18px; padding: 18px;
+  background: linear-gradient(#7a0710, #3a0206); border: 2px solid #d4950f; }
+.lz-paybox h3 { font: 900 20px 'Roboto Condensed', sans-serif; color: #ffd76a; margin-bottom: 10px; }
+.lz-paybox p { font-size: 13px; color: #ffe2b0; margin: 8px 0; line-height: 1.4; }
+.lz-paygrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.lz-paygrid div { display: flex; align-items: center; gap: 8px; background: rgba(0, 0, 0, .25); border-radius: 10px; padding: 6px 8px; font: 700 13px Roboto, sans-serif; }
+.lz-paygrid i { font-style: normal; font-size: 26px; width: 34px; display: grid; place-items: center; }
+.lz-paygrid i svg { width: 32px; }
+.lz-paybox button { margin-top: 12px; width: 100%; border: none; border-radius: 12px; padding: 12px; font: 900 15px Roboto, sans-serif; color: #5a0000; background: linear-gradient(#ffe48a, #c88a10); }
+
+@keyframes lzBob { 50% { transform: translateY(-6px) rotate(-3deg); } }
+@keyframes lzRoar { 0%, 100% { transform: scale(1) rotate(0); } 50% { transform: scale(1.18) rotate(-6deg); } }
+@keyframes lzLand { 0% { transform: translateY(-14px); } 70% { transform: translateY(4px); } 100% { transform: none; } }
+@keyframes lzPulse { to { transform: scale(1.07); } }
+@keyframes lzPop { 0% { transform: scale(.6); } 70% { transform: scale(1.2); } 100% { transform: none; } }
+@keyframes lzRot { to { transform: rotate(360deg); } }
+@keyframes lzFade { from { opacity: 0; } }
+@keyframes lzDraw { to { stroke-dashoffset: 0; } }
+@keyframes lzSpinBg { to { transform: rotate(360deg); } }

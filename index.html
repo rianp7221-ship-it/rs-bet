@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#ff4d00">
   <title>REAL SPORTS — Apostas Esportivas e Cassino</title>
-  <meta name="description" content="Aposte nos principais jogos de futebol, basquete e tênis, e jogue Mines e Dados no cassino REAL SPORTS.">
+  <meta name="description" content="Aposte nos principais jogos de futebol, basquete e tênis, e jogue Leão da Sorte, Mines e Dados no cassino REAL SPORTS.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@700;900&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="auth-style.css">
@@ -55,6 +55,7 @@
         </div>
         <div class="hscroll feat" id="feat-cards"></div>
         <div class="casino-strip" id="casino-strip">
+          <a class="cs-tile cs-leao" href="leao.html" data-game="leao"><i>🦁</i>Leão da Sorte<small>Cassino</small></a>
           <a class="cs-tile cs-mines" href="#casino" data-game="mines-card"><i>💎</i>Mines<small>Cassino</small></a>
           <a class="cs-tile cs-dice" href="#casino" data-game="dice"><i>🎲</i>Dados<small>Cassino</small></a>
           <a class="cs-tile cs-live" href="#sports" data-view="live"><i>🔴</i>Ao vivo<small>Esportes</small></a>
@@ -76,10 +77,11 @@
         <div class="casino-hero">
           <div><small>Cassino</small><h1>Jogos <span>originais</span></h1><p>Escolha um jogo para começar.</p></div>
         </div>
-        <div class="cat-chips" id="cat-chips"><button class="active" data-cat="all">Todos</button><button data-cat="orig">Originais</button><button data-cat="rtp">Alto RTP</button><button data-cat="fast">Rápidos</button></div>
+        <div class="cat-chips" id="cat-chips"><button class="active" data-cat="all">Todos</button><button data-cat="orig">Originais</button><button data-cat="slots">Slots</button><button data-cat="rtp">Alto RTP</button><button data-cat="fast">Rápidos</button></div>
         <div id="recent-wrap" class="hidden"><h2 class="section-title">Continuar jogando</h2><div class="game-tiles" id="recent-tiles"></div></div>
         <h2 class="section-title">Jogos em destaque</h2>
         <div class="game-tiles">
+          <a class="tile t-leao" href="leao.html" data-game="leao" data-cat="orig slots"><i>🦁</i><b>Leão da Sorte</b><small>Slot 3x3 · até 2.500x</small></a>
           <a class="tile t-mines" href="#casino" data-game="mines-card" data-cat="orig rtp"><i>💎</i><b>Mines</b><small>Até 24 minas</small></a>
           <a class="tile t-dice" href="#casino" data-game="dice" data-cat="orig rtp fast"><i>🎲</i><b>Dados</b><small>Escolha sua chance</small></a>
         </div>
@@ -186,7 +188,7 @@
     <div class="foot-cols">
       <div><a href="index.html" class="logo">Real<span>Sports</span></a><p class="muted small">Apostas esportivas e cassino online.</p></div>
       <div><h5>Esportes</h5><a href="#sports" data-view="all">Todos os jogos</a><a href="#sports" data-view="live">Ao vivo</a><a href="#sports" data-view="week">Calendário</a></div>
-      <div><h5>Cassino</h5><a href="#casino" data-game="mines-card">Mines</a><a href="#casino" data-game="dice">Dados</a></div>
+      <div><h5>Cassino</h5><a href="leao.html" data-game="leao">Leão da Sorte</a><a href="#casino" data-game="mines-card">Mines</a><a href="#casino" data-game="dice">Dados</a></div>
       <div><h5>Minha conta</h5><a href="#history">Minhas apostas</a><a href="login.html">Entrar / Cadastrar</a><a href="#" data-act="support">Suporte</a><a href="/app/realsports.apk" download data-app-link>Baixar app Android</a></div>
     </div>
     <p class="foot-legal"><b>+18</b> Jogue com responsabilidade. Apostas envolvem risco de perda financeira. Proibido para menores de 18 anos.</p>
