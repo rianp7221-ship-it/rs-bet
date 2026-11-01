@@ -55,7 +55,7 @@
         ${sels.map((s) => `<div class="bc-sel">
           <div class="bc-l1">${RS.icon("ball")}<b>${RS.esc(selName(s))}</b><span>${Number(s.odd).toFixed(2)}</span></div>
           <div class="bc-mk">${s.market === "bb" ? legs(s) : MNAME[s.market || "1x2"] || RS.esc(s.market)}</div>
-          <div class="bc-l3"><span>${RS.esc(s.matches.home)} - ${RS.esc(s.matches.away)}</span><span>${selState(s)}</span></div></div>`).join("")}
+          <div class="bc-l3"><span>${RS.esc(s.matches.home)} - ${RS.esc(s.matches.away)}</span><span data-st="${s.match_id}">${selState(s)}</span></div></div>`).join("")}
         <div class="bc-row"><span>Aposta</span><b>${RS.money(b.stake)}</b></div>
         <div class="bc-row bc-win"><span>${wl}</span><b>${RS.money(wv)}</b></div>
         ${b.status === "pending" ? `<div class="cashout-box" data-co="${b.id}"><small class="muted">Calculando cash out…</small></div>` : ""}
@@ -113,8 +113,22 @@
   // Cashout: cotado no servidor pelas odds atuais; suspenso em gol, odd mexendo ou dados atrasados
   let cashing = false;
   const lastCo = new Map();
+  // minuto, placar e status dos jogos do bilhete sem recarregar a página
+  async function refreshLive() {
+    const ids = [...new Set(bets.filter((b) => b.status === "pending").flatMap((b) => b.bet_selections.map((s) => s.match_id)))];
+    if (!ids.length) return;
+    const { data } = await sb.from("matches").select("id, status, starts_at, score_home, score_away, minute").in("id", ids);
+    const byId = new Map((data || []).map((m) => [m.id, m]));
+    for (const b of bets) for (const s of b.bet_selections) { const m = byId.get(s.match_id); if (m) Object.assign(s.matches, m); }
+    for (const el of RS.$$("[data-st]", box)) {
+      const b = bets.find((x) => x.id === Number(el.closest("[data-bet]")?.dataset.bet));
+      const s = b?.bet_selections.find((x) => x.match_id === Number(el.dataset.st));
+      if (s) el.innerHTML = selState(s);
+    }
+  }
   async function loadCashouts() {
     if (cashing) return;
+    await refreshLive();
     for (const el of RS.$$("[data-co]", box)) {
       const id = Number(el.dataset.co);
       const { data: q } = await sb.rpc("cashout_quote", { p_bet: id });
@@ -184,6 +198,7 @@
   sb.channel("hist-odds").on("postgres_changes", { event: "UPDATE", schema: "public", table: "matches" },
     () => { clearTimeout(pend); pend = setTimeout(() => { if (showingBets()) loadCashouts(); }, 300); }).subscribe();
   setInterval(() => { if (showingBets() && !document.hidden) loadCashouts(); }, 5000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && showingBets()) load(); });
 
   RS.$$("[data-hist]").forEach((b) => (b.onclick = () => {
     kind = b.dataset.hist;
