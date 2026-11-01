@@ -5,6 +5,9 @@
   const list = RS.$("#matches"), slipEl = RS.$("#slip"), box = RS.$("#slip-box");
   if (!list) return;
   const MAX = 12;
+  // texto do botão enquanto uma aposta está em andamento; impede um segundo pedido
+  // quando a lista é redesenhada durante a espera do ao vivo
+  let placing = "";
   const PICK = { home: "1", draw: "X", away: "2" };
   const CODE = { home: "h", draw: "d", away: "a" }, UNCODE = { h: "home", d: "draw", a: "away" };
   const MK = {
@@ -363,8 +366,8 @@
       <div class="quick"><button data-stake="10">+10</button><button data-stake="50">+50</button><button data-stake="200">+200</button><button data-stake="max">MÁX</button></div>
       <div class="keypad">${KP.map((k) => `<button data-kp="${k}">${k === "del" ? "⌫" : k}</button>`).join("")}</div>
       ${sys || (!multi && n > 1) ? `<div class="slip-total"><span>Total apostado</span><b id="slip-total"></b></div>` : ""}
-      <button class="btn btn-green w-full" id="place" ${anySusp ? "disabled" : ""}>
-        <b>${anySusp ? "Seleção suspensa" : `Apostar agora <span id="pl-stake"></span>`}</b>
+      <button class="btn btn-green w-full" id="place" ${anySusp || placing ? "disabled" : ""}>
+        <b>${placing || (anySusp ? "Seleção suspensa" : `Apostar agora <span id="pl-stake"></span>`)}</b>
         <small>Ganhos potenciais <span id="slip-return"></span></small></button>`;
 
     const stake = RS.$("#stake");
@@ -400,12 +403,14 @@
     RS.$("#place").onclick = () => place(multi, sys ? sysK : 0);
   }
 
+  const btnTxt = (t) => { placing = t; const b = RS.$("#place"); if (b) { b.disabled = true; b.innerHTML = `<b>${t}</b>`; } };
+
   async function place(multi, k = 0) {
+    if (placing) return;
     if (!(await RS.user())) { location.href = "login.html"; return; }
-    const btn = RS.$("#place");
     const stake = num(RS.$("#stake").value);
     if (!(stake > 0)) { RS.toast("Digite o valor da aposta.", "error"); return; }
-    btn.disabled = true;
+    btnTxt("Enviando aposta…");
     const sel = [...slip.entries()].map(([match_id, s]) => ({ match_id, market: s.market, pick: s.pick }));
     const groups = k ? kComb(sel, k) : multi ? [sel] : sel.map((s) => [s]);
     const ok = [];
@@ -415,8 +420,8 @@
         const r = await RS.rpc("place_bet_request", { p_selections: g, p_stake: stake });
         let id = r.bet;
         if (id == null) {
-          for (let s = r.wait; s > 0; s--) { btn.innerHTML = `<b>Confirmando aposta… ${s}s</b>`; await new Promise((res) => setTimeout(res, 1000)); }
-          btn.innerHTML = "<b>Conferindo o jogo…</b>";
+          for (let s = r.wait; s > 0; s--) { btnTxt(`Confirmando aposta… ${s}s`); await new Promise((res) => setTimeout(res, 1000)); }
+          btnTxt("Conferindo o jogo…");
           id = await RS.rpc("place_bet_confirm", { p_request: r.request });
           if (id == null) throw new Error((await RS.rpc("place_bet_reason", { p_request: r.request })) || "Aposta recusada");
         }
@@ -429,6 +434,7 @@
     } catch (e) {
       RS.toast((ok.length ? `${ok.length} aposta(s) feita(s). ` : "") + e.message, "error");
     }
+    placing = "";
     RS.refreshBalance();
     render(); renderSlip(); persist();
   }
