@@ -44,14 +44,21 @@
         });
         if (error) throw error;
         if (data.session) location.href = "index.html";
-        else RS.toast("Conta criada! Confirme pelo link enviado ao seu email.", "ok");
+        else RS.toast("Conta criada! Faça login para entrar.", "ok");
       } else {
         const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + "/login.html" });
         if (error) throw error;
         RS.toast("Enviamos um link para seu email.", "ok");
       }
     } catch (err) {
-      RS.toast(RS.err(err) === "Invalid login credentials" ? "Email ou senha incorretos" : RS.err(err), "error");
+      const m = RS.err(err);
+      const pt = {
+        "Invalid login credentials": "Email ou senha incorretos",
+        "User already registered": "Este email já tem conta. Faça login.",
+        "email rate limit exceeded": "Muitas tentativas. Aguarde alguns minutos e tente de novo.",
+        "Unable to validate email address: invalid format": "Email inválido",
+      };
+      RS.toast(pt[m] || (/rate limit|security purposes/i.test(m) ? pt["email rate limit exceeded"] : m), "error");
     } finally {
       submit.disabled = false;
     }
