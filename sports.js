@@ -407,7 +407,16 @@
     const ok = [];
     try {
       for (const g of groups) {
-        ok.push(await RS.rpc("place_bet", { p_selections: g, p_stake: stake }));
+        // ao vivo: o servidor espera alguns segundos e confere o jogo de novo antes de aceitar
+        const r = await RS.rpc("place_bet_request", { p_selections: g, p_stake: stake });
+        let id = r.bet;
+        if (id == null) {
+          for (let s = r.wait; s > 0; s--) { btn.innerHTML = `<b>Confirmando aposta… ${s}s</b>`; await new Promise((res) => setTimeout(res, 1000)); }
+          btn.innerHTML = "<b>Conferindo o jogo…</b>";
+          id = await RS.rpc("place_bet_confirm", { p_request: r.request });
+          if (id == null) throw new Error((await RS.rpc("place_bet_reason", { p_request: r.request })) || "Aposta recusada");
+        }
+        ok.push(id);
         if (!k) g.forEach((s) => slip.delete(s.match_id));
       }
       if (k) slip.clear();
