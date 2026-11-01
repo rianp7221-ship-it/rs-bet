@@ -115,7 +115,7 @@
       const { data } = await sb.from("casino_games").select("id,game,stake,mines,multiplier,payout,status,created_at")
         .eq("user_id", u.id).order("created_at", { ascending: false }).limit(50);
       box.innerHTML = data?.length ? `<table class="table"><thead><tr><th>Jogo</th><th>Data</th><th>Aposta</th><th>Mult.</th><th>Prêmio</th><th></th></tr></thead><tbody>
-        ${data.map((g) => `<tr><td>${g.game === "mines" ? `Mines (${g.mines})` : "Dados"}</td><td>${RS.date(g.created_at)}</td>
+        ${data.map((g) => `<tr><td>${g.game === "mines" ? `Mines (${g.mines})` : g.game === "leao" ? "Leão da Sorte" : "Dados"}</td><td>${RS.date(g.created_at)}</td>
         <td>${RS.money(g.stake)}</td><td>${Number(g.multiplier).toFixed(2)}x</td><td>${RS.money(g.payout)}</td><td>${badge(g.status)}</td></tr>`).join("")}
         </tbody></table>` : `<p class="muted">Nenhuma partida de cassino ainda.</p>`;
     }

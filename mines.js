@@ -8,7 +8,7 @@
   lobby.then((l) => {
     if (!l) return;
     const on = new Set(l.map((g) => g.id));
-    [["mines", "mines-card"], ["dice", "dice"]].forEach(([id, el]) =>
+    [["mines", "mines-card"], ["dice", "dice"], ["leao", "leao"]].forEach(([id, el]) =>
       RS.$$(`#${el}, [data-game="${el}"]`).forEach((n) => { n.style.display = on.has(id) ? "" : "none"; }));
     if (!l.length) RS.$(".casino-grid")?.insertAdjacentHTML("beforebegin", `<p class="muted" style="margin:12px 0">O cassino está temporariamente indisponível.</p>`);
   });

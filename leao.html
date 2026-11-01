@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#8a0710">
+  <title>Leão da Sorte — REAL SPORTS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Condensed:wght@700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="leao.css">
+  <link rel="icon" type="image/png" href="/icons/favicon.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+</head>
+<body class="lz">
+  <header class="lz-top">
+    <a href="index.html#casino" class="lz-back" aria-label="Voltar ao cassino">←</a>
+    <b>REAL SPORTS · CASSINO</b>
+  </header>
+  <main class="lz-stage">
+    <div class="lz-hero"><span class="lz-lion" id="lz-lion">🦁</span><div class="lz-sign">LEÃO<span>DA SORTE</span></div></div>
+    <div class="lz-msg" id="lz-msg">Toque em girar e boa sorte!</div>
+    <div class="lz-frame">
+      <div class="lz-reels" id="lz-reels"></div>
+      <svg class="lz-lines" id="lz-lines" viewBox="0 0 300 300" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="lz-win"><small>GANHO</small><b id="lz-winv">R$ 0,00</b></div>
+  </main>
+  <footer class="lz-ctrl">
+    <div class="lz-row">
+      <button class="lz-sm" id="lz-turbo" aria-label="Turbo">⚡<small>TURBO</small></button>
+      <button class="lz-pm" id="lz-minus" aria-label="Diminuir aposta">−</button>
+      <button class="lz-spin" id="lz-spin" aria-label="Girar"><span>⟳</span></button>
+      <button class="lz-pm" id="lz-plus" aria-label="Aumentar aposta">+</button>
+      <button class="lz-sm" id="lz-auto" aria-label="Giro automático">↻<small>AUTO</small></button>
+    </div>
+    <div class="lz-row2">
+      <span>Saldo <b id="lz-bal">—</b></span>
+      <span>Aposta <b id="lz-betv">—</b></span>
+      <button id="lz-info">Prêmios</button>
+    </div>
+  </footer>
+  <div class="lz-over hidden" id="lz-big"><div class="lz-big"><small id="lz-bigt">GRANDE GANHO</small><b id="lz-bigv"></b></div></div>
+  <div class="lz-over hidden" id="lz-feat"><div class="lz-feat"><span>🦁</span><b>RUGIDO DO LEÃO!</b><small>Os símbolos sorteados ficam presos e o resto gira até formar prêmio. Tela cheia paga 10x!</small></div></div>
+  <div class="lz-over hidden" id="lz-pay"><div class="lz-paybox" id="lz-paybox"></div></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
+  <script src="rs-base.js"></script>
+  <script src="leao.js"></script>
+</body>
+</html>

@@ -100,6 +100,7 @@ label.check { display: flex; gap: 8px; align-items: center; margin-bottom: 14px;
 .cs-tile { aspect-ratio: 1 / 1; border-radius: 10px; color: #fff; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; position: relative; overflow: hidden; font-weight: 700; font-size: 13px; }
 .cs-tile i { position: absolute; top: 6px; right: 8px; font-style: normal; font-size: 44px; }
 .cs-tile small { font-weight: 400; opacity: .85; font-size: 11px; }
+.cs-leao { background: radial-gradient(circle at 70% 20%, #ffd24a, #c40d16 55%, #5a0208); }
 .cs-mines { background: radial-gradient(circle at 70% 20%, #3fd28a, #0b5d48 70%); }
 .cs-dice { background: radial-gradient(circle at 70% 20%, #ff9a3c, #7a2bb0 75%); }
 .cs-live { background: radial-gradient(circle at 70% 20%, #ff5a5a, #3a1450 75%); }
@@ -212,6 +213,7 @@ body.slip-open .overlay, body.menu-open .overlay { display: block; }
 .tile i { position: absolute; top: 8px; right: 10px; font-style: normal; font-size: 54px; }
 .tile b { font-size: 18px; font-weight: 900; text-transform: uppercase; }
 .tile small { opacity: .85; font-size: 12px; }
+.t-leao { background: radial-gradient(circle at 70% 20%, #ffd24a, #c40d16 55%, #5a0208); }
 .t-mines { background: radial-gradient(circle at 70% 20%, #3fd28a, #0b5d48 70%); }
 .t-dice { background: radial-gradient(circle at 70% 20%, #ff9a3c, #7a2bb0 75%); }
 .casino-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }

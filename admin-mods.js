@@ -92,7 +92,7 @@
       if (k === "casino") {
         const { data } = await sb.from("casino_games").select("id,game,stake,mines,multiplier,payout,status,created_at").eq("user_id", id).order("created_at", { ascending: false }).limit(100);
         box.innerHTML = table(["#", "Data", "Jogo", "Aposta", "Mult.", "Prêmio", "Status"], (data || []).map((g) => [g.id, RS.date(g.created_at),
-          g.game === "mines" ? `Mines (${g.mines})` : "Dados", M(g.stake), Number(g.multiplier).toFixed(2) + "x", M(g.payout), badge(g.status)]), "Sem partidas.");
+          g.game === "mines" ? `Mines (${g.mines})` : g.game === "leao" ? "Leão da Sorte" : "Dados", M(g.stake), Number(g.multiplier).toFixed(2) + "x", M(g.payout), badge(g.status)]), "Sem partidas.");
       }
       if (k === "tx") {
         const { data } = await sb.from("transactions").select("*").eq("user_id", id).order("created_at", { ascending: false }).limit(200);
@@ -617,7 +617,7 @@
           `<span class="${g.ggr >= 0 ? "pos" : "neg"}">${M(g.ggr)}</span>`, g.open_rounds]), "Sem jogos.") +
         `<h3 style="margin:16px 0 8px">Maiores prêmios do período</h3>` +
         table(["Quando", "Jogador", "Jogo", "Aposta", "Multiplicador", "Prêmio"], d.big_wins.map((w) => [RS.date(w.created_at),
-          `<a href="#" data-open-user="${w.user_id}" style="color:var(--primary)">${esc(w.email || "")}</a>`, w.game === "mines" ? "Mines" : w.game === "dice" ? "Dados" : esc(w.game),
+          `<a href="#" data-open-user="${w.user_id}" style="color:var(--primary)">${esc(w.email || "")}</a>`, w.game === "mines" ? "Mines" : w.game === "dice" ? "Dados" : w.game === "leao" ? "Leão da Sorte" : esc(w.game),
           M(w.stake), `${(+w.multiplier).toFixed(2)}x`, `<b>${M(w.payout)}</b>`]), "Nenhum prêmio no período.");
       RS.$("#cs-h").onchange = (e) => { hours = +e.target.value; mon(); };
       RS.$("#cs-r").onclick = mon;
