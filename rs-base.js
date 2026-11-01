@@ -50,6 +50,27 @@ const RS = {
   },
   // avisa o cabeçalho para recarregar o saldo
   refreshBalance() { document.dispatchEvent(new Event("rs:balance")); },
+  // troca o conteúdo mexendo só no que mudou: imagens iguais (escudos) não recarregam nem piscam
+  morph(el, html) {
+    const t = document.createElement("template");
+    t.innerHTML = html;
+    const sync = (a, b) => {
+      const an = [...a.childNodes], bn = [...b.childNodes];
+      bn.forEach((n, i) => {
+        const o = an[i];
+        if (!o) a.appendChild(n);
+        else if (o.nodeType !== n.nodeType || o.nodeName !== n.nodeName) a.replaceChild(n, o);
+        else if (o.nodeType === 3 || o.nodeType === 8) { if (o.nodeValue !== n.nodeValue) o.nodeValue = n.nodeValue; }
+        else {
+          [...o.attributes].forEach((x) => { if (!n.hasAttribute(x.name)) o.removeAttribute(x.name); });
+          [...n.attributes].forEach((x) => { if (o.getAttribute(x.name) !== x.value) o.setAttribute(x.name, x.value); });
+          sync(o, n);
+        }
+      });
+      for (let i = an.length - 1; i >= bn.length; i--) an[i].remove();
+    };
+    sync(el, t.content);
+  },
   modal(html) {
     const wrap = document.createElement("div");
     wrap.className = "rs-modal";
