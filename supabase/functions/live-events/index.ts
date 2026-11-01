@@ -38,6 +38,7 @@ Deno.serve(async (req) => {
       if (ev.odds.home) patch.odd_home = ev.odds.home;
       if (ev.odds.draw !== undefined) patch.odd_draw = ev.odds.draw;
       if (ev.odds.away) patch.odd_away = ev.odds.away;
+      patch.odds_at = new Date().toISOString();
     } else { errors.push(`${ev.external_id}: tipo inválido ${ev.type}`); continue; }
     const { data, error } = await sb.from("matches").update(patch)
       .eq("external_id", ev.external_id).in("status", ["open", "live"]).select("id");
