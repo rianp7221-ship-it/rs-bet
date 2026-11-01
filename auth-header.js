@@ -40,6 +40,7 @@
       document.body.classList.toggle("menu-open");
     };
     RS.$("#hdr-search").onclick = search;
+    drawerAcct();
     if (!me) return;
     if (me.blocked) RS.toast("Sua conta está bloqueada. Fale com o suporte.", "error");
     RS.$("#btn-deposit").onclick = () => moneyModal("deposit");
@@ -51,6 +52,37 @@
       sessionStorage.setItem("rs-login-logged", "1");
       sb.rpc("log_login", { p_fingerprint: await fingerprint() });
     }
+  }
+
+  // ---------- menu lateral da conta (celular) ----------
+  function drawerAcct() {
+    document.getElementById("lacct")?.remove();
+    const nav = document.querySelector("#lside .lnav");
+    if (!nav || !me) return;
+    const grp = (ic, t, items) => `<details class="la-grp"><summary>${RS.icon(ic)}<span>${t}</span></summary>
+      ${items.map(([k, l]) => `<button data-la="${k}">${l}</button>`).join("")}</details>`;
+    const d = document.createElement("div");
+    d.id = "lacct";
+    d.className = "lacct";
+    d.innerHTML = `<div class="la-who"><span class="avatar">${RS.esc(initial(me))}</span><div><b>${RS.esc(nameOf(me))}</b><small id="la-bal">${RS.money(me.balance)}</small></div></div>
+      <button class="la-item" data-la="overview">${RS.icon("grid")}<span>Visão Geral</span></button>
+      ${grp("card", "Transações", [["deposit", "Depositar"], ["withdraw", "Sacar"], ["tx", "Histórico de transações"]])}
+      ${grp("clock", "Histórico", [["h:bets", "Apostas esportivas"], ["h:casino", "Cassino"]])}
+      ${grp("user", "Perfil", [["data", "Dados pessoais"], ["security", "Login & Segurança"], ["betcfg", "Configurações de apostas"], ["limits", "Proteção do jogador"], ["kyc", "Processo de verificação"]])}
+      <button class="la-item" data-la="privacy">${RS.icon("lock")}<span>Definições de privacidade</span></button>
+      <button class="la-out" data-la="logout">Sair ${RS.icon("logout")}</button>`;
+    nav.before(d);
+    d.onclick = async (e) => {
+      const a = e.target.closest("[data-la]")?.dataset.la;
+      if (!a) return;
+      document.body.classList.remove("menu-open");
+      if (a === "deposit" || a === "withdraw") moneyModal(a);
+      else if (a.startsWith("h:")) {
+        location.hash = "#history";
+        setTimeout(() => document.querySelector(`[data-hist="${a.slice(2)}"]`)?.click(), 50);
+      } else if (a === "logout") { await sb.auth.signOut(); location.href = "index.html"; }
+      else panel(a);
+    };
   }
 
   // identificador do aparelho (hash de características do navegador) para detectar multi-contas
@@ -143,7 +175,19 @@
   const txRow = (t) => `<div class="mb-item"><div>${RS.esc(t.description || t.type)}<small>${RS.date(t.created_at)} · ${TX_ST[t.status] || t.status}${t.pix_key ? " · PIX " + RS.esc(t.pix_key) : ""}</small>
     ${t.type === "deposit" && t.status === "pending" && t.provider_id && new Date(t.expires_at) > new Date() ? `<button class="btn sm btn-outline" data-ap="pix:${t.id}:${t.amount}">Ver PIX</button>` : ""}</div>
     <b class="${t.amount >= 0 ? "pos" : "neg"}">${RS.money(t.amount)}</b></div>`;
-  const TABS = { overview: ["grid", "Visão geral"], tx: ["card", "Transações"], data: ["user", "Meus dados"], limits: ["lock", "Jogo responsável"], kyc: ["id", "Verificação"], bonus: ["gift", "Bônus"] };
+  const TABS = { overview: ["grid", "Visão geral"], tx: ["card", "Transações"], data: ["user", "Dados pessoais"], security: ["key", "Login & Segurança"],
+    betcfg: ["receipt", "Configurações de apostas"], limits: ["lock", "Proteção do jogador"], kyc: ["id", "Processo de verificação"], bonus: ["gift", "Bônus"], privacy: ["lock", "Privacidade"] };
+  const TX_NAME = { deposit: "Depósito", withdraw: "Saque", bet: "Aposta", win: "Prêmio", cashout: "Cash out", casino_bet: "Aposta cassino", casino_win: "Prêmio cassino", adjust: "Ajuste", bonus: "Bônus" };
+  const txCard = (t) => `<div class="tx-card">
+      <div class="tx-h"><span class="tx-ic ${t.amount >= 0 ? "in" : "out"}">${RS.icon(t.amount >= 0 ? "wallet" : "back")}</span>
+        <div><b>${TX_NAME[t.type] || RS.esc(t.type)}</b><small>${t.type === "deposit" || t.type === "withdraw" ? "Pix" : RS.esc(t.description || "")}</small></div>
+        ${t.status && t.status !== "done" ? `<span class="badge b-${t.status}">${TX_ST[t.status] || t.status}</span>` : ""}</div>
+      <div class="tx-r"><span>ID</span><span>${t.id}<button class="icon-btn" data-copy="${t.id}" aria-label="Copiar ID">${RS.icon("copy")}</button></span></div>
+      <div class="tx-r"><span>Data</span><span>${RS.date(t.created_at)}</span></div>
+      ${t.pix_key ? `<div class="tx-r"><span>Chave PIX</span><span>${RS.esc(t.pix_key)}</span></div>` : ""}
+      <div class="tx-r tx-v"><span>Valor</span><b class="${t.amount >= 0 ? "pos" : "neg"}">${RS.money(t.amount)}</b></div>
+      ${t.type === "deposit" && t.status === "pending" && t.provider_id && new Date(t.expires_at) > new Date() ? `<button class="btn sm btn-outline w-full" data-ap="pix:${t.id}:${t.amount}">Ver PIX</button>` : ""}
+    </div>`;
 
   function panel(tab) {
     RS.$(".acct-panel")?.remove();
@@ -174,8 +218,56 @@
           <div class="ap-card ap-list">${deps?.length ? deps.map(txRow).join("") : `<p class="muted">Nenhum depósito ainda.</p>`}</div>`;
       }
       if (k === "tx") {
-        const { data } = await sb.from("transactions").select("*").eq("user_id", p.id).order("created_at", { ascending: false }).limit(50);
-        body.innerHTML = `<div class="ap-card ap-list">${data?.length ? data.map(txRow).join("") : `<p class="muted">Nenhuma movimentação.</p>`}</div>`;
+        body.innerHTML = `<div class="tx-top"><b>${RS.money(p.balance)}</b><button class="btn btn-green" data-ap="deposit">Depósito</button></div>
+          <input class="input" id="tx-q" inputmode="numeric" placeholder="Procurar por ID da transação">
+          <div class="tx-filters"><select class="input" id="tx-days"><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option>
+            <option value="90">Últimos 90 dias</option><option value="365">Últimos 12 meses</option></select>
+            <select class="input" id="tx-type"><option value="">Todos os tipos</option><option value="deposit">Depósitos</option><option value="withdraw">Saques</option>
+            <option value="bet,win,cashout">Apostas esportivas</option><option value="casino_bet,casino_win">Cassino</option><option value="bonus,adjust">Bônus e ajustes</option></select></div>
+          <div id="tx-list"><p class="muted">Carregando…</p></div>`;
+        const list = async () => {
+          const id = RS.$("#tx-q", body).value.replace(/\D/g, ""), types = RS.$("#tx-type", body).value;
+          let q = sb.from("transactions").select("*").eq("user_id", p.id).order("created_at", { ascending: false }).limit(100);
+          if (id) q = q.eq("id", Number(id));
+          else {
+            q = q.gte("created_at", new Date(Date.now() - Number(RS.$("#tx-days", body).value) * 864e5).toISOString());
+            if (types) q = q.in("type", types.split(","));
+          }
+          const { data } = await q;
+          RS.$("#tx-list", body).innerHTML = data?.length ? data.map(txCard).join("") : `<p class="muted">Nenhuma movimentação nesse filtro.</p>`;
+        };
+        RS.$("#tx-days", body).onchange = RS.$("#tx-type", body).onchange = list;
+        let tq; RS.$("#tx-q", body).oninput = () => { clearTimeout(tq); tq = setTimeout(list, 400); };
+        list();
+      }
+      if (k === "security") {
+        body.innerHTML = `<div class="ap-card"><h3>Login & Segurança</h3>
+          <div class="ap-field"><label>E-mail de acesso</label><input class="input" readonly value="${RS.esc(p.email || "")}"></div>
+          <div class="ap-field"><label>Último acesso</label><input class="input" readonly value="${p.last_login_at ? RS.date(p.last_login_at) : "—"}"></div>
+          <p class="muted small" style="margin-bottom:10px">Sua conexão com o site é criptografada (HTTPS). Use uma senha só sua e não compartilhe seu acesso.</p>
+          <button class="btn btn-outline w-full" data-ap="pass" style="margin-bottom:8px">${RS.icon("key")} Trocar senha</button>
+          <button class="btn btn-outline w-full" data-ap="logout-all">Sair de todos os aparelhos</button></div>`;
+      }
+      if (k === "betcfg") {
+        const def = localStorage.getItem("rs-def-stake") || "", ask = localStorage.getItem("rs-co-confirm") !== "0";
+        body.innerHTML = `<div class="ap-card"><h3>Configurações de apostas</h3>
+          <div class="ap-field"><label>Valor padrão da aposta no bilhete (R$)</label><input class="input" id="cfg-stake" inputmode="decimal" placeholder="Em branco = sem valor padrão" value="${RS.esc(def)}"></div>
+          <label class="check" style="margin:10px 0"><input type="checkbox" id="cfg-co" ${ask ? "checked" : ""}> Pedir confirmação antes do cash out</label>
+          <button class="btn btn-dark w-full" id="cfg-save">Salvar</button>
+          <p class="muted small" style="margin-top:8px">Fica salvo neste aparelho.</p></div>`;
+        RS.$("#cfg-save", body).onclick = () => {
+          const v = RS.$("#cfg-stake", body).value.replace(",", ".").trim();
+          if (v && !(Number(v) > 0)) { RS.toast("Valor inválido.", "error"); return; }
+          if (v) localStorage.setItem("rs-def-stake", v); else localStorage.removeItem("rs-def-stake");
+          localStorage.setItem("rs-co-confirm", RS.$("#cfg-co", body).checked ? "1" : "0");
+          RS.toast("Configurações salvas.", "ok");
+        };
+      }
+      if (k === "privacy") {
+        body.innerHTML = `<div class="ap-card"><h3>Definições de privacidade</h3>
+          <p class="muted small" style="margin-bottom:10px">Seus dados são usados só para operar sua conta, cumprir a lei (LGPD) e prevenir fraudes. Documentos de verificação ficam em armazenamento privado.</p>
+          <button class="btn btn-outline w-full" data-ap="export" style="margin-bottom:8px">Baixar meus dados</button>
+          <button class="btn btn-outline w-full" data-ap="delete">Pedir exclusão da conta</button></div>`;
       }
       if (k === "limits") {
         const { data: l } = await sb.from("user_limits").select("*").eq("user_id", p.id).maybeSingle();
@@ -287,15 +379,33 @@
       if (a === "refresh") { RS.refreshBalance(); show("overview"); }
       if (a === "deposit" || a === "withdraw") moneyModal(a);
       if (a === "pass") resetPass();
+      if (a === "logout-all" && confirm("Sair da conta em todos os aparelhos?")) sb.auth.signOut({ scope: "global" }).then(() => (location.href = "index.html"));
+      if (a === "export") exportData();
+      if (a === "delete") RS.support();
+      const cp = e.target.closest("[data-copy]")?.dataset.copy;
+      if (cp) navigator.clipboard?.writeText(cp).then(() => RS.toast("ID copiado!", "ok"));
       if (a?.startsWith("pix:")) { const [, id, v] = a.split(":"); showPix(+id, +v); }
     });
     document.addEventListener("rs:balance", () => { if (document.body.contains(w)) show(cur); });
     show(tab);
   }
 
+  // LGPD: cópia dos dados da conta em JSON
+  async function exportData() {
+    const p = await RS.profile();
+    const [tx, bets, lim] = await Promise.all([
+      sb.from("transactions").select("*").eq("user_id", p.id),
+      sb.from("bets").select("*, bet_selections(*)").eq("user_id", p.id),
+      sb.from("user_limits").select("*").eq("user_id", p.id)]);
+    const blob = new Blob([JSON.stringify({ perfil: p, transacoes: tx.data, apostas: bets.data, limites: lim.data }, null, 2)], { type: "application/json" });
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "meus-dados-realsports.json" });
+    a.click(); URL.revokeObjectURL(a.href);
+  }
+
   // ---------- depósito e saque ----------
   function moneyModal(kind) {
     const dep = kind === "deposit";
+    if (!dep) return withdrawModal();
     const m = RS.modal(`
       <h3>${dep ? "Depositar" : "Sacar"}</h3>
       <p class="muted">${dep ? "Mínimo R$ 10,00. O saldo entra assim que o pagamento for confirmado." : "Mínimo R$ 20,00. O valor é reservado até a aprovação."}</p>
@@ -320,6 +430,48 @@
         else RS.toast(`Saque #${id} solicitado. O PIX cai na chave informada após a aprovação.`, "ok");
         RS.refreshBalance();
       } catch (e) { RS.toast(e.message, "error"); }
+    };
+  }
+
+  // Saque PIX: CPF do titular (cadastrado uma vez), valor e chave PIX
+  async function withdrawModal() {
+    const p = await RS.profile();
+    if (!p) { location.href = "login.html"; return; }
+    const cpfMask = (c) => c.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+    const m = RS.modal(`<div class="wd">
+      <div class="wd-info"><div>${RS.icon("refresh")}<b>Mín. R$ 20,00</b></div><div>${RS.icon("clock")}<span>Tempo de processamento: normalmente em poucos minutos após a aprovação</span></div></div>
+      <h3>Pix</h3>
+      <p class="muted small">Faça seus saques de forma fácil e segura com o Pix. É importante usar uma conta bancária vinculada ao seu CPF.</p>
+      <label class="wd-l">CPF</label>
+      <input class="input" id="wd-cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" ${p.cpf ? `readonly value="${cpfMask(p.cpf)}"` : ""}>
+      <p class="small wd-warn"><b>Importante:</b> se o CPF do titular da conta bancária não for o mesmo cadastrado na Real Sports, o PIX não será processado.${p.cpf ? " Para corrigir o CPF, fale com o suporte." : " Depois de salvo, o CPF só pode ser corrigido pelo suporte."}</p>
+      <label class="wd-l">Montante</label>
+      <label class="stake wd-amt"><i>R$</i><input id="mm-amount" type="number" min="20" step="0.01" placeholder="0,00"></label>
+      <div class="chips">${[20, 50, 100, 500].map((v) => `<button class="chip" data-v="${v}">R$ ${v}</button>`).join("")}</div>
+      <label class="wd-l">Chave PIX</label>
+      <div class="wd-key"><select class="input" id="mm-ktype"><option value="cpf">CPF</option><option value="email">E-mail</option><option value="telefone">Celular</option>
+        <option value="aleatoria">Chave aleatória</option></select>
+        <input class="input" id="mm-key" maxlength="77" placeholder="Sua chave PIX" autocomplete="off"></div>
+      <button class="btn btn-dark w-full" id="mm-go">Saque</button></div>`);
+    const type = RS.$("#mm-ktype", m), key = RS.$("#mm-key", m), cpf = RS.$("#wd-cpf", m);
+    const syncKey = () => { if (type.value === "cpf") { key.value = cpf.value; key.readOnly = true; } else key.readOnly = false; };
+    type.onchange = () => { key.value = ""; syncKey(); };
+    cpf.oninput = () => { cpf.value = cpfMask(cpf.value.replace(/\D/g, "").slice(0, 11)); syncKey(); };
+    syncKey();
+    RS.$$(".chip", m).forEach((c) => (c.onclick = () => (RS.$("#mm-amount", m).value = c.dataset.v)));
+    sb.rpc("my_last_pix_key").then(({ data }) => {
+      if (data?.key && data.type !== "cpf" && data.type !== "cnpj") { type.value = data.type; key.readOnly = false; key.value = data.key; }
+    });
+    RS.$("#mm-go", m).onclick = async (e) => {
+      const btn = e.currentTarget, v = Number(RS.$("#mm-amount", m).value);
+      btn.disabled = true;
+      try {
+        if (!p.cpf) { p.cpf = await RS.rpc("set_my_cpf", { p_cpf: cpf.value }); cpf.readOnly = true; }
+        const id = await RS.rpc("request_withdraw", { p_amount: v, p_pix_key: key.value, p_pix_type: type.value });
+        m.remove();
+        RS.toast(`Saque #${id} solicitado. O PIX cai na chave informada após a aprovação.`, "ok");
+        RS.refreshBalance();
+      } catch (err) { RS.toast(err.message, "error"); btn.disabled = false; }
     };
   }
 
@@ -359,7 +511,7 @@
     const p = await RS.profile();
     if (!p) return;
     me = p;
-    for (const id of ["hdr-balance", "pop-balance"]) {
+    for (const id of ["hdr-balance", "pop-balance", "la-bal"]) {
       const b = document.getElementById(id);
       if (b) { b.textContent = RS.money(p.balance); b.classList.add("flash"); setTimeout(() => b.classList.remove("flash"), 600); }
     }
