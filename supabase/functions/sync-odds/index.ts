@@ -25,7 +25,15 @@ function marginMarkets(mk: Markets | null | undefined, marginPct: number): Marke
   }));
 }
 
-type Started = { id: number; external_id: string; home: string; away: string; score_home: number | null; score_away: number | null; suspended_until: string | null };
+type Started = { id: number; external_id: string; home: string; away: string; score_home: number | null; score_away: number | null; suspended_until: string | null;
+  odd_home: number | null; odd_draw: number | null; odd_away: number | null };
+// odd que salta de uma leitura para a outra costuma ser lance (gol, pênalti, expulsão) antes de o placar chegar
+const JUMP_LOCK_MS = 45_000;
+const oddsJump = (m: Started, o: { home?: number | null; draw?: number | null; away?: number | null }, pct: number) =>
+  pct > 0 && (["home", "draw", "away"] as const).some((k) => {
+    const a = Number(m[`odd_${k}`]), b = Number(o[k]);
+    return a > 1 && b > 1 && Math.abs(b - a) / a * 100 >= pct;
+  });
 // placar mudou desde a última leitura = gol (o evento de gol da API às vezes chega depois do placar)
 const GOAL_LOCK_MS = 90_000;
 const scoreChanged = (m: Started, home?: number | null, away?: number | null) =>
@@ -47,7 +55,7 @@ Deno.serve(async (req) => {
   if (feed.prefix && !only) await sb.rpc("sync_orphan_matches", { p_prefix: feed.prefix });
 
   // jogos já iniciados e ainda não liquidados (ao vivo)
-  const { data: started } = await sb.from("matches").select("id, external_id, home, away, score_home, score_away, suspended_until")
+  const { data: started } = await sb.from("matches").select("id, external_id, home, away, score_home, score_away, suspended_until, odd_home, odd_draw, odd_away")
     .in("status", ["open", "live"]).lt("starts_at", new Date().toISOString()).not("external_id", "is", null);
   const startedBySport = new Map<string, Started[]>();
   const sportOf = (ext: string) => {
@@ -64,7 +72,7 @@ Deno.serve(async (req) => {
     ? [...startedBySport.keys()]
     : only ?? (Deno.env.get("ODDS_SPORTS") || feed.defaultSports).split(",").map((s) => s.trim()).filter(Boolean);
   const { data: cfg } = await sb.from("settings").select("key, value, updated_at")
-    .in("key", ["odds_margin_pre", "odds_margin_live", "feed_remaining", "feed_limit"]);
+    .in("key", ["odds_margin_pre", "odds_margin_live", "feed_remaining", "feed_limit", "odds_jump_pct"]);
   const margin = (k: string) => Number(cfg?.find((c) => c.key === k)?.value ?? 0) || 0;
   const errors: string[] = [];
   let updated = 0, settled = 0;
@@ -97,13 +105,17 @@ Deno.serve(async (req) => {
         if (u.home_logo) { patch.home_logo = u.home_logo; patch.away_logo = u.away_logo ?? null; patch.league_logo = u.league_logo ?? null; }
         // uma suspensão nova nunca encurta a que já está valendo (ex.: 90 s do gol)
         const lockedUntil = Date.parse(m.suspended_until ?? "") || 0;
+        let jumped = false;
         if (u.odds) {
           const o = applyMargin(u.odds, margin("odds_margin_live"));
+          jumped = oddsJump(m, o, margin("odds_jump_pct"));
           patch.odd_home = o.home; patch.odd_draw = o.draw; patch.odd_away = o.away;
         }
         if (u.markets !== undefined) patch.markets = marginMarkets(u.markets, margin("odds_margin_live"));
         if (scoreChanged(m, u.home, u.away) && !u.completed) {
           patch.suspended_until = new Date(Date.now() + GOAL_LOCK_MS).toISOString(); patch.suspend_reason = "Gol";
+        } else if (jumped && !u.completed && lockedUntil < Date.now() + JUMP_LOCK_MS) {
+          patch.suspended_until = new Date(Date.now() + JUMP_LOCK_MS).toISOString(); patch.suspend_reason = "Odds em movimento brusco";
         } else if (u.cancelled) { patch.suspended_until = new Date(Date.now() + 600_000).toISOString(); patch.suspend_reason = "Jogo adiado ou cancelado"; }
         else if (lockedUntil > Date.now() + 30_000) { /* mantém a suspensão mais longa */ }
         else if (u.suspended) { patch.suspended_until = new Date(Date.now() + 30_000).toISOString(); patch.suspend_reason = u.suspended; }
