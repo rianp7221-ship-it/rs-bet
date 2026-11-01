@@ -23,7 +23,7 @@ body.roar::before { opacity: .35; animation: lzSpinBg 6s linear infinite; }
 .lz-hero { display: flex; align-items: center; gap: 10px; }
 .lz-lion { font-size: clamp(50px, 9dvh, 76px); line-height: 1; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .45)); animation: lzBob 3s ease-in-out infinite; }
 .roar .lz-lion { animation: lzRoar .45s ease-in-out infinite; }
-.lz-sign { display: flex; flex-direction: column; font: 900 clamp(28px, 5dvh, 40px)/.9 'Roboto Condensed', sans-serif;
+.lz-sign { display: flex; flex-direction: column; padding-top: .18em; font: 900 clamp(28px, 5dvh, 40px)/.9 'Roboto Condensed', sans-serif;
   background: linear-gradient(#fff7c8, #f7c42b 55%, #b57800); -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 2px 0 #5a0000) drop-shadow(0 4px 8px rgba(0, 0, 0, .4)); }
 .lz-sign span { font-size: .55em; letter-spacing: 3px; }
