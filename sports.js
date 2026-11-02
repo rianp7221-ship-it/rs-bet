@@ -69,9 +69,10 @@
     "UEFA Champions League": "Liga dos Campeões da UEFA", "UEFA Europa League": "Liga Europa da UEFA", "La Liga - Spain": "La Liga", "Serie A - Italy": "Serie A Itália" };
   const lname = (l) => LEAGUE_PT[l] || l;
   // ligas principais primeiro nas listas; o resto pela quantidade de jogos
-  const TOP = ["Brazil Série A", "UEFA Champions League", "CONMEBOL Libertadores", "Premier League", "La Liga", "Copa do Brasil",
-    "Serie A - Italy", "Bundesliga", "Ligue 1", "Brazil Série B", "CONMEBOL Sudamericana", "UEFA Europa League", "Primeira Liga Portugal",
-    "Liga Profesional Argentina", "UEFA Conference League", "MLS EUA"];
+  const TOP = ["Brazil Série A", "Brazil Série B", "Copa do Brasil", "CONMEBOL Libertadores", "CONMEBOL Sudamericana",
+    "UEFA Champions League", "Premier League", "La Liga", "Serie A - Italy", "Bundesliga", "Ligue 1", "UEFA Europa League",
+    "UEFA Conference League", "Primeira Liga Portugal", "Liga Profesional Argentina", "Copa del Rey", "FA Cup Inglaterra",
+    "Championship Inglaterra", "Eredivisie Holanda", "Liga MX México", "MLS EUA", "Saudi Pro League"];
   const rank = (l) => { const i = TOP.indexOf(l); return i < 0 ? TOP.length : i; };
   const byTop = (a, b) => rank(a[0]) - rank(b[0]) || b[1].n - a[1].n;
   // escudo do time (API-Football); sem escudo, camisa com a cor do nome
@@ -265,9 +266,18 @@
 
     const rows = visible();
     const reset = home ? "" : `<div class="filter-bar"><button class="btn btn-outline sm" data-view="all">Ver todos os jogos</button></div>`;
-    RS.morph(list, reset + (rows.length ? rows.map(row).join("")
+    RS.morph(list, reset + (rows.length ? (league ? rows.map(row).join("") : groups(rows))
       : `<p class="empty">${view === "fav" ? "Toque na estrela de um jogo para salvá-lo nos favoritos." : "Nenhum jogo disponível no momento."}</p>`));
     renderMv();
+  }
+
+  // lista separada por campeonato, ligas principais primeiro
+  function groups(rows) {
+    const by = new Map();
+    rows.forEach((m) => { if (!by.has(m.league)) by.set(m.league, []); by.get(m.league).push(m); });
+    return [...by].sort((a, b) => rank(a[0]) - rank(b[0]) || b[1].length - a[1].length)
+      .map(([l, ms]) => `<section class="lg-group"><button class="lg-bar" data-league="${RS.esc(l)}"><span class="comp-ico">${lico(l)}</span>
+        <b>${RS.esc(lname(l))}</b><em>${ms.length}</em></button>${ms.map(row).join("")}</section>`).join("");
   }
 
   function setView(v, opts = {}) {
