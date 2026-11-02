@@ -66,6 +66,7 @@
     { id: "casino", t: "Cassino", ic: "dice", p: "casino.view", run: () => window.RSmods.casino() },
     { id: "bonus", t: "Bônus e marketing", ic: "gift", p: "bonus.view", run: () => window.RSmods.bonus() },
     { id: "sports", t: "Apostas e jogos", ic: "receipt", p: "sports.view", run: () => window.RSmods.sports() },
+    { id: "art", t: "Gerar arte", ic: "share", p: "sports.view", run: () => window.RSmods.art() },
     { id: "staff", t: "Equipe e acessos", ic: "key", p: "staff.manage", run: staff },
     { id: "audit", t: "Auditoria", ic: "id", p: "audit.view", run: audit },
     { id: "settings", t: "Configurações", ic: "wallet", p: "settings.manage", run: settings },
@@ -75,11 +76,18 @@
   let current = null, cleanup = null;
   nav.innerHTML = MODS.map((m) => `<a data-mod="${m.id}">${RS.icon(m.ic)} ${m.t}${m.id === "alerts" ? `<em id="al-count" hidden></em>` : ""}</a>`).join("");
   nav.onclick = (e) => { const a = e.target.closest("[data-mod]"); if (a) go(a.dataset.mod); };
+  // celular: menu vira barra lateral aberta pelo botão "Menu"
+  const shell = RS.$("#admin"), burger = RS.$("#adm-burger");
+  const menu = (open) => { shell.classList.toggle("menu-open", open); document.body.style.overflow = open ? "hidden" : ""; };
+  burger.onclick = () => menu(true);
+  RS.$("#adm-backdrop").onclick = RS.$("#adm-close").onclick = () => menu(false);
   function go(id, arg) {
     const m = MODS.find((x) => x.id === id) || MODS[0];
     if (cleanup) { cleanup(); cleanup = null; }
     current = m;
     history.replaceState(null, "", "#" + m.id);
+    RS.$("#adm-cur").textContent = m.t;
+    menu(false);
     RS.$$("[data-mod]", nav).forEach((a) => a.classList.toggle("active", a.dataset.mod === m.id));
     main.innerHTML = `<p class="muted">Carregando…</p>`;
     Promise.resolve(m.run(arg)).catch((e) => { main.innerHTML = `<p class="empty">Erro: ${esc(e.message)}</p>`; });
