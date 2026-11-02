@@ -155,7 +155,7 @@
     if (!q || q.suspended) { el.innerHTML = CO_OFF; return; }
     const prev = lastCo.get(id), trend = prev == null || prev === q.value ? "" : q.value > prev ? "co-up" : "co-down";
     lastCo.set(id, q.value);
-    const label = `CASH OUT ${RS.money(q.value)}${trend ? (trend === "co-up" ? " ▲" : " ▼") : ""}${q.live ? " · ao vivo" : ""}`;
+    const label = `CASH OUT ${RS.money(q.value)}${trend ? (trend === "co-up" ? " ▲" : " ▼") : ""}`;
     let btn = el.querySelector("[data-cash]");
     if (!btn) { el.innerHTML = `<button class="btn btn-co w-full" data-cash="${id}"></button>`; btn = el.firstChild; }
     btn.dataset.v = q.value; btn.disabled = false; btn.textContent = label;
