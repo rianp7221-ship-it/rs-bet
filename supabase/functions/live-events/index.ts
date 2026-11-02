@@ -6,7 +6,7 @@
 //   type "goal" / "score" — atualiza placar (gol no futebol/hóquei suspende 90s automaticamente)
 //   type "odds"    — atualiza odds (variação > 15% suspende 30s automaticamente)
 import { adminClient, cors, json } from "../_shared/auth.ts";
-import { adjustOdds, type Adjust } from "../_shared/adjust.ts";
+import { capOdds } from "../_shared/adjust.ts";
 
 type LiveEvent = {
   external_id: string; type: string; seconds?: number; reason?: string;
@@ -25,8 +25,8 @@ Deno.serve(async (req) => {
 
   const errors: string[] = [];
   let applied = 0;
-  const { data: adj } = await sb.from("settings").select("value").eq("key", "odds_adjust").maybeSingle();
-  const adjust = adj?.value as Adjust | undefined;
+  const { data: mx } = await sb.from("settings").select("value").eq("key", "live_odd_max").maybeSingle();
+  const maxOdd = Number(mx?.value) || 0;
   for (const ev of events) {
     const patch: Record<string, unknown> = { synced_at: new Date().toISOString() };
     if (ev.type === "danger" || ev.type === "suspend") {
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     } else if ((ev.type === "goal" || ev.type === "score") && ev.score) {
       patch.score_home = ev.score.home; patch.score_away = ev.score.away; patch.status = "live";
     } else if (ev.type === "odds" && ev.odds) {
-      const o = adjustOdds(ev.odds, adjust);
+      const o = capOdds(ev.odds, maxOdd);
       if (o.home) patch.odd_home = o.home;
       if (o.draw !== undefined) patch.odd_draw = o.draw;
       if (o.away) patch.odd_away = o.away;

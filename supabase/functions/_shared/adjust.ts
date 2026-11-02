@@ -22,3 +22,16 @@ export function adjustMarkets(mk: Markets | null | undefined, a: Adjust | null |
   return Object.fromEntries(Object.entries(mk).map(([k, o]) =>
     [k, Object.fromEntries(Object.entries(o).map(([p, x]) => [p, scale(x, factor(a, k, p)) as number]))]));
 }
+
+// teto das odds ao vivo (settings.live_odd_max; 0 = sem teto)
+const cap = (x: number | null | undefined, max: number) => (x && max > 1 && x > max ? max : x ?? null);
+export function capOdds<T extends { home?: number | null; draw?: number | null; away?: number | null }>(o: T, max: number): T {
+  if (!(max > 1)) return o;
+  const out = { ...o };
+  for (const k of ["home", "draw", "away"] as const) if (o[k] != null) out[k] = cap(o[k], max) as T[typeof k];
+  return out;
+}
+export function capMarkets(mk: Markets | null | undefined, max: number): Markets | null {
+  if (!mk || !(max > 1)) return mk ?? null;
+  return Object.fromEntries(Object.entries(mk).map(([k, o]) => [k, Object.fromEntries(Object.entries(o).map(([p, x]) => [p, cap(x, max) as number]))]));
+}
