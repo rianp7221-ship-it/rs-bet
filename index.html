@@ -85,6 +85,12 @@
           <a class="tile t-mines" href="#casino" data-game="mines-card" data-cat="orig rtp"><i>💎</i><b>Mines</b><small>Até 24 minas</small></a>
           <a class="tile t-dice" href="#casino" data-game="dice" data-cat="orig rtp fast"><i>🎲</i><b>Dados</b><small>Escolha sua chance</small></a>
         </div>
+        <div id="pf-wrap" class="hidden">
+          <h2 class="section-title">Slots e cassino ao vivo</h2>
+          <div class="pf-bar"><input class="input" id="pf-q" type="search" placeholder="Buscar jogo (ex.: Fortune Tiger)"><select class="input" id="pf-prov"><option value="">Todos os provedores</option></select></div>
+          <div class="pf-grid" id="pf-grid"></div>
+          <button class="btn btn-outline w-full hidden" id="pf-more">Carregar mais</button>
+        </div>
         <div class="casino-grid">
           <div class="game-card" id="mines-card">
             <h2>💎 Mines</h2>
@@ -202,6 +208,7 @@
   <script src="mines.js"></script>
   <script src="history.js"></script>
   <script src="home.js"></script>
+  <script src="casino-pf.js"></script>
   <script>
     document.querySelectorAll("[data-ic]").forEach((e) => (e.outerHTML = RS.icon(e.dataset.ic)));
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
