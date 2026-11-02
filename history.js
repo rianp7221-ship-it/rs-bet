@@ -148,12 +148,11 @@
   }
   // uma chamada cota todos os bilhetes; nunca duas ao mesmo tempo; valor velho trava o botão
   let coBusy = false, coAgain = false, coAt = 0, coSeq = 0;
-  const CO_MAX_AGE = 8000;
+  const CO_MAX_AGE = 8000, CO_OFF = `<button class="btn btn-co w-full" disabled>Cash out indisponível</button>`;
   function coButton(el, q, id) {
     const card = el.closest(".bet-card");
     card?.classList.toggle("co-ok", !!q && !q.suspended);
-    if (!q) { el.innerHTML = `<small class="muted">Cash out indisponível no momento</small>`; return; }
-    if (q.suspended) { el.innerHTML = `<button class="btn btn-co w-full" disabled>🔒 CASH OUT suspenso · ${RS.esc(q.reason)}</button>`; return; }
+    if (!q || q.suspended) { el.innerHTML = CO_OFF; return; }
     const prev = lastCo.get(id), trend = prev == null || prev === q.value ? "" : q.value > prev ? "co-up" : "co-down";
     lastCo.set(id, q.value);
     const label = `CASH OUT ${RS.money(q.value)}${trend ? (trend === "co-up" ? " ▲" : " ▼") : ""}${q.live ? " · ao vivo" : ""}`;
@@ -183,7 +182,7 @@
   // sem cotação nova há mais de 8 s (rede caiu, app em segundo plano): botão trava até atualizar
   setInterval(() => {
     if (cashing || !coAt || Date.now() - coAt < CO_MAX_AGE) return;
-    for (const btn of RS.$$("[data-cash]:not([disabled])", box)) { btn.disabled = true; btn.textContent = "Atualizando cash out…"; }
+    for (const btn of RS.$$("[data-cash]:not([disabled])", box)) { btn.disabled = true; btn.textContent = "Cash out indisponível"; }
   }, 1000);
   const showingBets = () => kind === "bets" && !RS.$("#history").classList.contains("hidden") && RS.$("[data-co]", box);
   box.addEventListener("click", async (e) => {
