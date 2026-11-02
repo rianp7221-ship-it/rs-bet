@@ -1,5 +1,5 @@
 // goal-guard — chamado pelo pg_cron a cada 5 s (header x-cron-secret). Publicar com --no-verify-jwt.
-// Placar da ESPN e do 365Scores como 2ª/3ª fonte: se uma delas já mostra mais gols que o nosso jogo ao vivo, trava apostas e cashout
+// Placar da ESPN, 365Scores, FotMob e LiveScore como fontes extras: se uma delas já mostra mais gols que o nosso jogo ao vivo, trava apostas e cashout
 // até a API-Football confirmar o gol (aí o sync-odds aplica a trava normal). Máx. 3 min por placar, para um
 // placar errado ou um jogo trocado na fonte externa não travar o mercado para sempre.
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -37,6 +37,31 @@ const hits = (a: Set<string>, b: Set<string>) => [...a].filter((t) => b.has(t)).
 
 type Live = { id: number; league: string; home: string; away: string; starts_at: string; score_home: number | null; score_away: number | null; suspended_until: string | null };
 type G365 = { id: number; startTime: string; statusGroup: number; homeCompetitor: { name: string; score?: number }; awayCompetitor: { name: string; score?: number } };
+// jogo ao vivo de uma fonte extra (sem liga): casamos por horário de início e nome dos times
+type Ext = { id: string; start: number; home: string; away: string; h: number; a: number };
+const UA = { "User-Agent": "Mozilla/5.0" };
+const get = (u: string) => fetch(u, { headers: UA, signal: AbortSignal.timeout(4000) }).then((r) => r.json());
+const ymd = (t: number) => new Date(t).toISOString().slice(0, 10).replaceAll("-", "");
+// LiveScore com locale -3: Esd = yyyymmddhhmmss no horário de Brasília
+const esd = (n: number) => { const s = String(n); return Date.parse(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T${s.slice(8, 10)}:${s.slice(10, 12)}:00-03:00`); };
+async function extras(): Promise<Ext[]> {
+  const now = Date.now();
+  const days = new Date(now).getUTCHours() < 5 ? [ymd(now - 864e5), ymd(now)] : [ymd(now)];
+  const src = await Promise.all([
+    // 365Scores: uma chamada traz todos os jogos ao vivo do mundo; o mais rápido nas medições
+    get("https://webws.365scores.com/web/games/current/?appTypeId=5&langId=1&timezoneName=UTC&userCountryId=21&sports=1")
+      .then((j) => ((j?.games ?? []) as G365[]).filter((g) => g.statusGroup === 3).map((g) => ({ id: `365:${g.id}`, start: Date.parse(g.startTime),
+        home: g.homeCompetitor.name, away: g.awayCompetitor.name, h: Number(g.homeCompetitor.score) || 0, a: Number(g.awayCompetitor.score) || 0 }))),
+    // FotMob e LiveScore: um pouco mais lentos que o 365Scores, mas mantêm jogos que ele às vezes tira da lista
+    ...days.map((d) => get(`https://www.fotmob.com/api/data/matches?date=${d}`)
+      .then((j) => (j?.leagues ?? []).flatMap((l: any) => l.matches ?? []).filter((x: any) => x.status?.ongoing).map((x: any) => ({ id: `fm:${x.id}`,
+        start: Date.parse(x.status.utcTime), home: x.home.name, away: x.away.name, h: Number(x.home.score) || 0, a: Number(x.away.score) || 0 })))),
+    get("https://prod-public-api.livescore.com/v1/api/app/live/soccer/-3?locale=en&MD=1")
+      .then((j) => (j?.Stages ?? []).flatMap((s: any) => s.Events ?? []).filter((e: any) => "Tr1" in e && !["NS", "FT", "AET", "AP", "Canc.", "Postp."].includes(e.Eps))
+        .map((e: any) => ({ id: `lsc:${e.Eid}`, start: esd(e.Esd), home: e.T1[0].Nm, away: e.T2[0].Nm, h: Number(e.Tr1) || 0, a: Number(e.Tr2) || 0 }))),
+  ].map((p) => p.catch(() => [] as Ext[])));
+  return src.flat();
+}
 type Side = { homeAway: string; score?: string; team: { displayName: string; shortDisplayName?: string } };
 type Ev = { id: string; status?: { type?: { state?: string } }; competitions?: { competitors?: Side[] }[] };
 
@@ -57,10 +82,7 @@ Deno.serve(async (req) => {
       return [s, ((j?.events ?? []) as Ev[]).filter((e) => e.status?.type?.state === "in")] as const;
     } catch { return [s, [] as Ev[]] as const; }
   })));
-  // 365Scores: uma chamada traz todos os jogos ao vivo do mundo (cobre ligas que a ESPN não tem)
-  const g365 = await fetch("https://webws.365scores.com/web/games/current/?appTypeId=5&langId=1&timezoneName=UTC&userCountryId=21&sports=1",
-    { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(4000) })
-    .then((r) => r.json()).then((j) => ((j?.games ?? []) as G365[]).filter((g) => g.statusGroup === 3)).catch(() => [] as G365[]);
+  const ext = await extras();
   const { data: gs } = await sb.from("goal_guard").select("match_id, espn_home, espn_away, first_at").in("match_id", live.map((m) => m.id));
   const guard = new Map((gs ?? []).map((g) => [g.match_id as number, g]));
 
@@ -78,17 +100,20 @@ Deno.serve(async (req) => {
       if (score > bestScore) { best = { ev, h: Number(H.score) || 0, a: Number(A.score) || 0 }; bestScore = score; tie = false; }
       else if (score && score === bestScore) tie = true;
     }
-    // 365Scores: mesmo horário de início (±20 min) e pelo menos um dos times com nome parecido
-    let b365: G365 | null = null, s365 = 0, tie365 = false;
-    for (const x of g365) {
-      if (Math.abs(Date.parse(x.startTime) - Date.parse(m.starts_at)) > 20 * 60_000) continue;
-      const th = tokens(x.homeCompetitor.name), ta = tokens(x.awayCompetitor.name);
+    // fontes extras: mesmo horário de início (±20 min) e nome parecido; em cada fonte fica o jogo mais parecido (empate = ignora).
+    // Vale o maior placar entre as fontes que acharam o jogo.
+    const bySrc = new Map<string, { x: Ext; sc: number; tie: boolean }>();
+    for (const x of ext) {
+      if (!(Math.abs(x.start - Date.parse(m.starts_at)) <= 20 * 60_000)) continue;
+      const th = tokens(x.home), ta = tokens(x.away);
       const sc = Math.max(hits(mh, th) + hits(ma, ta), hits(mh, ta) + hits(ma, th));
-      if (sc > s365) { b365 = x; s365 = sc; tie365 = false; } else if (sc && sc === s365) tie365 = true;
+      if (!sc) continue;
+      const k = x.id.split(":")[0], cur = bySrc.get(k);
+      if (!cur || sc > cur.sc) bySrc.set(k, { x, sc, tie: false }); else if (sc === cur.sc && cur.x.id !== x.id) cur.tie = true;
     }
-    if (b365 && !tie365) {
-      const h = Number(b365.homeCompetitor.score) || 0, a = Number(b365.awayCompetitor.score) || 0;
-      if (!best || tie || h + a > best.h + best.a) { best = { ev: { id: `365:${b365.id}` }, h, a }; tie = false; }
+    for (const { x, tie: t } of bySrc.values()) {
+      if (t) continue;
+      if (!best || tie || x.h + x.a > best.h + best.a) { best = { ev: { id: x.id }, h: x.h, a: x.a }; tie = false; }
     }
     const g = guard.get(m.id);
     if (!best || tie) { if (g) await sb.from("goal_guard").delete().eq("match_id", m.id); continue; }
@@ -104,5 +129,6 @@ Deno.serve(async (req) => {
     }
     locked++;
   }
-  return json({ live: live.length, leagues: slugs.length, g365: g365.length, matched, locked });
+  const per = Object.fromEntries(["365", "fm", "lsc"].map((k) => [k, ext.filter((x) => x.id.startsWith(k + ":")).length]));
+  return json({ live: live.length, leagues: slugs.length, ext: per, matched, locked });
 });
