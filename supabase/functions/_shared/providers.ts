@@ -100,7 +100,9 @@ type AfFixture = {
   events?: { time: { elapsed: number; extra: number | null }; type: string; detail: string }[];
 };
 type AfBet = { id: number; name: string; values: { value: string; odd: string; suspended?: boolean }[] };
-type AfOdds = { fixture: { id: number }; bookmakers?: { bets: AfBet[] }[] };
+type AfOdds = { fixture: { id: number }; bookmakers?: { name?: string; bets: AfBet[] }[] };
+// 1X2 de pré-jogo vem da Bet365 (referência do mercado); sem ela, média das casas
+const AF_REF_BOOK = "Bet365";
 type AfLiveOdds = { fixture: { id: number }; status?: { stopped?: boolean; blocked?: boolean; finished?: boolean }; update?: string; odds: AfBet[] };
 type AfValue = AfBet["values"][number] & { handicap?: string | null };
 
@@ -218,15 +220,18 @@ function apiFootball(key: string): OddsProvider {
       const { response: fx } = await get<AfFixture>(`/fixtures?league=${league}&season=${y}&from=${day(0)}&to=${day(7)}&timezone=UTC`);
       const open = fx.filter((f) => !AF_DONE.includes(f.fixture.status.short) && !AF_CANCEL.includes(f.fixture.status.short));
       if (!open.length) return [];
-      const prices = new Map<number, AfBet[]>();
+      const prices = new Map<number, AfBet[]>(), ref = new Map<number, AfBet[]>();
       for (let page = 1, total = 1; page <= total && page <= 10; page++) {
         const r = await get<AfOdds>(`/odds?league=${league}&season=${y}&page=${page}`);
         total = r.paging?.total ?? 1;
-        for (const o of r.response) prices.set(o.fixture.id, (o.bookmakers ?? []).flatMap((b) => b.bets));
+        for (const o of r.response) {
+          prices.set(o.fixture.id, (o.bookmakers ?? []).flatMap((b) => b.bets));
+          ref.set(o.fixture.id, (o.bookmakers ?? []).find((b) => b.name === AF_REF_BOOK)?.bets ?? []);
+        }
       }
       return open.map((f) => ({
         id: String(f.fixture.id), league: AF_LEAGUE[f.league.id] ?? f.league.name, sport: "Futebol", home: f.teams.home.name, away: f.teams.away.name,
-        commence_time: f.fixture.date, odds: pick(prices.get(f.fixture.id) ?? []), markets: extra(prices.get(f.fixture.id) ?? []),
+        commence_time: f.fixture.date, odds: pick(ref.get(f.fixture.id) ?? []) ?? pick(prices.get(f.fixture.id) ?? []), markets: extra(prices.get(f.fixture.id) ?? []),
         home_logo: f.teams.home.logo, away_logo: f.teams.away.logo, league_logo: f.league.logo,
       }));
     },
