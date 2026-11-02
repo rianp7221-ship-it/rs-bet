@@ -19,6 +19,14 @@ const ESPN: Record<string, string> = {
   "Primera A Colômbia": "col.1", "Primera División Chile": "chi.1", "Primera División Uruguai": "uru.1", "Liga 1 Peru": "per.1",
   "Liga Pro Equador": "ecu.1", "J1 League Japão": "jpn.1", "Super League China": "chn.1", "A-League Austrália": "aus.1",
   "Saudi Pro League": "ksa.1",
+  "Eerste Divisie Holanda": "ned.2", "Premier League Rússia": "rus.1", "1. Lig Turquia": "tur.2", "Championship Escócia": "sco.2",
+  "Challenge League Suíça": "sui.2", "1ª Divisão Dinamarca": "den.2", "1ª Divisão Noruega": "nor.2", "Superettan Suécia": "swe.2",
+  "Ligat Ha'Al Israel": "isr.1", "2. Liga Áustria": "aut.2", "League One Inglaterra": "eng.3", "League Two Inglaterra": "eng.4",
+  "National League Inglaterra": "eng.5", "UEFA Nations League": "uefa.nations", "Amistosos Internacionais": "fifa.friendly", "AFC Champions League Elite": "afc.champions",
+  "Liga 1 Indonésia": "idn.1", "Indian Super League": "ind.1", "Thai League 1 Tailândia": "tha.1", "Primera Nacional Argentina": "arg.2",
+  "Primera B Argentina": "arg.3", "Primera B Colômbia": "col.2", "Primera División Costa Rica": "crc.1", "Primera División Paraguai": "par.1",
+  "Primera División Venezuela": "ven.1", "Primera División Bolívia": "bol.1", "USL Championship EUA": "usa.usl.1", "Liga Nacional Honduras": "hon.1",
+  "Liga Nacional Guatemala": "gua.1", "Copa Colômbia": "col.copa",
 };
 const LOCK_MS = 30_000, MAX_MS = 180_000;
 const STOP = new Set(["fc", "cf", "sc", "ac", "cd", "ad", "sk", "fk", "if", "bk", "afc", "ud", "rc", "club", "clube", "de", "the",

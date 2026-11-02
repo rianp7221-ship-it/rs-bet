@@ -127,6 +127,16 @@ const AF_LEAGUE: Record<number, string> = {
   292: "K League 1 Coreia do Sul", 307: "Saudi Pro League", 188: "A-League Austrália", 169: "Super League China", 305: "Stars League Catar",
   848: "UEFA Conference League", 45: "FA Cup Inglaterra", 48: "Copa da Liga Inglesa", 143: "Copa del Rey", 137: "Coppa Italia", 81: "DFB Pokal",
   66: "Coupe de France",
+  89: "Eerste Divisie Holanda", 235: "Premier League Rússia", 204: "1. Lig Turquia", 145: "Challenger Pro League Bélgica", 80: "3. Liga Alemanha",
+  95: "Liga Portugal 2", 180: "Championship Escócia", 208: "Challenge League Suíça", 120: "1ª Divisão Dinamarca", 104: "1ª Divisão Noruega",
+  114: "Superettan Suécia", 107: "I Liga Polônia", 383: "Ligat Ha'Al Israel", 172: "First League Bulgária", 332: "Superliga Eslováquia",
+  271: "NB I Hungria", 373: "PrvaLiga Eslovênia", 219: "2. Liga Áustria", 41: "League One Inglaterra", 42: "League Two Inglaterra",
+  43: "National League Inglaterra", 494: "Super League 2 Grécia", 237: "Copa da Rússia", 121: "Copa da Dinamarca", 5: "UEFA Nations League",
+  10: "Amistosos Internacionais", 17: "AFC Champions League Elite", 99: "J2 League Japão", 293: "K League 2 Coreia do Sul", 290: "Pro League Irã",
+  301: "Pro League Emirados", 274: "Liga 1 Indonésia", 323: "Indian Super League", 296: "Thai League 1 Tailândia", 129: "Primera Nacional Argentina",
+  131: "Primera B Argentina", 240: "Primera B Colômbia", 162: "Primera División Costa Rica", 252: "Primera División Paraguai", 299: "Primera División Venezuela",
+  344: "Primera División Bolívia", 255: "USL Championship EUA", 234: "Liga Nacional Honduras", 339: "Liga Nacional Guatemala", 241: "Copa Colômbia",
+  267: "Copa Chile",
 };
 // mercados extras: nomes do pré-jogo (/odds) e do ao vivo (/odds/live)
 const AF_OU = ["Goals Over/Under", "Match Goals"];
@@ -214,7 +224,8 @@ function apiFootball(key: string): OddsProvider {
     prefix: "af",
     // principais ligas e copas da Europa, Américas, Ásia e Oceania (nomes em AF_LEAGUE)
     defaultSports: "71,72,73,13,11,39,140,135,78,61,2,3,848,75,94,88,144,203,179,40,141,136,79,62,207,218,119,103,113,106,345,197,210,283,286,333," +
-      "128,253,262,239,265,268,281,242,98,292,307,188,169,305,45,48,143,137,81,66",
+      "128,253,262,239,265,268,281,242,98,292,307,188,169,305,45,48,143,137,81,66," +
+      "89,235,204,145,80,95,180,208,120,104,114,107,383,172,332,271,373,219,41,42,43,494,237,121,5,10,17,99,293,290,301,274,323,296,129,131,240,162,252,299,344,255,234,339,241,267",
     async odds(league) {
       const y = await season(league);
       const { response: fx } = await get<AfFixture>(`/fixtures?league=${league}&season=${y}&from=${day(0)}&to=${day(7)}&timezone=UTC`);
