@@ -18,7 +18,12 @@
   <header id="rs-header"></header>
   <p class="container muted" id="adm-gate">Carregando painel…</p>
   <div class="adm" id="admin" hidden>
-    <aside class="adm-side"><nav id="adm-nav"></nav></aside>
+    <button class="adm-burger" id="adm-burger" type="button" aria-label="Abrir menu"><span class="adm-bars"></span><b id="adm-cur">Menu</b></button>
+    <div class="adm-backdrop" id="adm-backdrop"></div>
+    <aside class="adm-side">
+      <div class="adm-side-top"><b>Painel admin</b><button type="button" id="adm-close" aria-label="Fechar menu">✕</button></div>
+      <nav id="adm-nav"></nav>
+    </aside>
     <main class="adm-main" id="adm-main"></main>
   </div>
 
@@ -29,5 +34,6 @@
   <script src="auth-header.js"></script>
   <script src="admin.js"></script>
   <script src="admin-mods.js"></script>
+  <script src="admin-art.js"></script>
 </body>
 </html>
