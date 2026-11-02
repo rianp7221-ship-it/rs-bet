@@ -201,13 +201,15 @@
       <div class="feat-teams"><b>${crest(m, "home")}${RS.esc(m.home)}</b><b>${crest(m, "away")}${RS.esc(m.away)}</b></div>${odds(m)}</div>`;
   }
 
+  // tela principal: só os jogos de hoje que ainda não começaram
+  const mainDay = (m) => !live(m) && sameDay(m.starts_at, 0);
   function visible() {
     const q = query.toLowerCase(), now = Date.now();
     return matches.filter((m) =>
       (sport === "Popular" || m.sport === sport) &&
       (!league || (m.league === league && (lt !== "live" || live(m)))) &&
       (!q || `${m.home} ${m.away} ${m.league} ${lname(m.league)}`.toLowerCase().includes(q)) &&
-      ((view === "all" && (league || q || !live(m))) ||
+      ((view === "all" && (league || q || mainDay(m))) ||
         (view === "live" && live(m)) ||
         (view === "today" && (live(m) || sameDay(m.starts_at, 0))) ||
         (view === "week" && sameDay(m.starts_at, dayOff)) ||
@@ -225,7 +227,7 @@
       || `<p class="muted small" style="padding:0 6px">Sem competições no momento.</p>`);
 
     const count = {};
-    matches.filter((m) => (view === "live" ? live(m) : view !== "all" || league || query || !live(m))).forEach((m) => (count[m.sport] = (count[m.sport] || 0) + 1));
+    matches.filter((m) => (view === "live" ? live(m) : view !== "all" || league || query || mainDay(m))).forEach((m) => (count[m.sport] = (count[m.sport] || 0) + 1));
     if (sport !== "Popular" && !count[sport]) sport = "Popular";
     const sports = ["Popular", ...Object.keys(count).sort((a, b) => count[b] - count[a])];
     RS.$("#sport-pills").innerHTML = sports.map((s) => `<button class="${s === sport ? "active" : ""}" data-sport="${RS.esc(s)}">
@@ -267,7 +269,7 @@
     const rows = visible();
     const reset = home ? "" : `<div class="filter-bar"><button class="btn btn-outline sm" data-view="all">Ver todos os jogos</button></div>`;
     RS.morph(list, reset + (rows.length ? (league ? rows.map(row).join("") : groups(rows))
-      : `<p class="empty">${view === "fav" ? "Toque na estrela de um jogo para salvá-lo nos favoritos." : "Nenhum jogo disponível no momento."}</p>`));
+      : `<p class="empty">${view === "fav" ? "Toque na estrela de um jogo para salvá-lo nos favoritos." : view === "all" && !league && !query ? "Nenhum jogo hoje. Veja os próximos dias no Calendário." : "Nenhum jogo disponível no momento."}</p>`));
     renderMv();
   }
 
