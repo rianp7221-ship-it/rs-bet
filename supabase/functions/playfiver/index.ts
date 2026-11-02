@@ -1,13 +1,13 @@
 // playfiver — cassino PlayFiver em carteira única (os jogos usam o saldo do site).
 // Jogador logado: { action: "launch", game: "<casino_catalog.id>" } → { url }.
-// Admin (casino.manage): { action: "sync" } importa provedores e jogos da PlayFiver.
+// Admin (casino.manage): { action: "sync" } importa provedores e jogos; { action: "status" } mostra agente e saldos.
 // Sem Authorization: webhooks da PlayFiver (saldo e WinBet/Refund), cadastrados como
 // https://<ref>.supabase.co/functions/v1/playfiver (aceita também /webhook e /api/webhook).
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { cors, json } from "../_shared/auth.ts";
 
 const API = "https://api.playfivers.com/api/v2";
-// a PlayFiver só aceita IP cadastrado; game_launch passa pelo proxy de IP fixo (VPS)
+// a PlayFiver só aceita IP cadastrado; as chamadas passam pelo proxy de IP fixo (VPS)
 const PROXY = (Deno.env.get("PLAYFIVER_PROXY_URL") ?? "").replace(/\/$/, "");
 const PROXY_KEY = Deno.env.get("PLAYFIVER_PROXY_KEY") ?? "";
 const TOKEN = Deno.env.get("PLAYFIVER_AGENT_TOKEN") ?? "";
@@ -16,10 +16,10 @@ const url = Deno.env.get("SUPABASE_URL")!;
 const sb = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
 const pf = async (path: string, body?: unknown) => {
-  const base = body && PROXY ? PROXY + "/api/v2" : API;
+  const base = PROXY ? PROXY + "/api/v2" : API;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (body && PROXY) headers["X-Proxy-Key"] = PROXY_KEY;
-  const r = await fetch(base + path, body ? { method: "POST", headers, body: JSON.stringify(body) } : {});
+  if (PROXY) headers["X-Proxy-Key"] = PROXY_KEY;
+  const r = await fetch(base + path, body ? { method: "POST", headers, body: JSON.stringify(body) } : { headers });
   return { status: r.status, data: await r.json().catch(() => ({})) };
 };
 const cat = (p: string) => /LIVE|EVOLUTION|EZUGI|DREAMGAMING|QUEENMAKER|PP_LIVE/i.test(p) ? "ao_vivo" : /CRASH|SPRIBE|AVIATRIX|TURBO|JETX/i.test(p) ? "crash" : "slots";
@@ -84,6 +84,13 @@ Deno.serve(async (req) => {
     const { data: ok } = await userSb.rpc("has_perm", { p_perm: "casino.manage" });
     return ok ? await sync() : json({ error: "Sem permissão" }, 403);
   }
+  if (body.action === "status") {
+    const { data: ok } = await userSb.rpc("has_perm", { p_perm: "casino.manage" });
+    if (!ok) return json({ error: "Sem permissão" }, 403);
+    const q = `?agentToken=${encodeURIComponent(TOKEN)}&secretKey=${encodeURIComponent(SECRET)}`;
+    const [a, b] = await Promise.all([pf("/agent" + q), pf("/balances" + q)]);
+    return json({ agent: a.data, balances: b.data });
+  }
   if (body.action !== "launch") return json({ error: "Ação inválida" }, 400);
 
   const { data: g } = await sb.from("casino_catalog").select("id,name,active,pf_code,pf_provider,pf_original,provider").eq("id", String(body.game ?? "")).maybeSingle();
@@ -101,7 +108,7 @@ Deno.serve(async (req) => {
   });
   if (!r.data?.launch_url) {
     console.error("game_launch", r.status, JSON.stringify(r.data).slice(0, 300));
-    return json({ error: "Não foi possível abrir o jogo agora. Tente novamente." }, 502);
+    return json({ error: "Não foi possível abrir o jogo agora. Tente novamente.", detail: typeof r.data?.msg === "string" ? r.data.msg : r.status }, 502);
   }
   return json({ url: r.data.launch_url, name: g.name });
 });
