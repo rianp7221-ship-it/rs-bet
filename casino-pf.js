@@ -3,7 +3,7 @@
   const wrap = RS.$("#pf-wrap");
   if (!wrap) return;
   const fort = RS.$("#pf-fort"), grid = RS.$("#pf-grid"), more = RS.$("#pf-more"), q = RS.$("#pf-q"), prov = RS.$("#pf-prov");
-  const PAGE = 48, POP = ["Fortune Tiger", "Fortune Rabbit", "Fortune Ox", "Fortune Mouse", "Gates of Olympus", "Sweet Bonanza", "Aviator", "Mines", "Big Bass Splash", "Sugar Rush"];
+  const PAGE = 48, POP = ["Gates of Olympus", "Sweet Bonanza", "Aviator", "Mines", "Big Bass Splash", "Sugar Rush"];
   const FORT = ["126", "1543462", "98", "68", "1695365", "1879752", "3", "2100928"].map((c) => "pf:pf-1:" + c);
   let page = 0, provs = [], timer;
   const tile = (g) => `<button class="pf-tile" data-pf="${RS.esc(g.id)}" title="${RS.esc(g.name)}">
