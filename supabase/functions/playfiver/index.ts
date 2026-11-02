@@ -49,7 +49,7 @@ async function sync() {
   const newProvs = provs.filter((p) => !known.has(`pf-${p.id}`));
   if (newProvs.length) {
     const { error } = await sb.from("casino_providers").insert(newProvs.map((p) => ({
-      id: `pf-${p.id}`, name: p.name, kind: "agregador", image: p.image_url, active: p.status === 1 })));
+      id: `pf-${p.id}`, name: p.name, kind: "agregador", image: p.image_url, active: p.status === 1 && cat(p.name) !== "ao_vivo" })));
     if (error) return json({ error: error.message }, 500);
   }
   const rows = games.filter((g) => pid.has(g.provider?.name) && g.game_code).map((g, i) => ({
