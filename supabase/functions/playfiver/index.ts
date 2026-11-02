@@ -7,13 +7,19 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { cors, json } from "../_shared/auth.ts";
 
 const API = "https://api.playfivers.com/api/v2";
+// a PlayFiver só aceita IP cadastrado; game_launch passa pelo proxy de IP fixo (VPS)
+const PROXY = (Deno.env.get("PLAYFIVER_PROXY_URL") ?? "").replace(/\/$/, "");
+const PROXY_KEY = Deno.env.get("PLAYFIVER_PROXY_KEY") ?? "";
 const TOKEN = Deno.env.get("PLAYFIVER_AGENT_TOKEN") ?? "";
 const SECRET = Deno.env.get("PLAYFIVER_SECRET_KEY") ?? "";
 const url = Deno.env.get("SUPABASE_URL")!;
 const sb = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
 const pf = async (path: string, body?: unknown) => {
-  const r = await fetch(API + path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+  const base = body && PROXY ? PROXY + "/api/v2" : API;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (body && PROXY) headers["X-Proxy-Key"] = PROXY_KEY;
+  const r = await fetch(base + path, body ? { method: "POST", headers, body: JSON.stringify(body) } : {});
   return { status: r.status, data: await r.json().catch(() => ({})) };
 };
 const cat = (p: string) => /LIVE|EVOLUTION|EZUGI|DREAMGAMING|QUEENMAKER|PP_LIVE/i.test(p) ? "ao_vivo" : /CRASH|SPRIBE|AVIATRIX|TURBO|JETX/i.test(p) ? "crash" : "slots";
