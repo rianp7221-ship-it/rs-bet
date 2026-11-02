@@ -14,6 +14,33 @@
   };
   const MODELS = [["auto", "Automático"], ["split", "Confronto diagonal"], ["neon", "Neon"], ["pitch", "Estádio"], ["waves", "Ondas"], ["brand", "Laranja Real Sports"]];
 
+  // ligas principais (mesma ordem da lista de jogos do site)
+  const TOP = ["Brazil Série A", "Brazil Série B", "Copa do Brasil", "CONMEBOL Libertadores", "CONMEBOL Sudamericana",
+    "UEFA Champions League", "Premier League", "La Liga", "Serie A - Italy", "Bundesliga", "Ligue 1", "UEFA Europa League"];
+
+  // .zip sem compressão (PNG já é comprimido)
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = (b) => { let c = ~0; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 255] ^ (c >>> 8); return ~c >>> 0; };
+  function zip(files) {
+    const parts = [], central = [];
+    let off = 0;
+    for (const f of files) {
+      const name = new TextEncoder().encode(f.name), crc = crc32(f.data), n = f.data.length;
+      const h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true);
+      h.setUint32(14, crc, true); h.setUint32(18, n, true); h.setUint32(22, n, true); h.setUint16(26, name.length, true);
+      parts.push(h, name, f.data);
+      const c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true);
+      c.setUint32(16, crc, true); c.setUint32(20, n, true); c.setUint32(24, n, true); c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+      central.push(c, name);
+      off += 30 + name.length + n;
+    }
+    const size = central.reduce((t, x) => t + x.byteLength, 0), e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, size, true); e.setUint32(16, off, true);
+    return new Blob([...parts, ...central, e], { type: "application/zip" });
+  }
+
   const imgCache = new Map();
   const loadImg = (u) => {
     if (!u) return Promise.resolve(null);
@@ -262,6 +289,14 @@
             <input class="input" id="art-q" placeholder="Buscar time ou liga" style="flex:1;min-width:160px">
             <select class="input" id="art-day"><option value="0">Hoje</option><option value="1">Amanhã</option><option value="7">Próximos 7 dias</option></select>
           </div>
+          <div class="art-bulk">
+            <button class="btn btn-primary" id="art-all">Gerar todas das ligas principais</button>
+            <div class="art-actions" id="art-bulk-out" hidden>
+              <button class="btn btn-primary" id="art-sendall">${RS.icon("share")} Compartilhar todas</button>
+              <button class="btn btn-outline" id="art-zip">Baixar .zip</button>
+            </div>
+            <small class="muted" id="art-bulk-msg">Brasileirão, Copa do Brasil, Libertadores, Champions, Premier, La Liga, Serie A, Bundesliga, Ligue 1… do dia escolhido acima.</small>
+          </div>
           <div id="art-list" class="art-list"><p class="muted">Carregando jogos…</p></div>
         </div>
         <div class="panel art-view">
@@ -304,7 +339,8 @@
       RS.$("#art-txt").value = caption(sel);
       for (const id of ["#art-var", "#art-share", "#art-dl", "#art-copy"]) RS.$(id).disabled = false;
     };
-    const fileName = () => `real-sports-${sel.home}-x-${sel.away}`.normalize("NFD").replace(/[^\w-]+/g, "-").toLowerCase() + ".png";
+    const slug = (g) => `real-sports-${g.home}-x-${g.away}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w-]+/g, "-").replace(/-+$/, "").toLowerCase();
+    const fileName = () => `real-sports-${sel.home}-x-${sel.away}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w-]+/g, "-").replace(/-+$/, "").toLowerCase() + ".png";
     const blob = () => new Promise((ok) => cv.toBlob(ok, "image/png"));
     const download = async () => {
       const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(await blob()), download: fileName() });
@@ -316,6 +352,39 @@
       RS.$$(".art-row", RS.$("#art-list")).forEach((r) => r.classList.toggle("active", r === b));
       render();
       if (matchMedia("(max-width: 900px)").matches) RS.$(".art-view").scrollIntoView({ behavior: "smooth" });
+    };
+    // todas as artes das ligas principais do dia escolhido
+    let bulk = [];
+    const bulkDays = () => {
+      const days = +RS.$("#art-day").value;
+      return new Set(Array.from({ length: days || 1 }, (_, i) => when(new Date(Date.now() + (days === 1 ? 1 : i) * 864e5).toISOString()).dayKey));
+    };
+    RS.$("#art-day").addEventListener("change", () => { bulk = []; RS.$("#art-bulk-out").hidden = true; });
+    RS.$("#art-all").onclick = async (e) => {
+      const btn = e.currentTarget, keys = bulkDays();
+      const top = games.filter((g) => TOP.includes(g.league) && keys.has(when(g.starts_at).dayKey))
+        .sort((a, b) => TOP.indexOf(a.league) - TOP.indexOf(b.league) || a.starts_at.localeCompare(b.starts_at));
+      if (!top.length) { RS.toast("Nenhum jogo das ligas principais nesse dia", "error"); return; }
+      btn.disabled = true; bulk = []; RS.$("#art-bulk-out").hidden = true;
+      const c = document.createElement("canvas"), fmt = RS.$("#art-fmt").value, model = RS.$("#art-model").value;
+      for (const [i, g] of top.entries()) {
+        btn.textContent = `Gerando ${i + 1} de ${top.length}…`;
+        await draw(c, g, fmt, model, 0);
+        const b = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.9));
+        bulk.push(new File([b], `${String(i + 1).padStart(2, "0")}-${slug(g)}.jpg`, { type: "image/jpeg" }));
+      }
+      btn.disabled = false; btn.textContent = "Gerar todas das ligas principais";
+      RS.$("#art-bulk-msg").textContent = `${bulk.length} artes prontas.`;
+      RS.$("#art-bulk-out").hidden = false;
+      RS.$("#art-sendall").hidden = !navigator.canShare?.({ files: bulk });
+    };
+    RS.$("#art-sendall").onclick = async () => {
+      try { await navigator.share({ files: bulk }); } catch (err) { if (err.name !== "AbortError") RS.toast("Não deu para compartilhar todas; use Baixar .zip", "error"); }
+    };
+    RS.$("#art-zip").onclick = async () => {
+      const files = await Promise.all(bulk.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) })));
+      const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(zip(files)), download: `real-sports-artes-${when(new Date().toISOString()).dayKey}.zip` });
+      a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
     };
     RS.$("#art-q").oninput = list; RS.$("#art-day").onchange = list;
     RS.$("#art-fmt").onchange = render; RS.$("#art-model").onchange = render;
