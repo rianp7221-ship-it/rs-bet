@@ -710,10 +710,12 @@
       RS.$("#cs-r").onclick = mon;
     }
     async function cfg() {
-      const [{ data: provs }, { data: games }] = await Promise.all([sb.from("casino_providers").select("*").order("name"), sb.from("casino_catalog").select("*").order("sort")]);
+      const [{ data: provs }, { data: games }] = await Promise.all([sb.from("casino_providers").select("*").order("name"), sb.from("casino_catalog").select("*").is("pf_code", null).order("sort")]);
       const pname = Object.fromEntries((provs || []).map((p) => [p.id, p.name]));
       const toggle = (kind, id, on) => manage ? `<button class="btn sm btn-outline" data-${kind}="${id}" data-on="${on ? 0 : 1}">${on ? "Desligar" : "Ligar"}</button>` : "";
       body().innerHTML = `<p class="muted" style="margin-bottom:8px">O RTP do jogo tem prioridade sobre o do provedor, que tem prioridade sobre o RTP global (Configurações → casino_rtp_global). Em branco = herda. Partidas de Mines em andamento mantêm o RTP do início. Para desligar o cassino inteiro use Configurações → casino_enabled.</p>
+        ${manage ? `<p style="margin-bottom:8px"><button class="btn sm btn-primary" id="pf-sync">Importar/atualizar jogos da PlayFiver</button> <span class="muted" id="pf-msg"></span></p>` : ""}
+        <p class="muted small">Jogos da PlayFiver: ligue/desligue pelo provedor (pf-…). O RTP deles é definido no painel da PlayFiver.</p>
         <h3 style="margin:8px 0">Provedores</h3>` +
         table(["Provedor", "Tipo", "Status", "RTP", ""], (provs || []).map((p) => [esc(p.name), p.kind === "interno" ? "Jogos próprios" : "Agregador",
           p.active ? `<span class="badge b-done">Ligado</span>` : `<span class="badge b-canceled">Desligado</span>`, p.rtp == null ? "herda global" : pct(p.rtp),
@@ -722,6 +724,14 @@
         table(["Jogo", "Provedor", "Categoria", "Status", "RTP", "Aposta mín.", "Aposta máx.", ""], (games || []).map((g) => [esc(g.name), esc(pname[g.provider] || g.provider), esc(g.category),
           g.active ? `<span class="badge b-done">Ligado</span>` : `<span class="badge b-canceled">Desligado</span>`, g.rtp == null ? "herda" : pct(g.rtp), M(g.min_stake), M(g.max_stake),
           toggle("gm", g.id, g.active) + (manage ? `<button class="btn sm" data-gedit="${g.id}">Editar</button>` : "")]), "Nenhum jogo.");
+      const sync = RS.$("#pf-sync");
+      if (sync) sync.onclick = async () => {
+        sync.disabled = true; RS.$("#pf-msg").textContent = "Importando…";
+        const { data, error } = await sb.functions.invoke("playfiver", { body: { action: "sync" } });
+        const err = error ? (await error.context?.json?.().catch(() => null))?.error || error.message : null;
+        RS.$("#pf-msg").textContent = err ? err : `${data.games} jogos de ${data.providers} provedores (${data.new} novos).`;
+        sync.disabled = false; if (!err) RS.toast("Jogos importados", "ok");
+      };
       body().onclick = async (e) => {
         const pv = e.target.closest("[data-pv]"), gm = e.target.closest("[data-gm]"), pr = e.target.closest("[data-prtp]"), ge = e.target.closest("[data-gedit]");
         if (pv) { const p = provs.find((x) => x.id === pv.dataset.pv); if (await act("admin_casino_provider", { p_id: p.id, p_active: pv.dataset.on === "1", p_rtp: p.rtp }, "Provedor atualizado")) cfg(); }

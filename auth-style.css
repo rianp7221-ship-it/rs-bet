@@ -621,3 +621,16 @@ body.mv-open { overflow: hidden; }
 .row-teams small .lg-logo { width: 14px; height: 14px; vertical-align: -2px; }
 .bc-teams .crest { width: 15px; height: 15px; vertical-align: -3px; margin-right: 5px; }
 .si-teams .crest, .si-bb + small .crest { width: 14px; height: 14px; vertical-align: -2px; margin-right: 5px; }
+/* cassino PlayFiver */
+.pf-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.pf-bar .input { flex: 1 1 180px; }
+.pf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.pf-tile { background: #1b2233; border: 0; border-radius: 12px; overflow: hidden; padding: 0; cursor: pointer; color: #fff; text-align: left; }
+.pf-tile img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #0f1522; }
+.pf-tile span { display: block; padding: 6px 8px; font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-ov { position: fixed; inset: 0; z-index: 9999; background: #000; display: flex; flex-direction: column; }
+.pf-ov-top { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; color: #fff; background: #111; padding-top: max(8px, env(safe-area-inset-top)); }
+.pf-ov-top button { background: none; border: 0; color: #fff; font-size: 22px; cursor: pointer; }
+.pf-ov-body { flex: 1; }
+.pf-ov-body iframe { width: 100%; height: 100%; border: 0; display: block; }
+@media (max-width: 600px) { .pf-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; } }
