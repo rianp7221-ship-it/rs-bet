@@ -7,14 +7,12 @@
   const form = RS.$("#auth-form");
   const title = RS.$("#auth-title");
   const submit = RS.$("#auth-submit");
-  const nameRow = RS.$("#row-username");
   const ageRow = RS.$("#row-age");
   let mode = "login";
 
   function setMode(m) {
     mode = m;
     RS.$$(".auth-switch button").forEach((b) => b.classList.toggle("active", b.dataset.mode === m));
-    nameRow.classList.toggle("hidden", m !== "signup");
     ["#row-fullname", "#row-cpf"].forEach((r) => RS.$(r).classList.toggle("hidden", m !== "signup"));
     ageRow.classList.toggle("hidden", m !== "signup");
     RS.$("#row-password").classList.toggle("hidden", m === "reset");
@@ -48,7 +46,7 @@
         if (!(await RS.rpc("cpf_available", { p_cpf: cpf }))) throw new Error("Este CPF já tem conta. Faça login.");
         const { data, error } = await sb.auth.signUp({
           email, password,
-          options: { data: { full_name: fullName, cpf, username: form.username.value.trim(), ref: localStorage.getItem("rs-ref") || undefined, aff: localStorage.getItem("rs-aff") || undefined }, emailRedirectTo: location.origin + "/index.html" },
+          options: { data: { full_name: fullName, cpf, username: fullName.split(" ")[0], ref: localStorage.getItem("rs-ref") || undefined, aff: localStorage.getItem("rs-aff") || undefined }, emailRedirectTo: location.origin + "/index.html" },
         });
         if (error) throw error;
         if (data.session) location.href = "index.html";
