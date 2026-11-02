@@ -120,6 +120,14 @@ label.check { display: flex; gap: 8px; align-items: center; margin-bottom: 14px;
 .row-teams { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 15px; }
 .row-teams span { display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-teams small { color: var(--text); font-size: 12px; margin-top: 2px; }
+.lg-group { background: #fff; border: 1px solid #e3e7f0; border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; }
+.lg-bar { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; background: var(--text); color: #fff; border: 0; font: inherit; font-size: 15px; text-align: left; cursor: pointer; }
+.lg-bar b { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-bar em { font-style: normal; font-size: 12px; font-weight: 700; background: var(--primary); border-radius: 10px; padding: 1px 8px; }
+.lg-bar .comp-ico { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; background: #fff; border-radius: 50%; font-size: 14px; overflow: hidden; }
+.lg-bar .lg-logo { width: 18px; height: 18px; object-fit: contain; }
+.lg-group .row { border: 0; border-radius: 0; margin: 0; border-top: 1px solid #eef1f6; }
+.lg-group .row-teams small { display: none; }
 .shirt { width: 16px; height: 16px; flex: none; }
 .fav { background: none; border: none; color: #8a94ad; cursor: pointer; font-size: 18px; padding: 4px; }
 .fav.on { color: var(--gold); }
