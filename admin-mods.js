@@ -252,7 +252,7 @@
     const { can, act, table, head, badge } = A();
     const manage = can("sports.manage");
     main().innerHTML = head("Apostas e jogos") + `
-      <div class="tabs-sm" id="sp-tabs"><button class="chip active" data-v="matches">Jogos</button><button class="chip" data-v="bets">Bilhetes</button><button class="chip" data-v="exp">Exposição</button></div>
+      <div class="tabs-sm" id="sp-tabs"><button class="chip active" data-v="matches">Jogos</button><button class="chip" data-v="bets">Bilhetes</button><button class="chip" data-v="exp">Exposição</button>${manage ? `<button class="chip" data-v="odds">Gerenciar odds</button>` : ""}</div>
       <div id="sp-matches">
         ${manage ? `<div class="panel" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-primary" id="sync-odds">Buscar jogos e odds reais (API)</button>
@@ -268,7 +268,7 @@
           <input name="odd_away" type="number" step="0.01" min="1.01" class="input" placeholder="Odd fora" required>
           <button class="btn btn-primary">Adicionar jogo</button></form>` : ""}
         <div id="m-list"></div></div>
-      <div id="sp-bets" hidden></div><div id="sp-exp" hidden></div>`;
+      <div id="sp-bets" hidden></div><div id="sp-exp" hidden></div><div id="sp-odds" hidden></div>`;
     async function matches() {
       const { data } = await sb.from("matches").select("*").order("starts_at", { ascending: false }).limit(150);
       RS.$("#m-list").innerHTML = table(["Jogo", "Data", "Odds", "Status", manage ? "Ações" : ""], (data || []).map((m) => [
@@ -334,6 +334,44 @@
         else RS.$("#bv-save", m).disabled = false;
       };
     }
+    // Gerenciar odds: % sobre a odd da fonte por mercado e resultado (-5 = 5% menor)
+    const MKS = [["1x2", "Vencedor do Encontro", [["home", "Casa"], ["draw", "Empate"], ["away", "Fora"]]],
+      ["dc", "Chance Dupla", [["1x", "Casa ou empate"], ["12", "Casa ou fora"], ["x2", "Empate ou fora"]]],
+      ["dnb", "Empate anula aposta", [["home", "Casa"], ["away", "Fora"]]],
+      ["btts", "Ambas as equipes marcam", [["yes", "Sim"], ["no", "Não"]]],
+      ...["1,5", "2,5", "3,5"].map((l) => [`ou${l.replace(",", "")}`, `Total de gols ${l}`, [["over", `Mais de ${l}`], ["under", `Menos de ${l}`]]])];
+    let oaMk = "1x2";
+    async function oddsAdjust() {
+      const box = RS.$("#sp-odds");
+      const { data } = await sb.from("settings").select("value").eq("key", "odds_adjust").maybeSingle();
+      let cfg = data?.value || {};
+      const draw = () => {
+        const m = MKS.find((x) => x[0] === oaMk);
+        box.innerHTML = `<div class="panel" style="max-width:520px">
+          <p class="muted small" style="margin-bottom:10px">Ajuste em % sobre a odd da fonte: -5 deixa a odd 5% menor. Vale na hora para os jogos abertos e ao vivo e continua nas próximas atualizações. Inativo = odd da fonte.</p>
+          <label><b>Selecione um mercado:</b><select class="input" id="oa-mk">${MKS.map(([k, t]) => `<option value="${k}" ${k === oaMk ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+          ${m[2].map(([p, t]) => { const e = cfg[oaMk]?.[p] || {}; return `<div style="margin-top:14px"><b>${t}</b>
+            <div style="display:flex;gap:6px;margin-top:6px"><input class="input" type="number" step="0.5" min="-50" max="50" data-pct="${p}" value="${e.pct ?? 0}" style="margin:0;flex:1"><button class="btn btn-green" data-ok="${p}" title="Salvar e ativar">✓</button></div>
+            <div style="display:flex;gap:6px;margin-top:6px;align-items:center"><span class="input" style="margin:0;flex:1;background:var(--bg2,#eef0f4)">${e.on ? "Ativo" : "Inativo"}</span>
+              <button class="btn ${e.on ? "btn-outline danger" : "btn-primary"}" data-on="${p}">${e.on ? "Desativar" : "Ativar"}</button></div></div>`; }).join("")}</div>`;
+      };
+      const save = async (p, patch) => {
+        const next = JSON.parse(JSON.stringify(cfg));
+        next[oaMk] = next[oaMk] || {};
+        next[oaMk][p] = { pct: 0, on: false, ...next[oaMk][p], ...patch };
+        if (await act("admin_set_odds_adjust", { p_value: next }, "Odds atualizadas")) { cfg = next; draw(); }
+      };
+      box.onchange = (e) => { if (e.target.id === "oa-mk") { oaMk = e.target.value; draw(); } };
+      box.onclick = (e) => {
+        const ok = e.target.closest("[data-ok]"), on = e.target.closest("[data-on]");
+        if (ok) {
+          const v = Number(RS.$(`[data-pct="${ok.dataset.ok}"]`, box).value);
+          if (!Number.isFinite(v) || Math.abs(v) > 50) { RS.toast("Use um valor entre -50 e 50", "error"); return; }
+          save(ok.dataset.ok, { pct: v, on: true });
+        } else if (on) save(on.dataset.on, { on: !cfg[oaMk]?.[on.dataset.on]?.on });
+      };
+      draw();
+    }
     RS.$("#sp-tabs").onclick = (e) => {
       const b = e.target.closest("[data-v]");
       if (!b) return;
@@ -341,6 +379,8 @@
       RS.$("#sp-matches").hidden = b.dataset.v !== "matches";
       RS.$("#sp-bets").hidden = b.dataset.v !== "bets";
       RS.$("#sp-exp").hidden = b.dataset.v !== "exp";
+      RS.$("#sp-odds").hidden = b.dataset.v !== "odds";
+      if (b.dataset.v === "odds") oddsAdjust();
       if (b.dataset.v === "bets") bets();
       if (b.dataset.v === "exp") exposure();
     };
