@@ -330,10 +330,14 @@
     render(); renderSlip(); persist();
   }
 
+  let oddMax = 0;
+  const capOdd = (o) => (oddMax > 0 ? Math.min(o, oddMax) : o);
+  RS.rpc("bet_limits").then((l) => { oddMax = Number(l && l.total_odd_max) || 0; if (slip.size) renderSlip(); }).catch(() => {});
+
   function renderSlip() {
     const items = [...slip.entries()].filter(([id]) => matches.some((m) => m.id === id));
     const n = items.length;
-    const total = items.reduce((a, [, s]) => a * s.odd, 1);
+    const total = capOdd(items.reduce((a, [, s]) => a * s.odd, 1));
     const saved = localStorage.getItem("rs-saved-slip");
     RS.$("#slip-count").textContent = `${n}/${MAX}`;
     box.classList.toggle("empty", !n && !saved);
@@ -386,7 +390,7 @@
     const upd = () => {
       stakeVal = stake.value;
       const v = num(stake.value);
-      RS.$("#slip-return").textContent = RS.money(sys ? combos.reduce((a, c) => a + v * Number(c.reduce((x, o) => x * o, 1).toFixed(2)), 0)
+      RS.$("#slip-return").textContent = RS.money(sys ? combos.reduce((a, c) => a + v * Number(capOdd(c.reduce((x, o) => x * o, 1)).toFixed(2)), 0)
         : multi ? v * Number(total.toFixed(2)) : items.reduce((a, [, s]) => a + v * s.odd, 0));
       const bets = sys ? combos.length : multi ? 1 : n;
       const ps = RS.$("#pl-stake");
