@@ -457,9 +457,9 @@
     if (!dep) return withdrawModal();
     const m = RS.modal(`
       <h3>${dep ? "Depositar" : "Sacar"}</h3>
-      <p class="muted">${dep ? "Mínimo R$ 10,00. O saldo entra assim que o pagamento for confirmado." : "Mínimo R$ 20,00. O valor é reservado até a aprovação."}</p>
+      <p class="muted">${dep ? "Mínimo R$ 1,00. O saldo entra assim que o pagamento for confirmado." : "Mínimo R$ 20,00. O valor é reservado até a aprovação."}</p>
       <div class="chips">${[20, 50, 100, 500].map((v) => `<button class="chip" data-v="${v}">R$ ${v}</button>`).join("")}</div>
-      <input type="number" id="mm-amount" class="input" min="${dep ? 10 : 20}" step="0.01" placeholder="Valor">
+      <input type="number" id="mm-amount" class="input" min="${dep ? 1 : 20}" step="0.01" placeholder="Valor">
       ${dep ? "" : `<div class="ap-field"><label>Tipo da chave PIX</label><select class="input" id="mm-ktype">
         <option value="cpf">CPF</option><option value="email">E-mail</option><option value="telefone">Celular</option>
         <option value="aleatoria">Chave aleatória</option><option value="cnpj">CNPJ</option></select></div>
