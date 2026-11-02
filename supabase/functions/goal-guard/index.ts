@@ -1,7 +1,7 @@
 // goal-guard — chamado pelo pg_cron a cada 5 s (header x-cron-secret). Publicar com --no-verify-jwt.
-// Placar da ESPN como 2ª fonte: se a ESPN já mostra mais gols que o nosso jogo ao vivo, trava apostas e cashout
+// Placar da ESPN e do 365Scores como 2ª/3ª fonte: se uma delas já mostra mais gols que o nosso jogo ao vivo, trava apostas e cashout
 // até a API-Football confirmar o gol (aí o sync-odds aplica a trava normal). Máx. 3 min por placar, para um
-// placar errado ou um jogo trocado na ESPN não travar o mercado para sempre.
+// placar errado ou um jogo trocado na fonte externa não travar o mercado para sempre.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { cors, json } from "../_shared/auth.ts";
 
@@ -35,7 +35,8 @@ const tokens = (s: string) => new Set(s.replace(/ø/g, "o").replace(/ı/g, "i").
   .toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3 && !STOP.has(t)));
 const hits = (a: Set<string>, b: Set<string>) => [...a].filter((t) => b.has(t)).length;
 
-type Live = { id: number; league: string; home: string; away: string; score_home: number | null; score_away: number | null; suspended_until: string | null };
+type Live = { id: number; league: string; home: string; away: string; starts_at: string; score_home: number | null; score_away: number | null; suspended_until: string | null };
+type G365 = { id: number; startTime: string; statusGroup: number; homeCompetitor: { name: string; score?: number }; awayCompetitor: { name: string; score?: number } };
 type Side = { homeAway: string; score?: string; team: { displayName: string; shortDisplayName?: string } };
 type Ev = { id: string; status?: { type?: { state?: string } }; competitions?: { competitors?: Side[] }[] };
 
@@ -45,7 +46,7 @@ Deno.serve(async (req) => {
   if (!secret || req.headers.get("x-cron-secret") !== secret) return json({ error: "Sem permissão" }, 401);
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-  const { data } = await sb.from("matches").select("id, league, home, away, score_home, score_away, suspended_until").eq("status", "live");
+  const { data } = await sb.from("matches").select("id, league, home, away, starts_at, score_home, score_away, suspended_until").eq("status", "live");
   const live = (data ?? []) as Live[];
   if (!live.length) return json({ live: 0 });
   const slugs = [...new Set(live.map((m) => ESPN[m.league]).filter(Boolean))];
@@ -56,6 +57,10 @@ Deno.serve(async (req) => {
       return [s, ((j?.events ?? []) as Ev[]).filter((e) => e.status?.type?.state === "in")] as const;
     } catch { return [s, [] as Ev[]] as const; }
   })));
+  // 365Scores: uma chamada traz todos os jogos ao vivo do mundo (cobre ligas que a ESPN não tem)
+  const g365 = await fetch("https://webws.365scores.com/web/games/current/?appTypeId=5&langId=1&timezoneName=UTC&userCountryId=21&sports=1",
+    { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(4000) })
+    .then((r) => r.json()).then((j) => ((j?.games ?? []) as G365[]).filter((g) => g.statusGroup === 3)).catch(() => [] as G365[]);
   const { data: gs } = await sb.from("goal_guard").select("match_id, espn_home, espn_away, first_at").in("match_id", live.map((m) => m.id));
   const guard = new Map((gs ?? []).map((g) => [g.match_id as number, g]));
 
@@ -73,6 +78,18 @@ Deno.serve(async (req) => {
       if (score > bestScore) { best = { ev, h: Number(H.score) || 0, a: Number(A.score) || 0 }; bestScore = score; tie = false; }
       else if (score && score === bestScore) tie = true;
     }
+    // 365Scores: mesmo horário de início (±20 min) e pelo menos um dos times com nome parecido
+    let b365: G365 | null = null, s365 = 0, tie365 = false;
+    for (const x of g365) {
+      if (Math.abs(Date.parse(x.startTime) - Date.parse(m.starts_at)) > 20 * 60_000) continue;
+      const th = tokens(x.homeCompetitor.name), ta = tokens(x.awayCompetitor.name);
+      const sc = Math.max(hits(mh, th) + hits(ma, ta), hits(mh, ta) + hits(ma, th));
+      if (sc > s365) { b365 = x; s365 = sc; tie365 = false; } else if (sc && sc === s365) tie365 = true;
+    }
+    if (b365 && !tie365) {
+      const h = Number(b365.homeCompetitor.score) || 0, a = Number(b365.awayCompetitor.score) || 0;
+      if (!best || tie || h + a > best.h + best.a) { best = { ev: { id: `365:${b365.id}` }, h, a }; tie = false; }
+    }
     const g = guard.get(m.id);
     if (!best || tie) { if (g) await sb.from("goal_guard").delete().eq("match_id", m.id); continue; }
     matched++;
@@ -87,5 +104,5 @@ Deno.serve(async (req) => {
     }
     locked++;
   }
-  return json({ live: live.length, leagues: slugs.length, matched, locked });
+  return json({ live: live.length, leagues: slugs.length, g365: g365.length, matched, locked });
 });
