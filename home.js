@@ -32,11 +32,14 @@
     (async () => {
       const { data } = await sb.from("banners").select("*").order("sort").order("id");
       if (!data?.length) return;
-      strip.insertAdjacentHTML("afterbegin", data.map((b) => `<a class="cs-tile pb-tile pb-${RS.esc(b.theme)}${b.image_url ? " pb-img" : ""}" ${linkOf(b)}
-          ${b.image_url ? `style="background-image:linear-gradient(180deg,rgba(0,0,0,0) 45%,rgba(0,0,0,.75)),url('${RS.esc(b.image_url)}')"` : ""}>
-          ${b.image_url ? "" : `<span class="pb-art">${RS.icon(b.icon || "ball")}</span><small class="pb-cta">${RS.esc(b.cta || "")}</small>`}
-          <b>${RS.esc(b.title)}</b></a>`).join(""));
+      strip.insertAdjacentHTML("beforebegin", `<div class="pc-strip" id="pc-strip">${data.map((b) => `<a class="pc pc-${RS.esc(b.theme)}${b.image_url ? " pc-img" : ""}" ${linkOf(b)}
+          ${b.image_url ? `style="--pc-img:url('${RS.esc(b.image_url)}')"` : ""}>
+          <span class="pc-glow"></span><span class="pc-shine"></span>
+          ${b.image_url ? "" : `<span class="pc-art">${RS.icon(b.icon || "ball")}</span>`}
+          <span class="pc-body"><b>${RS.esc(b.title)}</b>${b.subtitle ? `<small>${RS.esc(b.subtitle)}</small>` : ""}
+          ${b.cta ? `<span class="pc-cta">${RS.esc(b.cta)} <i>→</i></span>` : ""}</span></a>`).join("")}</div>`);
     })();
+    document.addEventListener("click", (e) => { if (e.target.closest("#pc-strip [data-promo-dep]")) { e.preventDefault(); document.dispatchEvent(new Event("rs:deposit")); } });
     strip.addEventListener("click", (e) => { if (e.target.closest("[data-promo-dep]")) { e.preventDefault(); document.dispatchEvent(new Event("rs:deposit")); } });
   }
 
