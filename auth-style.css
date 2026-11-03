@@ -97,6 +97,7 @@ label.check { display: flex; gap: 8px; align-items: center; margin-bottom: 14px;
 
 /* faixa do cassino */
 .casino-strip { display: grid; grid-auto-flow: column; grid-auto-columns: 132px; gap: 10px; overflow-x: auto; margin-bottom: 18px; scrollbar-width: none; }
+.casino-strip:not(:has(> a:not([style*="none"]))) { display: none; }
 .cs-tile { aspect-ratio: 1 / 1; border-radius: 10px; color: #fff; padding: 10px; display: flex; flex-direction: column; justify-content: flex-end; position: relative; overflow: hidden; font-weight: 700; font-size: 13px; }
 .cs-tile i { position: absolute; top: 6px; right: 8px; font-style: normal; font-size: 44px; }
 .cs-tile small { font-weight: 400; opacity: .85; font-size: 11px; }
@@ -104,8 +105,6 @@ label.check { display: flex; gap: 8px; align-items: center; margin-bottom: 14px;
 .cs-leao i, .t-leao i { visibility: hidden; }
 .cs-mines { background: radial-gradient(circle at 70% 20%, #3fd28a, #0b5d48 70%); }
 .cs-dice { background: radial-gradient(circle at 70% 20%, #ff9a3c, #7a2bb0 75%); }
-.cs-live { background: radial-gradient(circle at 70% 20%, #ff5a5a, #3a1450 75%); }
-.cs-refer { background: radial-gradient(circle at 70% 20%, #ffb23e, #a02a00 75%); }
 
 /* lista de jogos */
 .action-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 6px 0 12px; }
