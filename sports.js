@@ -42,30 +42,53 @@
   const stKeys = (m, p) => Object.keys(m?.markets || {}).filter((k) => k[0] === p && /^[st]\d+$/.test(k)).sort((a, b) => a.slice(1) - b.slice(1));
   const oddOf = (m, mk, pick) => mk === "bb" ? bbOdd(m, pick) : Number(mk === "1x2" ? m?.["odd_" + pick] : m?.markets?.[mk]?.[pick]) || 0;
   // Criar Aposta: mesmo modelo de Poisson do servidor (_bb_odd); o servidor recalcula a odd ao apostar
-  const BB_MK = ["1x2", "ou15", "ou25", "ou35", "btts", "dc"], BB_MAX = 4;
+  // pernas de gols: Poisson do placar; escanteios/cartões/chutes: odd justa do próprio mercado, 1 perna por grupo
+  const GOAL_RE = /^(1x2|dc|btts|btts1|btts2|ht1x2|ou\d+|hto\d+)$/, HALF_RE = /^(ht1x2|btts1|btts2|hto\d+)$/, BB_MAX = 4;
+  const bbFam = (mk) => /^(c1x2|co\d+|ch\d+|ca\d+)$/.test(mk) ? "c" : /^(k\d+|kh\d+|ka\d+)$/.test(mk) ? "k" : /^(s1x2|t1x2|[st]\d+|sh\d+|sa\d+)$/.test(mk) ? "s" : null;
+  const bbOk = (mk) => GOAL_RE.test(mk) || !!bbFam(mk);
   let bbMargin = 10;
   sb.rpc("bb_params").then(({ data }) => { if (data?.margin != null) bbMargin = Number(data.margin); });
   const legsOf = (s) => (s ? (s.market === "bb" ? s.pick.split("|").map((l) => l.split(":")) : [[s.market, s.pick]]) : []);
-  const legWon = (mk, p, h, a) => {
+  const ouL = (mk) => Number(mk.replace(/^[a-z]+/, "")) / 10;
+  const legWon = (mk, p, h, a, h1 = 0, a1 = 0) => {
     if (mk === "1x2") return (h > a ? "home" : h < a ? "away" : "draw") === p;
     if (mk === "btts") return (h > 0 && a > 0) === (p === "yes");
     if (mk === "dc") return p === "1x" ? h >= a : p === "x2" ? h <= a : h !== a;
-    return (h + a > { ou15: 1.5, ou25: 2.5, ou35: 3.5 }[mk]) === (p === "over");
+    if (mk === "ht1x2") return (h1 > a1 ? "home" : h1 < a1 ? "away" : "draw") === p;
+    if (mk === "btts1") return (h1 > 0 && a1 > 0) === (p === "yes");
+    if (mk === "btts2") return (h - h1 > 0 && a - a1 > 0) === (p === "yes");
+    if (/^hto\d+$/.test(mk)) return (h1 + a1 > ouL(mk)) === (p === "over");
+    return (h + a > ouL(mk)) === (p === "over");
   };
   const bbReady = (m) => !!m && m.status === "open" && m.bb_lh != null && new Date(m.starts_at) > new Date();
   function bbOdd(m, pick) {
     const legs = String(pick).split("|").map((l) => l.split(":"));
     if (!bbReady(m) || legs.length < 2 || legs.length > BB_MAX || new Set(legs.map((l) => l[0])).size !== legs.length) return 0;
-    let prod = 1;
+    let prod = 1, pst = 1, half = false;
+    const goal = [], fams = new Set();
     for (const [mk, p] of legs) {
-      const o = BB_MK.includes(mk) ? oddOf(m, mk, p) : 0;
+      const o = bbOk(mk) ? oddOf(m, mk, p) : 0;
       if (!(o > 1)) return 0;
       prod *= o;
+      if (GOAL_RE.test(mk)) { goal.push([mk, p]); half ||= HALF_RE.test(mk); continue; }
+      const f = bbFam(mk);
+      if (fams.has(f)) return 0;
+      fams.add(f);
+      pst *= (1 / o) / Object.values(m.markets?.[mk] || {}).filter((x) => x > 1).reduce((t, x) => t + 1 / x, 0);
     }
-    const pois = (l) => { const r = [Math.exp(-l)]; for (let i = 1; i <= 10; i++) r.push((r[i - 1] * l) / i); return r; };
-    const ph = pois(Number(m.bb_lh)), pa = pois(Number(m.bb_la));
+    const pois = (l, n) => { const r = [Math.exp(-l)]; for (let i = 1; i <= n; i++) r.push((r[i - 1] * l) / i); return r; };
+    const lh = Number(m.bb_lh), la = Number(m.bb_la), won = (h, a, h1, a1) => goal.every(([mk, p]) => legWon(mk, p, h, a, h1, a1));
     let pr = 0;
-    for (let h = 0; h <= 10; h++) for (let a = 0; a <= 10; a++) if (legs.every(([mk, p]) => legWon(mk, p, h, a))) pr += ph[h] * pa[a];
+    if (!goal.length) pr = 1;
+    else if (!half) {
+      const ph = pois(lh, 10), pa = pois(la, 10);
+      for (let h = 0; h <= 10; h++) for (let a = 0; a <= 10; a++) if (won(h, a, 0, 0)) pr += ph[h] * pa[a];
+    } else {
+      const h1 = pois(0.45 * lh, 6), a1 = pois(0.45 * la, 6), h2 = pois(0.55 * lh, 6), a2 = pois(0.55 * la, 6);
+      for (let i = 0; i <= 6; i++) for (let j = 0; j <= 6; j++) for (let x = 0; x <= 6; x++) for (let y = 0; y <= 6; y++)
+        if (won(i + x, j + y, i, j)) pr += h1[i] * a1[j] * h2[x] * a2[y];
+    }
+    pr *= pst;
     if (pr < 0.002) return 0;
     const v = Math.round(Math.min(prod, (1 / pr) * (1 - bbMargin / 100)) * 100) / 100;
     return v >= 1.05 ? v : 0;
@@ -172,27 +195,27 @@
   const MV_TABS = { all: "Todos", main: "Principais", goals: "Gols", corners: "Escanteios", cards: "Cartões", shots: "Chutes" };
   const MV_GROUPS = [
     { key: "r", tab: "main", name: "Resultado Final", rows: (m) => [[["1x2", "home", m.home], ["1x2", "draw", "Empate"], ["1x2", "away", m.away]]] },
-    { key: "ht", tab: "main", name: "Resultado 1º Tempo", ca: false, rows: (m) => [[["ht1x2", "home", m.home], ["ht1x2", "draw", "Empate"], ["ht1x2", "away", m.away]]] },
+    { key: "ht", tab: "main", name: "Resultado 1º Tempo", rows: (m) => [[["ht1x2", "home", m.home], ["ht1x2", "draw", "Empate"], ["ht1x2", "away", m.away]]] },
     { key: "ou", tab: "goals", name: "Total de Gols Mais/Menos", rows: () => ["ou05", "ou15", "ou25", "ou35", "ou45", "ou55"].map((k) => Object.entries(MK[k][1]).map(([p, l]) => [k, p, l])) },
-    { key: "hto", tab: "goals", name: "Gols 1º Tempo Mais/Menos", ca: false, rows: pxRows("hto") },
+    { key: "hto", tab: "goals", name: "Gols 1º Tempo Mais/Menos", rows: pxRows("hto") },
     { key: "btts", tab: "goals", name: "Ambas equipes Marcam", rows: () => [[["btts", "yes", "Sim"], ["btts", "no", "Não"]]] },
-    { key: "btts1", tab: "goals", name: "Ambas Marcam 1º Tempo", ca: false, rows: () => [[["btts1", "yes", "Sim"], ["btts1", "no", "Não"]]] },
-    { key: "btts2", tab: "goals", name: "Ambas Marcam 2º Tempo", ca: false, rows: () => [[["btts2", "yes", "Sim"], ["btts2", "no", "Não"]]] },
+    { key: "btts1", tab: "goals", name: "Ambas Marcam 1º Tempo", rows: () => [[["btts1", "yes", "Sim"], ["btts1", "no", "Não"]]] },
+    { key: "btts2", tab: "goals", name: "Ambas Marcam 2º Tempo", rows: () => [[["btts2", "yes", "Sim"], ["btts2", "no", "Não"]]] },
     { key: "dc", tab: "main", name: "Chance Dupla", rows: (m) => [[["dc", "1x", `${m.home} ou Empate`], ["dc", "x2", `Empate ou ${m.away}`], ["dc", "12", `${m.home} ou ${m.away}`]]] },
     { key: "dnb", tab: "main", name: "Empate Anula", ca: false, rows: (m) => [[["dnb", "home", m.home], ["dnb", "away", m.away]]] },
-    { key: "c1x2", tab: "corners", name: "Escanteios 1X2", ca: false, rows: (m) => [[["c1x2", "home", m.home], ["c1x2", "draw", "Empate"], ["c1x2", "away", m.away]]] },
-    { key: "co", tab: "corners", name: "Total de Escanteios Mais/Menos", ca: false, rows: (m) => coKeys(m).map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
-    { key: "ch", tab: "corners", name: "Escanteios Casa Mais/Menos", ca: false, rows: pxRows("ch") },
-    { key: "ca", tab: "corners", name: "Escanteios Fora Mais/Menos", ca: false, rows: pxRows("ca") },
-    { key: "ko", tab: "cards", name: "Total de Cartões Mais/Menos", ca: false, rows: (m) => kKeys(m).map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
-    { key: "kh", tab: "cards", name: "Cartões Casa Mais/Menos", ca: false, rows: pxRows("kh") },
-    { key: "ka", tab: "cards", name: "Cartões Fora Mais/Menos", ca: false, rows: pxRows("ka") },
-    { key: "s1x2", tab: "shots", name: "Chutes 1X2", ca: false, rows: (m) => [[["s1x2", "home", m.home], ["s1x2", "draw", "Empate"], ["s1x2", "away", m.away]]] },
-    { key: "so", tab: "shots", name: "Total de Chutes Mais/Menos", ca: false, rows: (m) => stKeys(m, "s").map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
-    { key: "sh", tab: "shots", name: "Chutes Casa Mais/Menos", ca: false, rows: pxRows("sh") },
-    { key: "sa", tab: "shots", name: "Chutes Fora Mais/Menos", ca: false, rows: pxRows("sa") },
-    { key: "t1x2", tab: "shots", name: "Chutes no Gol 1X2", ca: false, rows: (m) => [[["t1x2", "home", m.home], ["t1x2", "draw", "Empate"], ["t1x2", "away", m.away]]] },
-    { key: "to", tab: "shots", name: "Total de Chutes no Gol Mais/Menos", ca: false, rows: (m) => stKeys(m, "t").map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
+    { key: "c1x2", tab: "corners", name: "Escanteios 1X2", rows: (m) => [[["c1x2", "home", m.home], ["c1x2", "draw", "Empate"], ["c1x2", "away", m.away]]] },
+    { key: "co", tab: "corners", name: "Total de Escanteios Mais/Menos", rows: (m) => coKeys(m).map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
+    { key: "ch", tab: "corners", name: "Escanteios Casa Mais/Menos", rows: pxRows("ch") },
+    { key: "ca", tab: "corners", name: "Escanteios Fora Mais/Menos", rows: pxRows("ca") },
+    { key: "ko", tab: "cards", name: "Total de Cartões Mais/Menos", rows: (m) => kKeys(m).map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
+    { key: "kh", tab: "cards", name: "Cartões Casa Mais/Menos", rows: pxRows("kh") },
+    { key: "ka", tab: "cards", name: "Cartões Fora Mais/Menos", rows: pxRows("ka") },
+    { key: "s1x2", tab: "shots", name: "Chutes 1X2", rows: (m) => [[["s1x2", "home", m.home], ["s1x2", "draw", "Empate"], ["s1x2", "away", m.away]]] },
+    { key: "so", tab: "shots", name: "Total de Chutes Mais/Menos", rows: (m) => stKeys(m, "s").map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
+    { key: "sh", tab: "shots", name: "Chutes Casa Mais/Menos", rows: pxRows("sh") },
+    { key: "sa", tab: "shots", name: "Chutes Fora Mais/Menos", rows: pxRows("sa") },
+    { key: "t1x2", tab: "shots", name: "Chutes no Gol 1X2", rows: (m) => [[["t1x2", "home", m.home], ["t1x2", "draw", "Empate"], ["t1x2", "away", m.away]]] },
+    { key: "to", tab: "shots", name: "Total de Chutes no Gol Mais/Menos", rows: (m) => stKeys(m, "t").map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
   ];
   const mvBtn = (m, [mk, p, label]) => {
     const odd = oddOf(m, mk, p);
@@ -335,8 +358,8 @@
     const m = matches.find((x) => x.id === id);
     if (!m || suspended(m)) return;
     const cur = slip.get(id);
-    if (bbOn.has(id) && bbReady(m) && BB_MK.includes(market)) {
-      let legs = legsOf(cur).filter(([k]) => BB_MK.includes(k));
+    if (bbOn.has(id) && bbReady(m) && bbOk(market)) {
+      let legs = legsOf(cur).filter(([k]) => bbOk(k));
       if (legs.some(([k, p]) => k === market && p === pick)) legs = legs.filter(([k]) => k !== market);
       else if (legs.some(([k]) => k === market)) legs = legs.map(([k, p]) => [k, k === market ? pick : p]);
       else if (legs.length >= BB_MAX) { RS.toast(`Criar Aposta: até ${BB_MAX} mercados por jogo.`, "error"); return; }
