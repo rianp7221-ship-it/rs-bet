@@ -292,7 +292,7 @@ function apiFootball(key: string): OddsProvider {
       }
       return open.map((f) => ({
         id: String(f.fixture.id), league: AF_LEAGUE[f.league.id] ?? f.league.name, sport: "Futebol", home: f.teams.home.name, away: f.teams.away.name,
-        commence_time: f.fixture.date, odds: pick(ref.get(f.fixture.id) ?? []) ?? pick(prices.get(f.fixture.id) ?? []), markets: extra(prices.get(f.fixture.id) ?? []),
+        commence_time: f.fixture.date, odds: pick(ref.get(f.fixture.id) ?? []) ?? pick(prices.get(f.fixture.id) ?? []), markets: { ...extra(prices.get(f.fixture.id) ?? []), ...extra(ref.get(f.fixture.id) ?? []) },
         home_logo: f.teams.home.logo, away_logo: f.teams.away.logo, league_logo: f.league.logo,
       }));
     },

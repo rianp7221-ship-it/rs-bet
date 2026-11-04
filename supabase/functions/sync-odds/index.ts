@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
     ? [...startedBySport.keys()]
     : only ?? (Deno.env.get("ODDS_SPORTS") || feed.defaultSports).split(",").map((s) => s.trim()).filter(Boolean);
   const { data: cfg } = await sb.from("settings").select("key, value, updated_at")
-    .in("key", ["odds_margin_pre", "odds_margin_live", "feed_remaining", "feed_limit", "odds_jump_pct", "odds_adjust", "live_odd_max"]);
+    .in("key", ["odds_margin_pre", "odds_margin_live", "feed_remaining", "feed_limit", "odds_jump_pct", "odds_adjust", "live_odd_max", "odds_extra_pct"]);
   const margin = (k: string) => Number(cfg?.find((c) => c.key === k)?.value ?? 0) || 0;
   const adjust = cfg?.find((c) => c.key === "odds_adjust")?.value as Adjust | undefined;
   const errors: string[] = [];
@@ -220,7 +220,7 @@ Deno.serve(async (req) => {
           starts_at: ev.commence_time, odd_home: odds.home, odd_draw: odds.draw, odd_away: odds.away,
           status: isLive ? "live" : "open",
           ...(ev.markets !== undefined ? { markets: isLive ? capMarkets(marginMarkets(ev.markets, margin("odds_margin_live")), margin("live_odd_max"))
-            : adjustMarkets(marginMarkets(ev.markets, margin("odds_margin_pre")), adjust) } : {}),
+            : adjustMarkets(marginMarkets(ev.markets, margin("odds_margin_pre")), adjust, margin("odds_extra_pct")) } : {}),
           ...(ev.home_logo ? { home_logo: await mirrorLogo(sb, ev.home_logo), away_logo: await mirrorLogo(sb, ev.away_logo), league_logo: await mirrorLogo(sb, ev.league_logo) } : {}),
           synced_at: new Date().toISOString(),
         };
