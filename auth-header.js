@@ -452,12 +452,22 @@
   }
 
   // ---------- depósito e saque ----------
+  const brl = (n) => Number(n).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  function applyLimits(m, kind, el, long) {
+    sb.rpc("money_limits").then(({ data }) => {
+      if (!data) return;
+      const mn = data[kind + "_min"], mx = data[kind + "_max"], inp = RS.$("#mm-amount", m);
+      el.textContent = long ? `Mínimo ${brl(mn)}${mx > 0 ? `, máximo ${brl(mx)}` : ""}.` : `Mín. ${brl(mn)}${mx > 0 ? ` · Máx. ${brl(mx)}` : ""}`;
+      inp.min = mn;
+      if (mx > 0) inp.max = mx;
+    });
+  }
   function moneyModal(kind) {
     const dep = kind === "deposit";
     if (!dep) return withdrawModal();
     const m = RS.modal(`
       <h3>${dep ? "Depositar" : "Sacar"}</h3>
-      <p class="muted">${dep ? "Mínimo R$ 1,00. O saldo entra assim que o pagamento for confirmado." : "Mínimo R$ 20,00. O valor é reservado até a aprovação."}</p>
+      <p class="muted"><span class="mm-lim">${dep ? "Mínimo R$ 1,00." : "Mínimo R$ 20,00."}</span> ${dep ? "O saldo entra assim que o pagamento for confirmado." : "O valor é reservado até a aprovação."}</p>
       <div class="chips">${[20, 50, 100, 500].map((v) => `<button class="chip" data-v="${v}">R$ ${v}</button>`).join("")}</div>
       <input type="number" id="mm-amount" class="input" min="${dep ? 1 : 20}" step="0.01" placeholder="Valor">
       ${dep ? "" : `<div class="ap-field"><label>Tipo da chave PIX</label><select class="input" id="mm-ktype">
@@ -465,6 +475,7 @@
         <option value="aleatoria">Chave aleatória</option><option value="cnpj">CNPJ</option></select></div>
       <input class="input" id="mm-key" maxlength="77" placeholder="Sua chave PIX (em seu nome)" autocomplete="off">`}
       <button class="btn ${dep ? "btn-green" : "btn-primary"} w-full" id="mm-go">${dep ? "Gerar pagamento" : "Solicitar saque"}</button>`);
+    applyLimits(m, dep ? "dep" : "wd", RS.$(".mm-lim", m), true);
     RS.$$(".chip", m).forEach((c) => (c.onclick = () => (RS.$("#mm-amount", m).value = c.dataset.v)));
     if (!dep) sb.rpc("my_last_pix_key").then(({ data }) => {
       if (data?.key && !RS.$("#mm-key", m).value) { RS.$("#mm-key", m).value = data.key; RS.$("#mm-ktype", m).value = data.type; }
@@ -488,7 +499,7 @@
     if (!p) { location.href = "login.html"; return; }
     const cpfMask = (c) => c.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
     const m = RS.modal(`<div class="wd">
-      <div class="wd-info"><div>${RS.icon("refresh")}<b>Mín. R$ 20,00</b></div><div>${RS.icon("clock")}<span>Tempo de processamento: normalmente em poucos minutos após a aprovação</span></div></div>
+      <div class="wd-info"><div>${RS.icon("refresh")}<b class="mm-lim">Mín. R$ 20,00</b></div><div>${RS.icon("clock")}<span>Tempo de processamento: normalmente em poucos minutos após a aprovação</span></div></div>
       <h3>Pix</h3>
       <p class="muted small">Faça seus saques de forma fácil e segura com o Pix. É importante usar uma conta bancária vinculada ao seu CPF.</p>
       <label class="wd-l">CPF</label>
@@ -507,6 +518,7 @@
     type.onchange = () => { key.value = ""; syncKey(); };
     cpf.oninput = () => { cpf.value = cpfMask(cpf.value.replace(/\D/g, "").slice(0, 11)); syncKey(); };
     syncKey();
+    applyLimits(m, "wd", RS.$(".mm-lim", m), false);
     RS.$$(".chip", m).forEach((c) => (c.onclick = () => (RS.$("#mm-amount", m).value = c.dataset.v)));
     sb.rpc("my_last_pix_key").then(({ data }) => {
       if (data?.key && data.type !== "cpf" && data.type !== "cnpj") { type.value = data.type; key.readOnly = false; key.value = data.key; }
