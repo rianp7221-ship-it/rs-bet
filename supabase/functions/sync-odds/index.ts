@@ -134,6 +134,7 @@ Deno.serve(async (req) => {
         if (!m) continue;
         const patch: Record<string, unknown> = { synced_at: new Date().toISOString() };
         if (u.home != null && u.away != null) { patch.score_home = u.home; patch.score_away = u.away; }
+        if (u.ht) { patch.ht_home = u.ht.home; patch.ht_away = u.ht.away; }
         if (!u.completed && !u.cancelled) patch.status = "live";
         if (u.minute != null) patch.minute = u.minute;
         if (u.home_logo && !m.home_logo?.includes("/storage/v1/object/public/logos/")) { patch.home_logo = await mirrorLogo(sb, u.home_logo); patch.away_logo = await mirrorLogo(sb, u.away_logo); patch.league_logo = await mirrorLogo(sb, u.league_logo); }
@@ -260,7 +261,7 @@ Deno.serve(async (req) => {
         if (!s) continue;
         const goal = !s.completed && scoreChanged(m, s.home, s.away)
           ? { suspended_until: new Date(Date.now() + GOAL_LOCK_MS).toISOString(), suspend_reason: "Gol" } : {};
-        await sb.from("matches").update({ score_home: s.home, score_away: s.away, ...goal, ...(s.completed ? {} : { status: "live" }) }).eq("id", m.id);
+        await sb.from("matches").update({ score_home: s.home, score_away: s.away, ...(s.ht ? { ht_home: s.ht.home, ht_away: s.ht.away } : {}), ...goal, ...(s.completed ? {} : { status: "live" }) }).eq("id", m.id);
         if (!s.completed) continue;
         const result = s.home > s.away ? "home" : s.home < s.away ? "away" : "draw";
         await saveCorners(sb, feed, m.id, s.id);

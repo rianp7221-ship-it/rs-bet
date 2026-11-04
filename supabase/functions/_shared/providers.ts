@@ -9,11 +9,12 @@ export type FeedEvent = {
   commence_time: string; odds: MatchOdds | null; markets?: Markets | null;
   home_logo?: string; away_logo?: string; league_logo?: string;
 };
-export type FeedScore = { id: string; home: number; away: number; completed: boolean };
+export type FeedScore = { id: string; home: number; away: number; completed: boolean; ht?: { home: number; away: number } | null };
 
 // ao vivo em 1 chamada para todos os jogos (APIs com feed ao vivo)
 export type LiveUpdate = {
   id: string; home: number | null; away: number | null; completed: boolean;
+  ht?: { home: number; away: number } | null; // placar do 1º tempo
   cancelled: boolean; // adiado ou cancelado: trava o mercado
   voided: boolean; // cancelado de vez: anula as seleções
   odds: MatchOdds | null; markets?: Markets | null;
@@ -97,7 +98,7 @@ type AfFixture = {
   league: { id: number; name: string; country: string; logo?: string };
   teams: { home: { name: string; logo?: string }; away: { name: string; logo?: string } };
   goals: { home: number | null; away: number | null };
-  score?: { fulltime?: { home: number | null; away: number | null } };
+  score?: { fulltime?: { home: number | null; away: number | null }; halftime?: { home: number | null; away: number | null } };
   events?: { time: { elapsed: number; extra: number | null }; type: string; detail: string }[];
 };
 type AfBet = { id: number; name: string; values: { value: string; odd: string; suspended?: boolean }[] };
@@ -114,6 +115,10 @@ const AF_CANCEL = ["PST", ...AF_VOID];
 const afGoals = (f: AfFixture) =>
   ["AET", "PEN"].includes(f.fixture.status.short) && f.score?.fulltime?.home != null && f.score.fulltime.away != null
     ? f.score.fulltime : f.goals;
+const afHt = (f: AfFixture) => {
+  const h = f.score?.halftime;
+  return h?.home != null && h.away != null ? { home: h.home, away: h.away } : null;
+};
 const AF_PAUSE: Record<string, string> = { SUSP: "Jogo paralisado", INT: "Jogo interrompido", BT: "Intervalo da prorrogação", P: "Disputa de pênaltis" };
 const AF_1X2 = ["Match Winner", "Fulltime Result", "1x2"];
 // a API chama Brasileirão e Itália de "Serie A"/"Serie B": nome único por liga
@@ -150,6 +155,16 @@ const AF_KO = ["Cards Over/Under", "Total Cards"];
 // chutes (s) e chutes no gol (t): total mais/menos e 1X2
 const AF_SO = ["Total Shots"], AF_TO = ["Total ShotOnGoal", "Total shots on goal"];
 const AF_S1X2 = ["Shots.1x2"], AF_T1X2 = ["ShotOnTarget 1x2", "1x2 shots on goal"];
+// mais opções dentro dos mercados: 1º tempo, ambas por tempo e totais por time
+const AF_HT1X2 = ["First Half Winner", "1x2 (1st Half)"];
+const AF_BTTS1 = ["Both Teams Score - First Half", "Both Teams To Score (1st Half)"];
+const AF_BTTS2 = ["Both Teams To Score - Second Half", "Both Teams To Score (2nd Half)"];
+const AF_OUX: [string[], string, number, number][] = [
+  [["Goals Over/Under First Half", "Over/Under (1st Half)"], "hto", 0.5, 3.5],
+  [["Home Corners Over/Under"], "ch", 0.5, 9.5], [["Away Corners Over/Under"], "ca", 0.5, 9.5],
+  [["Home Team Total Cards"], "kh", 0.5, 5.5], [["Away Team Total Cards"], "ka", 0.5, 5.5],
+  [["Home Total Shots", "Home Player Shots Total"], "sh", 3.5, 30.5], [["Away Total Shots", "Away Player Shots Total"], "sa", 3.5, 30.5],
+];
 const AF_C1X2_PICK: Record<string, string> = { Home: "home", "1": "home", Draw: "draw", X: "draw", Away: "away", "2": "away" };
 const AF_DC_PICK: Record<string, string> = {
   "Home/Draw": "1x", "Home or Draw": "1x", "Home/Away": "12", "Home or Away": "12", "Draw/Away": "x2", "Away or Draw": "x2",
@@ -198,7 +213,7 @@ function apiFootball(key: string): OddsProvider {
         if (AF_OU.includes(b.name)) {
           const m = /^(Over|Under)\s*([\d.]+)?$/.exec(v.value);
           const line = Number(m?.[2] ?? v.handicap);
-          if (m && [1.5, 2.5, 3.5].includes(line)) add(`ou${line * 10}`, m[1].toLowerCase(), v);
+          if (m && line >= 0.5 && line <= 5.5 && line % 1 === 0.5) add(`ou${String(line * 10).padStart(2, "0")}`, m[1].toLowerCase(), v);
         } else if (AF_BTTS.includes(b.name) && /^(Yes|No)$/.test(v.value)) add("btts", v.value.toLowerCase(), v);
         else if (AF_DC.includes(b.name) && AF_DC_PICK[v.value]) add("dc", AF_DC_PICK[v.value], v);
         else if (AF_DNB.includes(b.name) && /^(Home|Away)$/.test(v.value)) add("dnb", v.value.toLowerCase(), v);
@@ -217,13 +232,23 @@ function apiFootball(key: string): OddsProvider {
           if (m && line % 1 === 0.5 && (t ? line >= 3.5 && line <= 20.5 : line >= 10.5 && line <= 45.5)) add(`${t ? "t" : "s"}${line * 10}`, m[1].toLowerCase(), v);
         } else if (AF_S1X2.includes(b.name) && AF_C1X2_PICK[v.value]) add("s1x2", AF_C1X2_PICK[v.value], v);
         else if (AF_T1X2.includes(b.name) && AF_C1X2_PICK[v.value]) add("t1x2", AF_C1X2_PICK[v.value], v);
+        else if (AF_HT1X2.includes(b.name) && AF_C1X2_PICK[v.value]) add("ht1x2", AF_C1X2_PICK[v.value], v);
+        else if (AF_BTTS1.includes(b.name) && /^(Yes|No)$/.test(v.value)) add("btts1", v.value.toLowerCase(), v);
+        else if (AF_BTTS2.includes(b.name) && /^(Yes|No)$/.test(v.value)) add("btts2", v.value.toLowerCase(), v);
+        else {
+          const x = AF_OUX.find(([n]) => n.includes(b.name));
+          const m = x && /^(Over|Under)\s*([\d.]+)?$/.exec(v.value);
+          const line = Number(m?.[2] ?? v.handicap);
+          if (x && m && line >= x[2] && line <= x[3] && line % 1 === 0.5) add(`${x[1]}${String(line * 10).padStart(2, "0")}`, m[1].toLowerCase(), v);
+        }
       }
     }
     const need: Record<string, string[]> = {
       ou15: ["over", "under"], ou25: ["over", "under"], ou35: ["over", "under"], btts: ["yes", "no"], dc: ["1x", "12", "x2"], dnb: ["home", "away"],
     };
-    need.c1x2 = need.s1x2 = need.t1x2 = ["home", "draw", "away"];
-    for (const k of acc.keys()) if (/^(co|k|s|t)\d+$/.test(k.split(".")[0])) need[k.split(".")[0]] = ["over", "under"];
+    need.c1x2 = need.s1x2 = need.t1x2 = need.ht1x2 = ["home", "draw", "away"];
+    need.btts1 = need.btts2 = ["yes", "no"];
+    for (const k of acc.keys()) if (/^(co|k|s|t|ou|hto|ch|ca|kh|ka|sh|sa)\d+$/.test(k.split(".")[0])) need[k.split(".")[0]] = ["over", "under"];
     const out: Markets = {};
     for (const [mk, ks] of Object.entries(need)) {
       if (!ks.every((k) => acc.has(`${mk}.${k}`))) continue;
@@ -275,7 +300,7 @@ function apiFootball(key: string): OddsProvider {
       const y = await season(league);
       const { response } = await get<AfFixture>(`/fixtures?league=${league}&season=${y}&from=${day(-3)}&to=${day(0)}&timezone=UTC`);
       return response.map((f) => ({ f, g: afGoals(f) })).filter(({ g }) => g.home != null && g.away != null).map(({ f, g }) => ({
-        id: String(f.fixture.id), home: g.home!, away: g.away!, completed: AF_DONE.includes(f.fixture.status.short),
+        id: String(f.fixture.id), home: g.home!, away: g.away!, completed: AF_DONE.includes(f.fixture.status.short), ht: afHt(f),
       }));
     },
     async live(ids) {
@@ -302,7 +327,7 @@ function apiFootball(key: string): OddsProvider {
         const suspended = AF_PAUSE[st] ?? (locked ? "Mercado travado na fonte" : hotWhy ?? stale);
         const g = afGoals(f);
         out.push({
-          id: String(f.fixture.id), home: g.home, away: g.away,
+          id: String(f.fixture.id), home: g.home, away: g.away, ht: afHt(f),
           home_logo: f.teams.home.logo, away_logo: f.teams.away.logo, league_logo: f.league.logo,
           completed: AF_DONE.includes(st), cancelled: AF_CANCEL.includes(st), voided: AF_VOID.includes(st),
           odds: lo ? pick(lo.odds) : null, markets: lo && !locked ? extra(lo.odds) : null,

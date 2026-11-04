@@ -289,7 +289,7 @@
         manage && b.status === "pending" ? `<input type="checkbox" data-bc="${b.id}">` : "", b.id, `<a href="#users" data-open-user="${b.user_id}" style="color:var(--primary)">${esc(b.profiles?.email || "")}</a>`, b.bet_selections[0]?.count,
         M(b.stake), b.total_odd, M(b.potential), badge(b.status), RS.date(b.created_at), `<button class="btn sm" data-bv="${b.id}">Abrir</button>`]), "Nenhum bilhete.");
     }
-    const MKN = { "1x2": "Resultado Final", dc: "Chance Dupla", ou15: "Gols 1,5", ou25: "Gols 2,5", ou35: "Gols 3,5", btts: "Ambas Marcam", dnb: "Empate Anula", c1x2: "Escanteios 1X2", s1x2: "Chutes 1X2", t1x2: "Chutes no Gol 1X2", bb: "Criar Aposta" };
+    const MKN = { "1x2": "Resultado Final", dc: "Chance Dupla", ou15: "Gols 1,5", ou25: "Gols 2,5", ou35: "Gols 3,5", btts: "Ambas Marcam", dnb: "Empate Anula", ht1x2: "Resultado 1º Tempo", btts1: "Ambas Marcam 1º T", btts2: "Ambas Marcam 2º T", ou05: "Gols 0,5", ou45: "Gols 4,5", ou55: "Gols 5,5", c1x2: "Escanteios 1X2", s1x2: "Chutes 1X2", t1x2: "Chutes no Gol 1X2", bb: "Criar Aposta" };
     const PICK = { draw: "Empate", over: "Mais", under: "Menos", yes: "Sim", no: "Não", "1x": "Casa ou empate", "12": "Casa ou fora", x2: "Empate ou fora" };
     const pickName = (mk, p, m) => mk === "bb"
       ? p.split("|").map((l) => { const [k, v] = l.split(":"); return `${MKN[k] || k}: ${pickName(k, v, m)}`; }).join(" + ")
@@ -306,7 +306,7 @@
           <small class="muted">${esc(g.league || "")} · ${RS.date(g.starts_at)} · ${badge(g.status)}${g.score_home != null ? ` ${g.score_home} x ${g.score_away}` : ""}</small>
           <div><b>${esc(g.home || "")} x ${esc(g.away || "")}</b></div>
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px">
-            <span>${MKN[s.market] || (/^co\d+$/.test(s.market) ? `Escanteios ${+s.market.slice(2) / 10}` : /^k\d+$/.test(s.market) ? `Cartões ${+s.market.slice(1) / 10}` : /^[st]\d+$/.test(s.market) ? `${s.market[0] === "s" ? "Chutes" : "Chutes no gol"} ${+s.market.slice(1) / 10}` : s.market)}: <b>${esc(pickName(s.market, s.pick, g))}</b> @ <b>${s.odd}</b></span>
+            <span>${MKN[s.market] || (/^co\d+$/.test(s.market) ? `Escanteios ${+s.market.slice(2) / 10}` : /^k\d+$/.test(s.market) ? `Cartões ${+s.market.slice(1) / 10}` : /^(hto|ch|ca|kh|ka|sh|sa)\d+$/.test(s.market) ? `${{ hto: "Gols 1º T", ch: "Escanteios casa", ca: "Escanteios fora", kh: "Cartões casa", ka: "Cartões fora", sh: "Chutes casa", sa: "Chutes fora" }[s.market.replace(/\d+$/, "")]} ${+s.market.replace(/^[a-z]+/, "") / 10}` : /^[st]\d+$/.test(s.market) ? `${s.market[0] === "s" ? "Chutes" : "Chutes no gol"} ${+s.market.slice(1) / 10}` : s.market)}: <b>${esc(pickName(s.market, s.pick, g))}</b> @ <b>${s.odd}</b></span>
             ${edit ? `<select class="input" data-sel="${s.id}" data-odd="${s.odd}" data-was="${s.status}" style="width:auto">${SEL.map(([v, t]) => `<option value="${v}" ${v === s.status ? "selected" : ""}>${t}</option>`).join("")}</select>` : badge(s.status === "canceled" ? "canceled" : s.status, s.status === "canceled" ? "Devolvida" : null)}
           </div></div>`; }).join("")}</div>
         ${edit ? `<p id="bv-prev" class="muted" style="margin:10px 0"></p>

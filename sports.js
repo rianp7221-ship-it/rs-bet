@@ -13,7 +13,13 @@
   const MK = {
     dc: ["Chance Dupla", { "1x": "1X", x2: "X2", "12": "12" }],
     ou25: ["Total de Gols 2,5", { over: "Mais de 2,5", under: "Menos de 2,5" }],
+    ou05: ["Total de Gols 0,5", { over: "Mais de 0,5", under: "Menos de 0,5" }],
+    ou45: ["Total de Gols 4,5", { over: "Mais de 4,5", under: "Menos de 4,5" }],
+    ou55: ["Total de Gols 5,5", { over: "Mais de 5,5", under: "Menos de 5,5" }],
     btts: ["Ambas Marcam", { yes: "Sim", no: "Não" }],
+    btts1: ["Ambas Marcam 1º Tempo", { yes: "Sim", no: "Não" }],
+    btts2: ["Ambas Marcam 2º Tempo", { yes: "Sim", no: "Não" }],
+    ht1x2: ["Resultado 1º Tempo", { home: "1", draw: "X", away: "2" }],
     dnb: ["Empate Anula", { home: "1", away: "2" }],
     ou15: ["Total de Gols 1,5", { over: "Mais de 1,5", under: "Menos de 1,5" }],
     ou35: ["Total de Gols 3,5", { over: "Mais de 3,5", under: "Menos de 3,5" }],
@@ -23,10 +29,15 @@
   };
   const coKeys = (m) => Object.keys(m?.markets || {}).filter((k) => /^co\d+$/.test(k)).sort((a, b) => a.slice(2) - b.slice(2));
   const coLine = (k) => (Number(k.slice(2)) / 10).toLocaleString("pt-BR");
+  const PX = { hto: "Gols 1º Tempo", ch: "Escanteios Casa", ca: "Escanteios Fora", kh: "Cartões Casa", ka: "Cartões Fora", sh: "Chutes Casa", sa: "Chutes Fora" };
+  const pxKeys = (m, p) => Object.keys(m?.markets || {}).filter((k) => k.startsWith(p) && /^\d+$/.test(k.slice(p.length))).sort((a, b) => a.slice(p.length) - b.slice(p.length));
+  const pxLine = (k) => (Number(k.replace(/^[a-z]+/, "")) / 10).toLocaleString("pt-BR");
+  const pxRows = (p) => (m) => pxKeys(m, p).map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]);
   const kKeys = (m) => Object.keys(m?.markets || {}).filter((k) => /^k\d+$/.test(k)).sort((a, b) => a.slice(1) - b.slice(1));
   const kLine = (k) => (Number(k.slice(1)) / 10).toLocaleString("pt-BR");
   const mkDef = (k) => MK[k] || (/^co\d+$/.test(k) ? [`Escanteios ${coLine(k)}`, { over: `Mais de ${coLine(k)}`, under: `Menos de ${coLine(k)}` }]
     : /^k\d+$/.test(k) ? [`Cartões ${kLine(k)}`, { over: `Mais de ${kLine(k)}`, under: `Menos de ${kLine(k)}` }]
+    : PX[k.replace(/\d+$/, "")] && /\d$/.test(k) ? [`${PX[k.replace(/\d+$/, "")]} ${pxLine(k)}`, { over: `Mais de ${pxLine(k)}`, under: `Menos de ${pxLine(k)}` }]
     : /^[st]\d+$/.test(k) ? [`${k[0] === "s" ? "Chutes" : "Chutes no Gol"} ${kLine(k)}`, { over: `Mais de ${kLine(k)}`, under: `Menos de ${kLine(k)}` }] : [k, {}]);
   const stKeys = (m, p) => Object.keys(m?.markets || {}).filter((k) => k[0] === p && /^[st]\d+$/.test(k)).sort((a, b) => a.slice(1) - b.slice(1));
   const oddOf = (m, mk, pick) => mk === "bb" ? bbOdd(m, pick) : Number(mk === "1x2" ? m?.["odd_" + pick] : m?.markets?.[mk]?.[pick]) || 0;
@@ -60,7 +71,7 @@
     return v >= 1.05 ? v : 0;
   }
   const bbOn = new Set();
-  const extras = (m) => [...Object.keys(MK).filter((k) => m.markets?.[k]), ...coKeys(m), ...kKeys(m), ...stKeys(m, "s"), ...stKeys(m, "t")];
+  const extras = (m) => [...Object.keys(MK).filter((k) => m.markets?.[k]), ...coKeys(m), ...kKeys(m), ...stKeys(m, "s"), ...stKeys(m, "t"), ...Object.keys(PX).flatMap((p) => pxKeys(m, p))];
   let mvId = null, mvTab = "all";
   const mvClosed = new Set();
   const isSel = (id, mk, pick) => legsOf(slip.get(id)).some(([k, p]) => k === mk && p === pick);
@@ -161,15 +172,25 @@
   const MV_TABS = { all: "Todos", main: "Principais", goals: "Gols", corners: "Escanteios", cards: "Cartões", shots: "Chutes" };
   const MV_GROUPS = [
     { key: "r", tab: "main", name: "Resultado Final", rows: (m) => [[["1x2", "home", m.home], ["1x2", "draw", "Empate"], ["1x2", "away", m.away]]] },
-    { key: "ou", tab: "goals", name: "Total de Gols Mais/Menos", rows: () => ["ou15", "ou25", "ou35"].map((k) => Object.entries(MK[k][1]).map(([p, l]) => [k, p, l])) },
+    { key: "ht", tab: "main", name: "Resultado 1º Tempo", ca: false, rows: (m) => [[["ht1x2", "home", m.home], ["ht1x2", "draw", "Empate"], ["ht1x2", "away", m.away]]] },
+    { key: "ou", tab: "goals", name: "Total de Gols Mais/Menos", rows: () => ["ou05", "ou15", "ou25", "ou35", "ou45", "ou55"].map((k) => Object.entries(MK[k][1]).map(([p, l]) => [k, p, l])) },
+    { key: "hto", tab: "goals", name: "Gols 1º Tempo Mais/Menos", ca: false, rows: pxRows("hto") },
     { key: "btts", tab: "goals", name: "Ambas equipes Marcam", rows: () => [[["btts", "yes", "Sim"], ["btts", "no", "Não"]]] },
+    { key: "btts1", tab: "goals", name: "Ambas Marcam 1º Tempo", ca: false, rows: () => [[["btts1", "yes", "Sim"], ["btts1", "no", "Não"]]] },
+    { key: "btts2", tab: "goals", name: "Ambas Marcam 2º Tempo", ca: false, rows: () => [[["btts2", "yes", "Sim"], ["btts2", "no", "Não"]]] },
     { key: "dc", tab: "main", name: "Chance Dupla", rows: (m) => [[["dc", "1x", `${m.home} ou Empate`], ["dc", "x2", `Empate ou ${m.away}`], ["dc", "12", `${m.home} ou ${m.away}`]]] },
     { key: "dnb", tab: "main", name: "Empate Anula", ca: false, rows: (m) => [[["dnb", "home", m.home], ["dnb", "away", m.away]]] },
     { key: "c1x2", tab: "corners", name: "Escanteios 1X2", ca: false, rows: (m) => [[["c1x2", "home", m.home], ["c1x2", "draw", "Empate"], ["c1x2", "away", m.away]]] },
     { key: "co", tab: "corners", name: "Total de Escanteios Mais/Menos", ca: false, rows: (m) => coKeys(m).map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
+    { key: "ch", tab: "corners", name: "Escanteios Casa Mais/Menos", ca: false, rows: pxRows("ch") },
+    { key: "ca", tab: "corners", name: "Escanteios Fora Mais/Menos", ca: false, rows: pxRows("ca") },
     { key: "ko", tab: "cards", name: "Total de Cartões Mais/Menos", ca: false, rows: (m) => kKeys(m).map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
+    { key: "kh", tab: "cards", name: "Cartões Casa Mais/Menos", ca: false, rows: pxRows("kh") },
+    { key: "ka", tab: "cards", name: "Cartões Fora Mais/Menos", ca: false, rows: pxRows("ka") },
     { key: "s1x2", tab: "shots", name: "Chutes 1X2", ca: false, rows: (m) => [[["s1x2", "home", m.home], ["s1x2", "draw", "Empate"], ["s1x2", "away", m.away]]] },
     { key: "so", tab: "shots", name: "Total de Chutes Mais/Menos", ca: false, rows: (m) => stKeys(m, "s").map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
+    { key: "sh", tab: "shots", name: "Chutes Casa Mais/Menos", ca: false, rows: pxRows("sh") },
+    { key: "sa", tab: "shots", name: "Chutes Fora Mais/Menos", ca: false, rows: pxRows("sa") },
     { key: "t1x2", tab: "shots", name: "Chutes no Gol 1X2", ca: false, rows: (m) => [[["t1x2", "home", m.home], ["t1x2", "draw", "Empate"], ["t1x2", "away", m.away]]] },
     { key: "to", tab: "shots", name: "Total de Chutes no Gol Mais/Menos", ca: false, rows: (m) => stKeys(m, "t").map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
   ];
@@ -380,7 +401,7 @@
     const anySusp = items.some(([id]) => suspended(matches.find((m) => m.id === id)));
     slipEl.innerHTML = items.map(([id, s]) => {
       const m = matches.find((x) => x.id === id);
-      const name = (mk, p) => (mk === "1x2" || mk === "dnb" || /^[cst]1x2$/.test(mk) ? (p === "home" ? m.home : p === "away" ? m.away : "Empate") : mkDef(mk)[1][p]);
+      const name = (mk, p) => (mk === "1x2" || mk === "dnb" || /^([cst]|ht)1x2$/.test(mk) ? (p === "home" ? m.home : p === "away" ? m.away : "Empate") : mkDef(mk)[1][p]);
       const mkName = (mk) => (mk === "1x2" ? "Resultado Final" : mkDef(mk)[0]);
       const up = s.odd > s.base;
       return `<div class="slip-item">
