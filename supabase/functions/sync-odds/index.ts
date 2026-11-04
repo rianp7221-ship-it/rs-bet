@@ -17,12 +17,13 @@ function applyMargin(o: Odds, marginPct: number): Odds {
 }
 
 // mesma margem nos mercados extras; na Chance Dupla cada resultado cobre 2 de 3, então a soma justa das probabilidades é 2
-// grava escanteios e cartões finais antes de liquidar (mercados c1x2/coNN/kNN); sem o dado as seleções são anuladas
+// grava escanteios, cartões e chutes finais antes de liquidar (c1x2/coNN/kNN/s1x2/sNNN/t1x2/tNNN); sem o dado as seleções são anuladas
 // deno-lint-ignore no-explicit-any
-async function saveCorners(sb: any, feed: { corners?: (id: string) => Promise<{ home: number; away: number; cards: { home: number; away: number } } | null> }, matchId: number, fixture: string) {
+async function saveCorners(sb: any, feed: { corners?: (id: string) => Promise<{ home: number; away: number; cards: { home: number; away: number }; shots: { home: number; away: number }; sot: { home: number; away: number } } | null> }, matchId: number, fixture: string) {
   if (!feed.corners) return;
   const c = await feed.corners(fixture).catch(() => null);
-  if (c) await sb.from("matches").update({ corners_home: c.home, corners_away: c.away, cards_home: c.cards.home, cards_away: c.cards.away }).eq("id", matchId);
+  if (c) await sb.from("matches").update({ corners_home: c.home, corners_away: c.away, cards_home: c.cards.home, cards_away: c.cards.away,
+    shots_home: c.shots.home, shots_away: c.shots.away, sot_home: c.sot.home, sot_away: c.sot.away }).eq("id", matchId);
 }
 
 function marginMarkets(mk: Markets | null | undefined, marginPct: number): Markets | null {
