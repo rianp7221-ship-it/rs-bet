@@ -178,8 +178,11 @@
     if (!m) { el?.remove(); return; }
     if (!el) { el = document.createElement("section"); el.id = "mv"; el.className = "mv"; document.body.append(el); }
     const bb = bbOn.has(m.id) && bbReady(m), canBB = bbReady(m);
-    const groups = MV_GROUPS.map((g) => ({ ...g, html: g.rows(m).map((r) => r.map((b) => mvBtn(m, b)).join("")).filter(Boolean) }))
-      .filter((g) => g.html.length && (mvTab === "all" || g.tab === mvTab) && (!bb || g.ca !== false));
+    const avail = MV_GROUPS.map((g) => ({ ...g, html: g.rows(m).map((r) => r.map((b) => mvBtn(m, b)).join("")).filter(Boolean) }))
+      .filter((g) => g.html.length && (!bb || g.ca !== false));
+    const tabs = Object.entries(MV_TABS).filter(([k]) => k === "all" || avail.some((g) => g.tab === k));
+    if (!tabs.some(([k]) => k === mvTab)) mvTab = "all";
+    const groups = avail.filter((g) => mvTab === "all" || g.tab === mvTab);
     const allClosed = groups.length && groups.every((g) => mvClosed.has(g.key));
     const top = live(m)
       ? `<i class="live">${m.minute ? m.minute + "' " : ""}AO VIVO</i>`
@@ -189,7 +192,7 @@
     RS.morph(el, `<div class="mv-head"><button class="mv-back" data-mvclose aria-label="Voltar">←</button><small>${lico(m.league)} ${RS.esc(lname(m.league))}</small></div>
       <div class="mv-match"><div class="mv-date">${top}</div>
         <div class="mv-teams"><span>${crest(m, "home")}${RS.esc(m.home)}</span>${sc}<span>${RS.esc(m.away)}${crest(m, "away")}</span></div></div>
-      <div class="mv-bar"><div class="mv-tabs">${Object.entries(MV_TABS).map(([k, l]) => `<button class="${mvTab === k ? "on" : ""}" data-mvtab="${k}">${l}</button>`).join("")}</div>
+      <div class="mv-bar"><div class="mv-tabs">${tabs.map(([k, l]) => `<button class="${mvTab === k ? "on" : ""}" data-mvtab="${k}">${l}</button>`).join("")}</div>
         <button class="mv-all" data-mvall title="${allClosed ? "Abrir todos" : "Fechar todos"}">${allClosed ? "⇕" : "⇳"}</button>
         ${canBB ? `<button class="bb-toggle ${bb ? "on" : ""}" data-bb="${m.id}" aria-pressed="${bb}">CRIAR<br>APOSTA</button>` : ""}</div>
       ${bb ? `<p class="mv-hint">Escolha de 2 a ${BB_MAX} mercados deste jogo para combinar numa aposta só.</p>` : ""}
