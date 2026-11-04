@@ -17,6 +17,14 @@ function applyMargin(o: Odds, marginPct: number): Odds {
 }
 
 // mesma margem nos mercados extras; na Chance Dupla cada resultado cobre 2 de 3, então a soma justa das probabilidades é 2
+// grava os escanteios finais antes de liquidar (mercados c1x2/coNN); sem o dado as seleções são anuladas
+// deno-lint-ignore no-explicit-any
+async function saveCorners(sb: any, feed: { corners?: (id: string) => Promise<{ home: number; away: number } | null> }, matchId: number, fixture: string) {
+  if (!feed.corners) return;
+  const c = await feed.corners(fixture).catch(() => null);
+  if (c) await sb.from("matches").update({ corners_home: c.home, corners_away: c.away }).eq("id", matchId);
+}
+
 function marginMarkets(mk: Markets | null | undefined, marginPct: number): Markets | null {
   if (!mk) return null;
   if (!(marginPct > 0)) return mk;
@@ -156,6 +164,7 @@ Deno.serve(async (req) => {
           if (e2) errors.push(`${m.home} x ${m.away}: ${e2.message}`); else settled++;
         } else if (u.completed && u.home != null && u.away != null) {
           const result = u.home > u.away ? "home" : u.home < u.away ? "away" : "draw";
+          await saveCorners(sb, feed, m.id, u.id);
           const { error: e2 } = await sb.rpc("settle_match", { p_match: m.id, p_result: result });
           if (e2) errors.push(`${m.home} x ${m.away}: ${e2.message}`); else settled++;
         }
@@ -253,6 +262,7 @@ Deno.serve(async (req) => {
         await sb.from("matches").update({ score_home: s.home, score_away: s.away, ...goal, ...(s.completed ? {} : { status: "live" }) }).eq("id", m.id);
         if (!s.completed) continue;
         const result = s.home > s.away ? "home" : s.home < s.away ? "away" : "draw";
+        await saveCorners(sb, feed, m.id, s.id);
         const { error } = await sb.rpc("settle_match", { p_match: m.id, p_result: result });
         if (error) errors.push(`${m.home} x ${m.away}: ${error.message}`);
         else settled++;
