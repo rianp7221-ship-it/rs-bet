@@ -5,7 +5,7 @@
   if (!root) return;
   const grid = RS.$("#pf-grid"), more = RS.$("#pf-more"), q = RS.$("#pf-q"), prov = RS.$("#pf-prov"), nav = RS.$("#cat-chips");
   const PAGE = 48, COLS = "id,name,image,provider,pf_code";
-  const POP = ["Fortune Tiger", "Gates of Olympus", "Sweet Bonanza", "Aviator", "Fortune Rabbit", "Big Bass Splash", "Sugar Rush", "Fortune Ox"];
+  const POP = ["Fortune Tiger", "Gates of Olympus", "Sweet Bonanza", "Fortune Mouse", "Fortune Rabbit", "Big Bass Splash", "Sugar Rush", "Fortune Ox"];
   const FORT = ["126", "1543462", "98", "68", "1695365", "1879752", "3", "2100928"].map((c) => "pf:pf-1:" + c);
   const RKEY = "rs-recent-games", MKEY = "rs-recent-meta";
   let page = 0, provs = [], timer, sec = "all";
