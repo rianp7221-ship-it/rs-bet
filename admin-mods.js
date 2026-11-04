@@ -710,12 +710,19 @@
       RS.$("#cs-r").onclick = mon;
     }
     async function cfg() {
-      const [{ data: provs }, { data: games }] = await Promise.all([sb.from("casino_providers").select("*").order("name"), sb.from("casino_catalog").select("*").is("pf_code", null).order("sort")]);
+      const [{ data: provs }, { data: games }, { data: feat }] = await Promise.all([sb.from("casino_providers").select("*").order("name"), sb.from("casino_catalog").select("*").is("pf_code", null).order("sort"),
+        sb.from("casino_catalog").select("id,name,provider,image,featured").not("featured", "is", null).order("featured")]);
       const pname = Object.fromEntries((provs || []).map((p) => [p.id, p.name]));
       const toggle = (kind, id, on) => manage ? `<button class="btn sm btn-outline" data-${kind}="${id}" data-on="${on ? 0 : 1}">${on ? "Desligar" : "Ligar"}</button>` : "";
+      const featHtml = `<h3 style="margin:8px 0">Jogos em destaque</h3><p class="muted small">Aparecem na faixa "Em destaque" do cassino, nesta ordem. Sem nenhum, a faixa mostra os mais populares.</p>` +
+        table(["#", "Jogo", "Provedor", ""], (feat || []).map((g, i) => [i + 1,
+          `${g.image ? `<img src="${esc(g.image)}" alt="" style="width:32px;height:32px;border-radius:6px;object-fit:cover;vertical-align:middle;margin-right:6px">` : ""}${esc(g.name)}`,
+          esc(pname[g.provider] || g.provider),
+          manage ? `<button class="btn sm btn-outline" data-fmv="${i}" data-d="-1" ${i ? "" : "disabled"}>↑</button> <button class="btn sm btn-outline" data-fmv="${i}" data-d="1" ${i < feat.length - 1 ? "" : "disabled"}>↓</button> <button class="btn sm" data-fdel="${esc(g.id)}">Tirar</button>` : ""]), "Nenhum jogo em destaque.") +
+        (manage ? `<div class="pf-bar" style="margin-top:8px"><input class="input" id="ft-q" type="search" placeholder="Buscar jogo para destacar (ex.: Fortune Tiger)"></div><div id="ft-res"></div>` : "");
       body().innerHTML = `<p class="muted" style="margin-bottom:8px">O RTP do jogo tem prioridade sobre o do provedor, que tem prioridade sobre o RTP global (Configurações → casino_rtp_global). Em branco = herda. Partidas de Mines em andamento mantêm o RTP do início. Para desligar o cassino inteiro use Configurações → casino_enabled.</p>
         ${manage ? `<p style="margin-bottom:8px"><button class="btn sm btn-primary" id="pf-sync">Importar/atualizar jogos da PlayFiver</button> <span class="muted" id="pf-msg"></span></p>` : ""}
-        <p class="muted small">Jogos da PlayFiver: ligue/desligue pelo provedor (pf-…). O RTP deles é definido no painel da PlayFiver.</p>
+        <p class="muted small">Jogos da PlayFiver: ligue/desligue pelo provedor (pf-…). O RTP deles é definido no painel da PlayFiver.</p>` + featHtml + `
         <h3 style="margin:8px 0">Provedores</h3>` +
         table(["Provedor", "Tipo", "Status", "RTP", ""], (provs || []).map((p) => [esc(p.name), p.kind === "interno" ? "Jogos próprios" : "Agregador",
           p.active ? `<span class="badge b-done">Ligado</span>` : `<span class="badge b-canceled">Desligado</span>`, p.rtp == null ? "herda global" : pct(p.rtp),
@@ -732,7 +739,27 @@
         RS.$("#pf-msg").textContent = err ? err : `${data.games} jogos de ${data.providers} provedores (${data.new} novos).`;
         sync.disabled = false; if (!err) RS.toast("Jogos importados", "ok");
       };
+      const fq = RS.$("#ft-q");
+      let ft;
+      if (fq) fq.oninput = () => { clearTimeout(ft); ft = setTimeout(async () => {
+        const t = fq.value.trim().replace(/[%_]/g, "");
+        if (t.length < 2) { RS.$("#ft-res").innerHTML = ""; return; }
+        const { data } = await sb.from("casino_catalog").select("id,name,provider").ilike("name", `%${t}%`).eq("active", true).is("featured", null).order("sort").limit(12);
+        RS.$("#ft-res").innerHTML = table(["Jogo", "Provedor", ""], (data || []).map((g) => [esc(g.name), esc(pname[g.provider] || g.provider),
+          `<button class="btn sm btn-primary" data-fadd="${esc(g.id)}">Destacar</button>`]), "Nenhum jogo encontrado.");
+      }, 300); };
       body().onclick = async (e) => {
+        const fa = e.target.closest("[data-fadd]"), fd = e.target.closest("[data-fdel]"), fm = e.target.closest("[data-fmv]");
+        if (fa) { if (await act("admin_casino_feature", { p_id: fa.dataset.fadd, p_featured: (feat?.at(-1)?.featured || 0) + 1 }, "Jogo destacado")) cfg(); return; }
+        if (fd) { if (await act("admin_casino_feature", { p_id: fd.dataset.fdel, p_featured: null }, "Destaque removido")) cfg(); return; }
+        if (fm) {
+          const i = +fm.dataset.fmv, j = i + +fm.dataset.d, list = [...feat];
+          [list[i], list[j]] = [list[j], list[i]];
+          const res = await Promise.all(list.map((g, k) => (g.featured === k + 1 ? null : sb.rpc("admin_casino_feature", { p_id: g.id, p_featured: k + 1 }))));
+          const er = res.find((x) => x?.error);
+          if (er) RS.toast(er.error.message, "error");
+          cfg(); return;
+        }
         const pv = e.target.closest("[data-pv]"), gm = e.target.closest("[data-gm]"), pr = e.target.closest("[data-prtp]"), ge = e.target.closest("[data-gedit]");
         if (pv) { const p = provs.find((x) => x.id === pv.dataset.pv); if (await act("admin_casino_provider", { p_id: p.id, p_active: pv.dataset.on === "1", p_rtp: p.rtp }, "Provedor atualizado")) cfg(); }
         if (gm) { const g = games.find((x) => x.id === gm.dataset.gm); if (await act("admin_casino_game", { p_id: g.id, p_active: gm.dataset.on === "1", p_rtp: g.rtp, p_min: null, p_max: null }, "Jogo atualizado")) cfg(); }

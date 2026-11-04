@@ -73,21 +73,24 @@
       <!-- CASSINO -->
       <section id="casino" class="tab-panel hidden casino-dark">
         <div class="casino-hero">
-          <div><small>Cassino</small><h1>Jogos <span>originais</span></h1><p>Escolha um jogo para começar.</p></div>
+          <div><small>Cassino</small><h1>Slots, <span>originais</span> e mais</h1><p>Milhares de jogos com o seu saldo.</p></div>
         </div>
-        <div class="cat-chips" id="cat-chips"><button class="active" data-cat="all">Todos</button><button data-cat="orig">Originais</button><button data-cat="slots">Slots</button><button data-cat="rtp">Alto RTP</button><button data-cat="fast">Rápidos</button></div>
-        <div id="recent-wrap" class="hidden"><h2 class="section-title">Continuar jogando</h2><div class="game-tiles" id="recent-tiles"></div></div>
-        <h2 class="section-title">Jogos em destaque</h2>
-        <div class="game-tiles">
-          <a class="tile t-leao" href="leao.html" data-game="leao" data-cat="orig slots"><i>🦁</i><b>Leão da Sorte</b><small>Slot 3x3 · até 2.500x</small></a>
-          <a class="tile t-mines" href="#casino" data-game="mines-card" data-cat="orig rtp"><i>💎</i><b>Mines</b><small>Até 24 minas</small></a>
-          <a class="tile t-dice" href="#casino" data-game="dice" data-cat="orig rtp fast"><i>🎲</i><b>Dados</b><small>Escolha sua chance</small></a>
+        <div class="cs-nav" id="cat-chips"><button class="active" data-sec="all">🏠 Lobby</button><button data-sec="feat">⭐ Destaques</button><button data-sec="fort">🐯 Fortuna</button><button data-sec="orig">💎 Originais</button><button data-sec="slots">🎰 Slots</button><button data-sec="crash">🚀 Crash</button><button data-sec="prov">🏢 Provedores</button></div>
+        <div class="cs-search"><input class="input" id="pf-q" type="search" placeholder="🔍 Buscar jogo (ex.: Fortune Tiger)"></div>
+        <div class="cs-sec hidden" data-sec="recent" id="recent-wrap" data-empty="1"><div class="cs-head"><h2>🕘 Continuar jogando</h2><span class="cs-arr"><button type="button" data-arr="-1" aria-label="Anterior">‹</button><button type="button" data-arr="1" aria-label="Próximo">›</button></span></div><div class="cs-rail" id="recent-tiles"></div></div>
+        <div class="cs-sec hidden" data-sec="feat" data-empty="1"><div class="cs-head"><h2>⭐ Em destaque</h2><span class="cs-arr"><button type="button" data-arr="-1" aria-label="Anterior">‹</button><button type="button" data-arr="1" aria-label="Próximo">›</button></span></div><div class="cs-rail cs-big" id="pf-feat"></div></div>
+        <div class="cs-sec hidden" data-sec="fort" data-empty="1"><div class="cs-head"><h2>🐯 Jogos da Fortuna</h2><span class="cs-arr"><button type="button" data-arr="-1" aria-label="Anterior">‹</button><button type="button" data-arr="1" aria-label="Próximo">›</button></span></div><div class="cs-rail" id="pf-fort"></div></div>
+        <div class="cs-sec" data-sec="orig"><div class="cs-head"><h2>💎 Originais Real Sports</h2></div>
+          <div class="game-tiles cs-orig">
+            <a class="tile t-leao" href="leao.html" data-game="leao"><i>🦁</i><b>Leão da Sorte</b><small>Slot 3x3 · até 2.500x</small></a>
+            <a class="tile t-mines" href="#mines-card" data-game="mines-card"><i>💎</i><b>Mines</b><small>Até 24 minas</small></a>
+            <a class="tile t-dice" href="#dice" data-game="dice"><i>🎲</i><b>Dados</b><small>Escolha sua chance</small></a>
+          </div>
         </div>
-        <div id="pf-wrap" class="hidden">
-          <h2 class="section-title">Jogos da Fortuna</h2>
-          <div class="pf-fort" id="pf-fort"></div>
-          <h2 class="section-title">Slots</h2>
-          <div class="pf-bar"><input class="input" id="pf-q" type="search" placeholder="Buscar jogo (ex.: Fortune Tiger)"><select class="input" id="pf-prov"><option value="">Todos os provedores</option></select></div>
+        <div class="cs-sec hidden" data-sec="crash" data-empty="1"><div class="cs-head"><h2>🚀 Crash</h2><span class="cs-arr"><button type="button" data-arr="-1" aria-label="Anterior">‹</button><button type="button" data-arr="1" aria-label="Próximo">›</button></span></div><div class="cs-rail" id="pf-crash"></div></div>
+        <div class="cs-sec hidden" data-sec="prov" data-empty="1"><div class="cs-head"><h2>🏢 Provedores</h2><span class="cs-arr"><button type="button" data-arr="-1" aria-label="Anterior">‹</button><button type="button" data-arr="1" aria-label="Próximo">›</button></span></div><div class="cs-provs cs-rail" id="pf-provs"></div></div>
+        <div class="cs-sec hidden" data-sec="slots" id="pf-wrap" data-empty="1">
+          <div class="cs-head"><h2 id="pf-title">🎰 Todos os slots</h2><select class="input" id="pf-prov"><option value="">Todos os provedores</option></select></div>
           <div class="pf-grid" id="pf-grid"></div>
           <button class="btn btn-outline w-full hidden" id="pf-more">Carregar mais</button>
         </div>
