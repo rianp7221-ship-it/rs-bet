@@ -10,9 +10,10 @@
   const MKT = { dc: "Chance Dupla", ou15: "Gols 1,5", ou25: "Gols 2,5", ou35: "Gols 3,5", btts: "Ambas Marcam", dnb: "Empate Anula" };
   const badge = (s) => `<span class="badge b-${s}">${STATUS[s] || s}</span>`;
   const TYPE = (n) => (n === 1 ? "Simples" : n === 2 ? "Dupla" : n === 3 ? "Tripla" : "Múltipla");
-  const MNAME = { "1x2": "Resultado Final", ou15: "Total de Gols", ou25: "Total de Gols", ou35: "Total de Gols", btts: "Ambas Marcam", dc: "Chance Dupla", dnb: "Empate Anula", c1x2: "Escanteios 1X2", s1x2: "Chutes 1X2", t1x2: "Chutes no Gol 1X2" };
-  const mname = (mk) => MNAME[mk] || (/^co\d+$/.test(mk) ? "Total de Escanteios" : /^k\d+$/.test(mk) ? "Total de Cartões" : /^s\d+$/.test(mk) ? "Total de Chutes" : /^t\d+$/.test(mk) ? "Total de Chutes no Gol" : RS.esc(mk));
-  const LINE = { ou15: "1,5", ou25: "2,5", ou35: "3,5" };
+  const MNAME = { "1x2": "Resultado Final", ou15: "Total de Gols", ou25: "Total de Gols", ou35: "Total de Gols", btts: "Ambas Marcam", btts1: "Ambas Marcam 1º Tempo", btts2: "Ambas Marcam 2º Tempo", ht1x2: "Resultado 1º Tempo", ou05: "Total de Gols", ou45: "Total de Gols", ou55: "Total de Gols", dc: "Chance Dupla", dnb: "Empate Anula", c1x2: "Escanteios 1X2", s1x2: "Chutes 1X2", t1x2: "Chutes no Gol 1X2" };
+  const mname = (mk) => MNAME[mk] || (/^co\d+$/.test(mk) ? "Total de Escanteios" : /^k\d+$/.test(mk) ? "Total de Cartões" : PXN[mk.replace(/\d+$/, "")] && /\d$/.test(mk) ? PXN[mk.replace(/\d+$/, "")] : /^s\d+$/.test(mk) ? "Total de Chutes" : /^t\d+$/.test(mk) ? "Total de Chutes no Gol" : RS.esc(mk));
+  const LINE = { ou05: "0,5", ou15: "1,5", ou25: "2,5", ou35: "3,5", ou45: "4,5", ou55: "5,5" };
+  const PXN = { hto: "Gols 1º Tempo", ch: "Escanteios Casa", ca: "Escanteios Fora", kh: "Cartões Casa", ka: "Cartões Fora", sh: "Chutes Casa", sa: "Chutes Fora" };
   let bets = [], betTab = "open", betFilter = "";
   const folded = new Set();
 
@@ -21,9 +22,10 @@
     if (mk === "bb") return "Criar Aposta";
     if (LINE[mk]) return `${s.pick === "over" ? "Mais" : "Menos"} de ${LINE[mk]}`;
     if (/^k\d+$/.test(mk)) return `${s.pick === "over" ? "Mais" : "Menos"} de ${(Number(mk.slice(1)) / 10).toLocaleString("pt-BR")} cartões`;
+    if (/^(hto|ch|ca|kh|ka|sh|sa)\d+$/.test(mk)) return `${s.pick === "over" ? "Mais" : "Menos"} de ${(Number(mk.replace(/^[a-z]+/, "")) / 10).toLocaleString("pt-BR")}`;
     if (/^[st]\d+$/.test(mk)) return `${s.pick === "over" ? "Mais" : "Menos"} de ${(Number(mk.slice(1)) / 10).toLocaleString("pt-BR")} ${mk[0] === "s" ? "chutes" : "chutes no gol"}`;
     if (/^co\d+$/.test(mk)) return `${s.pick === "over" ? "Mais" : "Menos"} de ${(Number(mk.slice(2)) / 10).toLocaleString("pt-BR")} escanteios`;
-    if (mk === "btts") return s.pick === "yes" ? "Sim" : "Não";
+    if (/^btts[12]?$/.test(mk)) return s.pick === "yes" ? "Sim" : "Não";
     if (mk === "dc") return { "1x": `${home} ou Empate`, x2: `Empate ou ${away}`, "12": `${home} ou ${away}` }[s.pick] || s.pick;
     return s.pick === "home" ? home : s.pick === "away" ? away : "Empate";
   }
