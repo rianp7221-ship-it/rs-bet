@@ -10,7 +10,8 @@
   const MKT = { dc: "Chance Dupla", ou15: "Gols 1,5", ou25: "Gols 2,5", ou35: "Gols 3,5", btts: "Ambas Marcam", dnb: "Empate Anula" };
   const badge = (s) => `<span class="badge b-${s}">${STATUS[s] || s}</span>`;
   const TYPE = (n) => (n === 1 ? "Simples" : n === 2 ? "Dupla" : n === 3 ? "Tripla" : "Múltipla");
-  const MNAME = { "1x2": "Resultado Final", ou15: "Total de Gols", ou25: "Total de Gols", ou35: "Total de Gols", btts: "Ambas Marcam", dc: "Chance Dupla", dnb: "Empate Anula" };
+  const MNAME = { "1x2": "Resultado Final", ou15: "Total de Gols", ou25: "Total de Gols", ou35: "Total de Gols", btts: "Ambas Marcam", dc: "Chance Dupla", dnb: "Empate Anula", c1x2: "Escanteios 1X2" };
+  const mname = (mk) => MNAME[mk] || (/^co\d+$/.test(mk) ? "Total de Escanteios" : RS.esc(mk));
   const LINE = { ou15: "1,5", ou25: "2,5", ou35: "3,5" };
   let bets = [], betTab = "open", betFilter = "";
   const folded = new Set();
@@ -19,12 +20,13 @@
     const { home, away } = s.matches, mk = s.market || "1x2";
     if (mk === "bb") return "Criar Aposta";
     if (LINE[mk]) return `${s.pick === "over" ? "Mais" : "Menos"} de ${LINE[mk]}`;
+    if (/^co\d+$/.test(mk)) return `${s.pick === "over" ? "Mais" : "Menos"} de ${(Number(mk.slice(2)) / 10).toLocaleString("pt-BR")} escanteios`;
     if (mk === "btts") return s.pick === "yes" ? "Sim" : "Não";
     if (mk === "dc") return { "1x": `${home} ou Empate`, x2: `Empate ou ${away}`, "12": `${home} ou ${away}` }[s.pick] || s.pick;
     return s.pick === "home" ? home : s.pick === "away" ? away : "Empate";
   }
   const legList = (s) => s.pick.split("|").map((l) => { const [market, pick] = l.split(":");
-    return `<li><b>${RS.esc(selName({ ...s, market, pick }))}</b><small>${MNAME[market] || RS.esc(market)}</small></li>`; }).join("");
+    return `<li><b>${RS.esc(selName({ ...s, market, pick }))}</b><small>${mname(market)}</small></li>`; }).join("");
   function when(iso) {
     const d = new Date(iso), hm = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     const days = Math.round((new Date(iso).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 864e5);
@@ -73,7 +75,7 @@
       <div class="bc-body">
         ${sels.map((s) => `<div class="bc-sel">
           <div class="bc-l1">${RS.icon("ball")}<b${s.market === "bb" ? ' class="bc-bb"' : ""}>${RS.esc(selName(s))}</b>${mark(s)}<span>${Number(s.odd).toFixed(2)}</span></div>
-          ${s.market === "bb" ? "" : `<div class="bc-mk">${MNAME[s.market || "1x2"] || RS.esc(s.market)}</div>`}
+          ${s.market === "bb" ? "" : `<div class="bc-mk">${mname(s.market || "1x2")}</div>`}
           <div class="bc-l3"><span class="bc-teams">${logo(s.matches.home_logo)}${RS.esc(s.matches.home)}<br>${logo(s.matches.away_logo)}${RS.esc(s.matches.away)}</span><span class="bc-st" data-st="${s.match_id}">${selState(s)}</span></div>
           ${s.market === "bb" ? `<ul class="bc-legs">${legList(s)}</ul>` : ""}</div>`).join("")}
         <div class="bc-row"><span>Aposta</span><b>${RS.money(b.stake)}</b></div>

@@ -29,6 +29,7 @@ export interface OddsProvider {
   odds(sport: string): Promise<FeedEvent[]>;
   scores(sport: string, ids?: string[]): Promise<FeedScore[]>; // ids = jogos já iniciados dessa liga
   live?(ids: string[]): Promise<LiveUpdate[]>;
+  corners?(id: string): Promise<{ home: number; away: number } | null>; // escanteios finais
   remaining(): string | null;
   limit?(): number | null; // cota do plano (por dia ou por hora)
   info?(): string | null; // resumo da última busca (diagnóstico)
@@ -143,6 +144,9 @@ const AF_OU = ["Goals Over/Under", "Match Goals"];
 const AF_BTTS = ["Both Teams Score", "Both Teams to Score"];
 const AF_DC = ["Double Chance"];
 const AF_DNB = ["Draw No Bet", "Home/Away"];
+const AF_CO = ["Corners Over Under", "Total Corners", "Asian Corners"];
+const AF_C1X2 = ["Corners 1x2"];
+const AF_C1X2_PICK: Record<string, string> = { Home: "home", "1": "home", Draw: "draw", X: "draw", Away: "away", "2": "away" };
 const AF_DC_PICK: Record<string, string> = {
   "Home/Draw": "1x", "Home or Draw": "1x", "Home/Away": "12", "Home or Away": "12", "Draw/Away": "x2", "Away or Draw": "x2",
 };
@@ -194,11 +198,18 @@ function apiFootball(key: string): OddsProvider {
         } else if (AF_BTTS.includes(b.name) && /^(Yes|No)$/.test(v.value)) add("btts", v.value.toLowerCase(), v);
         else if (AF_DC.includes(b.name) && AF_DC_PICK[v.value]) add("dc", AF_DC_PICK[v.value], v);
         else if (AF_DNB.includes(b.name) && /^(Home|Away)$/.test(v.value)) add("dnb", v.value.toLowerCase(), v);
+        else if (AF_CO.includes(b.name)) {
+          const m = /^(Over|Under)\s*([\d.]+)?$/.exec(v.value);
+          const line = Number(m?.[2] ?? v.handicap);
+          if (m && line >= 6.5 && line <= 13.5 && line % 1 === 0.5) add(`co${line * 10}`, m[1].toLowerCase(), v);
+        } else if (AF_C1X2.includes(b.name) && AF_C1X2_PICK[v.value]) add("c1x2", AF_C1X2_PICK[v.value], v);
       }
     }
     const need: Record<string, string[]> = {
       ou15: ["over", "under"], ou25: ["over", "under"], ou35: ["over", "under"], btts: ["yes", "no"], dc: ["1x", "12", "x2"], dnb: ["home", "away"],
     };
+    need.c1x2 = ["home", "draw", "away"];
+    for (const k of acc.keys()) if (k.startsWith("co")) need[k.split(".")[0]] = ["over", "under"];
     const out: Markets = {};
     for (const [mk, ks] of Object.entries(need)) {
       if (!ks.every((k) => acc.has(`${mk}.${k}`))) continue;
@@ -285,6 +296,13 @@ function apiFootball(key: string): OddsProvider {
         });
       }
       return out;
+    },
+    // escanteios finais (null quando a liga não tem estatísticas)
+    async corners(id) {
+      const { response } = await get<{ statistics: { type: string; value: number | string | null }[] }>(`/fixtures/statistics?fixture=${id}`);
+      if (response.length < 2 || !response.every((t) => t.statistics?.length)) return null;
+      const [home, away] = response.map((t) => Number(t.statistics.find((s) => s.type === "Corner Kicks")?.value ?? 0) || 0);
+      return { home, away };
     },
     remaining: () => left,
     limit: () => daily,
