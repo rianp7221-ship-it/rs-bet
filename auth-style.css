@@ -711,3 +711,8 @@ body.mv-open { overflow: hidden; }
 @media (max-width: 900px) { .cs-nav { top: 60px; } }
 @media (max-width: 600px) { .cs-arr { display: none; } .cs-rail { grid-auto-columns: 30%; } .cs-rail.cs-big { grid-auto-columns: 42%; } .cs-provs { grid-auto-columns: 46%; } .cs-orig { grid-template-columns: repeat(3, 1fr); gap: 8px; } }
 @media (prefers-reduced-motion: reduce) { .pf-tile, .cs-nav button { transition: none; } }
+
+/* jogos originais: escondidos até o mines.js confirmar que estão ativos (evita aparecer desativado ao recarregar) */
+html:not(.g-mines) #mines-card, html:not(.g-mines) [data-game="mines-card"],
+html:not(.g-dice) #dice, html:not(.g-dice) [data-game="dice"],
+html:not(.g-leao) [data-game="leao"] { display: none !important; }
