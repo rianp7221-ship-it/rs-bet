@@ -242,10 +242,27 @@
     } catch (err) { RS.toast(err.message, "error"); }
     cashing = false; load();
   });
-  // valor e suspensão do cashout acompanham o jogo: tempo real + checagem a cada 3s
-  let pend;
-  sb.channel("hist-odds").on("postgres_changes", { event: "UPDATE", schema: "public", table: "matches" },
-    () => { clearTimeout(pend); pend = setTimeout(() => { if (showingBets()) loadCashouts(); }, 300); }).subscribe();
+  // gol ou suspensão no placar fecha o botão na hora; a cotação confirma no servidor em seguida
+  function lockCashout(ids, goal) {
+    const mine = new Set(ids.map(Number));
+    for (const b of bets) {
+      if (b.status !== "pending" || !b.bet_selections.some((s) => mine.has(Number(s.match_id)))) continue;
+      const el = box.querySelector(`[data-co="${b.id}"]`);
+      if (!el) continue;
+      el.innerHTML = goal
+        ? `<button class="btn btn-co w-full" disabled>Cash out indisponível — gol no jogo</button>`
+        : CO_OFF;
+    }
+  }
+  document.addEventListener("rs:match-lock", (e) => {
+    if (!showingBets()) return;
+    const hits = e.detail || [];
+    const open = new Set(bets.filter((b) => b.status === "pending").flatMap((b) => b.bet_selections.map((s) => Number(s.match_id))));
+    const mine = hits.filter((h) => open.has(Number(h.id)));
+    if (!mine.length) return;
+    lockCashout(mine.map((h) => h.id), mine.some((h) => h.goal));
+    loadCashouts();
+  });
   setInterval(() => { if (showingBets() && !document.hidden) loadCashouts(); }, 3000);
   const wake = () => { if (!document.hidden && showingBets()) { coAt = 1; loadCashouts(); } };
   document.addEventListener("visibilitychange", wake);
@@ -258,5 +275,5 @@
   }));
   document.addEventListener("rs:tab", (e) => { if (e.detail === "history") load(); });
   document.addEventListener("rs:balance", () => { if (!RS.$("#history").classList.contains("hidden")) load(); });
-  load();
+  if (!RS.$("#history").classList.contains("hidden")) load();
 })();

@@ -157,18 +157,39 @@
   const mobile = () => matchMedia("(max-width: 1000px)").matches;
   const KP = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "del"];
 
-  async function load() {
-    const { data, error } = await sb.from("matches").select("*").in("status", ["open", "live"]).order("starts_at");
-    if (error) { list.innerHTML = `<p class="empty">Erro ao carregar jogos.</p>`; return; }
-    matches = data;
+  function syncSlip() {
     for (const [id, s] of slip) {
       const m = matches.find((x) => x.id === id);
       const cur = oddOf(m, s.market, s.pick);
       if (!cur) { slip.delete(id); continue; }
       s.odd = cur;
     }
+  }
+  function paint() {
+    syncSlip();
     render();
     if (document.activeElement?.id !== "stake") renderSlip();
+  }
+  async function load() {
+    const { data, error } = await sb.from("matches").select("*").in("status", ["open", "live"]).order("starts_at");
+    if (error) { list.innerHTML = `<p class="empty">Erro ao carregar jogos.</p>`; return; }
+    matches = data;
+    lastFull = Date.now();
+    paint();
+  }
+  // o tempo real manda a linha que mudou; a lista inteira só volta na rede se o socket cair
+  function applyPayload(payload) {
+    const row = payload.new?.id ? payload.new : null;
+    const id = row?.id || payload.old?.id;
+    if (!id) return;
+    const i = matches.findIndex((m) => m.id === id);
+    const visible = row && (row.status === "open" || row.status === "live");
+    if (!visible) { if (i >= 0) matches.splice(i, 1); return; }
+    if (i >= 0) matches[i] = { ...matches[i], ...row };
+    else {
+      matches.push(row);
+      matches.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+    }
   }
 
   // ---------- jogos ----------
@@ -601,13 +622,32 @@
     },
   };
 
-  // odds e placar ao vivo; suspensões que expiram
-  let pend;
-  sb.channel("matches").on("postgres_changes", { event: "*", schema: "public", table: "matches" },
-    () => { clearTimeout(pend); pend = setTimeout(load, 400); }).subscribe();
-  // o celular derruba o tempo real em segundo plano: confere sozinho a cada 15 s e ao voltar para a aba
-  setInterval(() => { if (!document.hidden) load(); }, 15000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+  // odds e placar ao vivo; várias linhas do sync chegam juntas e redesenham uma vez só
+  let lastFull = 0, rtOk = false, queue = [], pend;
+  const sportsOpen = () => !document.getElementById("sports")?.classList.contains("hidden");
+  const needFeed = () => sportsOpen() || slip.size > 0;
+  sb.channel("matches").on("postgres_changes", { event: "*", schema: "public", table: "matches" }, (payload) => {
+    const row = payload.new?.id ? payload.new : null;
+    const prev = row && matches.find((m) => m.id === row.id);
+    const goal = !!row && !!prev && (Number(prev.score_home) !== Number(row.score_home) || Number(prev.score_away) !== Number(row.score_away));
+    const locked = !!row && (row.locked || (row.suspended_until && new Date(row.suspended_until) > new Date()));
+    if (row && (goal || locked)) document.dispatchEvent(new CustomEvent("rs:match-lock", { detail: [{ id: row.id, goal }] }));
+    queue.push(payload);
+    clearTimeout(pend);
+    pend = setTimeout(() => { for (const p of queue) applyPayload(p); queue = []; paint(); }, 400);
+  }).subscribe((status) => { rtOk = status === "SUBSCRIBED"; });
+  // lista completa no máximo 1 vez por minuto com o socket saudável; a cada 15 s se ele cair
+  setInterval(() => {
+    if (document.hidden || !needFeed()) return;
+    if (rtOk && Date.now() - lastFull < 60000) return;
+    load();
+  }, 15000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && needFeed()) load(); });
+  document.addEventListener("rs:tab", (e) => {
+    if (e.detail !== "sports") return;
+    paint();
+    if (!rtOk || Date.now() - lastFull > 60000) load();
+  });
 
   (async () => {
     await load();
