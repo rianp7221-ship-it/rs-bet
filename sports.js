@@ -18,13 +18,17 @@
     ou15: ["Total de Gols 1,5", { over: "Mais de 1,5", under: "Menos de 1,5" }],
     ou35: ["Total de Gols 3,5", { over: "Mais de 3,5", under: "Menos de 3,5" }],
     c1x2: ["Escanteios 1X2", { home: "1", draw: "X", away: "2" }],
+    s1x2: ["Chutes 1X2", { home: "1", draw: "X", away: "2" }],
+    t1x2: ["Chutes no Gol 1X2", { home: "1", draw: "X", away: "2" }],
   };
   const coKeys = (m) => Object.keys(m?.markets || {}).filter((k) => /^co\d+$/.test(k)).sort((a, b) => a.slice(2) - b.slice(2));
   const coLine = (k) => (Number(k.slice(2)) / 10).toLocaleString("pt-BR");
   const kKeys = (m) => Object.keys(m?.markets || {}).filter((k) => /^k\d+$/.test(k)).sort((a, b) => a.slice(1) - b.slice(1));
   const kLine = (k) => (Number(k.slice(1)) / 10).toLocaleString("pt-BR");
   const mkDef = (k) => MK[k] || (/^co\d+$/.test(k) ? [`Escanteios ${coLine(k)}`, { over: `Mais de ${coLine(k)}`, under: `Menos de ${coLine(k)}` }]
-    : /^k\d+$/.test(k) ? [`Cartões ${kLine(k)}`, { over: `Mais de ${kLine(k)}`, under: `Menos de ${kLine(k)}` }] : [k, {}]);
+    : /^k\d+$/.test(k) ? [`Cartões ${kLine(k)}`, { over: `Mais de ${kLine(k)}`, under: `Menos de ${kLine(k)}` }]
+    : /^[st]\d+$/.test(k) ? [`${k[0] === "s" ? "Chutes" : "Chutes no Gol"} ${kLine(k)}`, { over: `Mais de ${kLine(k)}`, under: `Menos de ${kLine(k)}` }] : [k, {}]);
+  const stKeys = (m, p) => Object.keys(m?.markets || {}).filter((k) => k[0] === p && /^[st]\d+$/.test(k)).sort((a, b) => a.slice(1) - b.slice(1));
   const oddOf = (m, mk, pick) => mk === "bb" ? bbOdd(m, pick) : Number(mk === "1x2" ? m?.["odd_" + pick] : m?.markets?.[mk]?.[pick]) || 0;
   // Criar Aposta: mesmo modelo de Poisson do servidor (_bb_odd); o servidor recalcula a odd ao apostar
   const BB_MK = ["1x2", "ou15", "ou25", "ou35", "btts", "dc"], BB_MAX = 4;
@@ -56,7 +60,7 @@
     return v >= 1.05 ? v : 0;
   }
   const bbOn = new Set();
-  const extras = (m) => [...Object.keys(MK).filter((k) => m.markets?.[k]), ...coKeys(m), ...kKeys(m)];
+  const extras = (m) => [...Object.keys(MK).filter((k) => m.markets?.[k]), ...coKeys(m), ...kKeys(m), ...stKeys(m, "s"), ...stKeys(m, "t")];
   let mvId = null, mvTab = "all";
   const mvClosed = new Set();
   const isSel = (id, mk, pick) => legsOf(slip.get(id)).some(([k, p]) => k === mk && p === pick);
@@ -154,7 +158,7 @@
     </div>`;
 
   // tela do jogo: mercados em blocos que abrem e fecham, separados por abas
-  const MV_TABS = { all: "Todos", main: "Principais", goals: "Gols", corners: "Escanteios", cards: "Cartões" };
+  const MV_TABS = { all: "Todos", main: "Principais", goals: "Gols", corners: "Escanteios", cards: "Cartões", shots: "Chutes" };
   const MV_GROUPS = [
     { key: "r", tab: "main", name: "Resultado Final", rows: (m) => [[["1x2", "home", m.home], ["1x2", "draw", "Empate"], ["1x2", "away", m.away]]] },
     { key: "ou", tab: "goals", name: "Total de Gols Mais/Menos", rows: () => ["ou15", "ou25", "ou35"].map((k) => Object.entries(MK[k][1]).map(([p, l]) => [k, p, l])) },
@@ -164,6 +168,10 @@
     { key: "c1x2", tab: "corners", name: "Escanteios 1X2", ca: false, rows: (m) => [[["c1x2", "home", m.home], ["c1x2", "draw", "Empate"], ["c1x2", "away", m.away]]] },
     { key: "co", tab: "corners", name: "Total de Escanteios Mais/Menos", ca: false, rows: (m) => coKeys(m).map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
     { key: "ko", tab: "cards", name: "Total de Cartões Mais/Menos", ca: false, rows: (m) => kKeys(m).map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
+    { key: "s1x2", tab: "shots", name: "Chutes 1X2", ca: false, rows: (m) => [[["s1x2", "home", m.home], ["s1x2", "draw", "Empate"], ["s1x2", "away", m.away]]] },
+    { key: "so", tab: "shots", name: "Total de Chutes Mais/Menos", ca: false, rows: (m) => stKeys(m, "s").map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
+    { key: "t1x2", tab: "shots", name: "Chutes no Gol 1X2", ca: false, rows: (m) => [[["t1x2", "home", m.home], ["t1x2", "draw", "Empate"], ["t1x2", "away", m.away]]] },
+    { key: "to", tab: "shots", name: "Total de Chutes no Gol Mais/Menos", ca: false, rows: (m) => stKeys(m, "t").map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
   ];
   const mvBtn = (m, [mk, p, label]) => {
     const odd = oddOf(m, mk, p);
@@ -372,7 +380,7 @@
     const anySusp = items.some(([id]) => suspended(matches.find((m) => m.id === id)));
     slipEl.innerHTML = items.map(([id, s]) => {
       const m = matches.find((x) => x.id === id);
-      const name = (mk, p) => (mk === "1x2" || mk === "dnb" || mk === "c1x2" ? (p === "home" ? m.home : p === "away" ? m.away : "Empate") : mkDef(mk)[1][p]);
+      const name = (mk, p) => (mk === "1x2" || mk === "dnb" || /^[cst]1x2$/.test(mk) ? (p === "home" ? m.home : p === "away" ? m.away : "Empate") : mkDef(mk)[1][p]);
       const mkName = (mk) => (mk === "1x2" ? "Resultado Final" : mkDef(mk)[0]);
       const up = s.odd > s.base;
       return `<div class="slip-item">

@@ -29,7 +29,7 @@ export interface OddsProvider {
   odds(sport: string): Promise<FeedEvent[]>;
   scores(sport: string, ids?: string[]): Promise<FeedScore[]>; // ids = jogos já iniciados dessa liga
   live?(ids: string[]): Promise<LiveUpdate[]>;
-  corners?(id: string): Promise<{ home: number; away: number; cards: { home: number; away: number } } | null>; // escanteios e cartões finais
+  corners?(id: string): Promise<{ home: number; away: number; cards: { home: number; away: number }; shots: { home: number; away: number }; sot: { home: number; away: number } } | null>; // escanteios, cartões e chutes finais
   remaining(): string | null;
   limit?(): number | null; // cota do plano (por dia ou por hora)
   info?(): string | null; // resumo da última busca (diagnóstico)
@@ -147,6 +147,9 @@ const AF_DNB = ["Draw No Bet", "Home/Away"];
 const AF_CO = ["Corners Over Under", "Total Corners", "Asian Corners"];
 const AF_C1X2 = ["Corners 1x2"];
 const AF_KO = ["Cards Over/Under", "Total Cards"];
+// chutes (s) e chutes no gol (t): total mais/menos e 1X2
+const AF_SO = ["Total Shots"], AF_TO = ["Total ShotOnGoal", "Total shots on goal"];
+const AF_S1X2 = ["Shots.1x2"], AF_T1X2 = ["ShotOnTarget 1x2", "1x2 shots on goal"];
 const AF_C1X2_PICK: Record<string, string> = { Home: "home", "1": "home", Draw: "draw", X: "draw", Away: "away", "2": "away" };
 const AF_DC_PICK: Record<string, string> = {
   "Home/Draw": "1x", "Home or Draw": "1x", "Home/Away": "12", "Home or Away": "12", "Draw/Away": "x2", "Away or Draw": "x2",
@@ -208,14 +211,19 @@ function apiFootball(key: string): OddsProvider {
           const m = /^(Over|Under)\s*([\d.]+)?$/.exec(v.value);
           const line = Number(m?.[2] ?? v.handicap);
           if (m && line >= 0.5 && line <= 9.5 && line % 1 === 0.5) add(`k${line * 10}`, m[1].toLowerCase(), v);
-        }
+        } else if (AF_SO.includes(b.name) || AF_TO.includes(b.name)) {
+          const t = AF_TO.includes(b.name), m = /^(Over|Under)\s*([\d.]+)?$/.exec(v.value);
+          const line = Number(m?.[2] ?? v.handicap);
+          if (m && line % 1 === 0.5 && (t ? line >= 3.5 && line <= 20.5 : line >= 10.5 && line <= 45.5)) add(`${t ? "t" : "s"}${line * 10}`, m[1].toLowerCase(), v);
+        } else if (AF_S1X2.includes(b.name) && AF_C1X2_PICK[v.value]) add("s1x2", AF_C1X2_PICK[v.value], v);
+        else if (AF_T1X2.includes(b.name) && AF_C1X2_PICK[v.value]) add("t1x2", AF_C1X2_PICK[v.value], v);
       }
     }
     const need: Record<string, string[]> = {
       ou15: ["over", "under"], ou25: ["over", "under"], ou35: ["over", "under"], btts: ["yes", "no"], dc: ["1x", "12", "x2"], dnb: ["home", "away"],
     };
-    need.c1x2 = ["home", "draw", "away"];
-    for (const k of acc.keys()) if (/^(co|k)\d/.test(k)) need[k.split(".")[0]] = ["over", "under"];
+    need.c1x2 = need.s1x2 = need.t1x2 = ["home", "draw", "away"];
+    for (const k of acc.keys()) if (/^(co|k|s|t)\d+$/.test(k.split(".")[0])) need[k.split(".")[0]] = ["over", "under"];
     const out: Markets = {};
     for (const [mk, ks] of Object.entries(need)) {
       if (!ks.every((k) => acc.has(`${mk}.${k}`))) continue;
@@ -310,7 +318,9 @@ function apiFootball(key: string): OddsProvider {
       const stat = (t: { statistics: { type: string; value: number | string | null }[] }, type: string) => Number(t.statistics.find((s) => s.type === type)?.value ?? 0) || 0;
       const [home, away] = response.map((t) => stat(t, "Corner Kicks"));
       const [ch, ca] = response.map((t) => stat(t, "Yellow Cards") + stat(t, "Red Cards"));
-      return { home, away, cards: { home: ch, away: ca } };
+      const [sh, sa] = response.map((t) => stat(t, "Total Shots"));
+      const [th, ta] = response.map((t) => stat(t, "Shots on Goal"));
+      return { home, away, cards: { home: ch, away: ca }, shots: { home: sh, away: sa }, sot: { home: th, away: ta } };
     },
     remaining: () => left,
     limit: () => daily,
