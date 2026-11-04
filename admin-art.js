@@ -1,5 +1,5 @@
 // =====================================================
-//  admin-art.js — Admin → Gerar arte: imagem de divulgação de um jogo
+//  admin-art.js — Admin → Gerar arte: imagem de divulgação de um jogo ou de um bilhete ganho
 //  Cores tiradas dos escudos; modelo e detalhes variam por jogo e a cada "Outra variação".
 // =====================================================
 (() => {
@@ -279,12 +279,96 @@
       + (o.every(Boolean) ? `\n📊 Casa ${o[0]} | Empate ${o[1]} | Fora ${o[2]}` : "") + `\n👉 Aposte em https://${SITE}`;
   };
 
+  // ---------- bilhetes ganhos ----------
+  const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const shortName = (p) => {
+    const n = (p?.full_name || "").trim().split(/\s+/).filter(Boolean);
+    if (n.length) return n[0][0].toUpperCase() + n[0].slice(1).toLowerCase() + (n.length > 1 ? ` ${n[n.length - 1][0].toUpperCase()}.` : "");
+    return (p?.username || "cliente").slice(0, 3) + "***";
+  };
+  const MKT = { dnb: "Empate Anula", ht1x2: "1º Tempo", c1x2: "Escanteios", s1x2: "Chutes", t1x2: "Chutes no gol", btts: "Ambas Marcam", btts1: "Ambas Marcam 1º T", btts2: "Ambas Marcam 2º T" };
+  const PXT = { ou: "gols", hto: "gols 1º T", co: "escanteios", ch: "escanteios casa", ca: "escanteios fora", k: "cartões", kh: "cartões casa", ka: "cartões fora", s: "chutes", t: "chutes no gol", sh: "chutes casa", sa: "chutes fora" };
+  function selText(s) {
+    const m = s.matches || {}, mk = s.market || "1x2", px = mk.replace(/\d+$/, "");
+    if (mk === "bb") return "Criar Aposta";
+    if (PXT[px] && /\d$/.test(mk)) return `${s.pick === "over" ? "Mais" : "Menos"} de ${(Number(mk.slice(px.length)) / 10).toLocaleString("pt-BR")} ${PXT[px]}`;
+    if (mk === "dc") return { "1x": `${m.home} ou Empate`, x2: `Empate ou ${m.away}`, "12": `${m.home} ou ${m.away}` }[s.pick] || s.pick;
+    const v = { home: m.home, away: m.away, draw: "Empate", yes: "Sim", no: "Não" }[s.pick] || s.pick;
+    return MKT[mk] ? `${MKT[mk]}: ${v}` : v;
+  }
+  async function drawTicket(cv, b, fmt, model, variant) {
+    const [W, H] = SIZES[fmt];
+    cv.width = W; cv.height = H;
+    const x = cv.getContext("2d"), u = W / 1080;
+    await document.fonts.load("900 40px Roboto").catch(() => {});
+    const sels = b.bet_selections || [];
+    const logos = await Promise.all(sels.map((s) => Promise.all([loadImg(s.matches?.home_logo), loadImg(s.matches?.away_logo)])));
+    const f = sels[0]?.matches || {}, A = teamTone(logos[0]?.[0], f.home || "a"), B = teamTone(logos[0]?.[1], f.away || "b");
+    const r = rng(hash("b" + b.id) + variant * 7919);
+    const keys = Object.keys(BG), key = model === "auto" ? keys[(hash("b" + b.id) + variant) % keys.length] : model;
+    BG[key](x, W, H, A, B, r, { h: logos[0]?.[0], a: logos[0]?.[1] });
+    x.fillStyle = "rgba(0,0,0,.35)"; x.fillRect(0, 0, W, H);
+    // seleções: altura da linha se ajusta; se não couber, mostra "+ N seleções"; sobra de espaço vai para cima e para baixo
+    const foot = (fmt === "story" ? 520 : fmt === "quad" ? 350 : 400) * u, pad = 60 * u, bw = W - pad * 2;
+    const top0 = (fmt === "story" ? 90 : fmt === "quad" ? 30 : 50) * u, avail = H - top0 - 276 * u - foot;
+    const rowH = Math.min(150 * u, Math.max(92 * u, avail / Math.max(1, sels.length)));
+    const fitN = Math.max(1, Math.floor(avail / rowH)), show = sels.length > fitN ? sels.slice(0, fitN - 1) : sels;
+    const off = Math.max(0, (avail - show.length * rowH - (show.length < sels.length ? rowH * 0.8 : 0)) / 2), top = top0 + off;
+    brandMark(x, W / 2, top, 76 * u);
+    let y = top + 116 * u;
+    x.textAlign = "center"; x.textBaseline = "middle";
+    x.save(); x.shadowColor = "rgba(0,0,0,.6)"; x.shadowBlur = 20; x.fillStyle = "#ffd23f";
+    x.font = `900 italic ${(fmt === "quad" ? 74 : 92) * u}px Roboto, Arial`; x.fillText("BILHETE PREMIADO", W / 2, y + 45 * u); x.restore();
+    y += 100 * u;
+    x.fillStyle = "#fff"; x.font = `700 ${34 * u}px Roboto, Arial`;
+    x.fillText(`${shortName(b.profiles)} · ${sels.length > 1 ? `Múltipla de ${sels.length}` : "Simples"}`, W / 2, y + 20 * u);
+    y += 60 * u;
+    show.forEach((s, i) => {
+      const ry = y + i * rowH, h = rowH - 14 * u, m = s.matches || {}, cs = Math.min(56 * u, h * 0.42), cy = ry + h / 2;
+      x.fillStyle = "rgba(0,0,0,.55)"; rr(x, pad, ry, bw, h, 18 * u); x.fill();
+      crest(x, logos[i][0], pad + 26 * u + cs / 2, cy - cs * 0.55, cs, A, m.home || "");
+      crest(x, logos[i][1], pad + 26 * u + cs / 2, cy + cs * 0.55, cs, B, m.away || "");
+      const tx = pad + 50 * u + cs, tw = bw - (tx - pad) - 230 * u, game = `${m.home} x ${m.away}`, st = selText(s);
+      x.textAlign = "left";
+      x.fillStyle = "rgba(255,255,255,.75)"; fit(x, game, tw, Math.min(28 * u, h * 0.24), 700); x.fillText(game, tx, ry + h * 0.3);
+      x.fillStyle = "#fff"; fit(x, st, tw, Math.min(38 * u, h * 0.34)); x.fillText(st, tx, ry + h * 0.7);
+      x.textAlign = "right"; x.fillStyle = "#ffd23f"; x.font = `900 ${44 * u}px Roboto, Arial`; x.fillText(Number(s.odd).toFixed(2), pad + bw - 90 * u, cy);
+      const ok = s.status !== "canceled", kx = pad + bw - 46 * u;
+      x.fillStyle = ok ? "#1fbf5b" : "#8a8f98"; x.beginPath(); x.arc(kx, cy, 24 * u, 0, 7); x.fill();
+      x.strokeStyle = "#fff"; x.lineWidth = 6 * u; x.lineCap = "round"; x.beginPath();
+      if (ok) { x.moveTo(kx - 11 * u, cy); x.lineTo(kx - 3 * u, cy + 8 * u); x.lineTo(kx + 12 * u, cy - 9 * u); } else { x.moveTo(kx - 10 * u, cy); x.lineTo(kx + 10 * u, cy); }
+      x.stroke();
+    });
+    if (show.length < sels.length) {
+      x.textAlign = "center"; x.fillStyle = "#fff"; x.font = `700 ${32 * u}px Roboto, Arial`;
+      x.fillText(`+ ${sels.length - show.length} seleções`, W / 2, y + show.length * rowH + rowH * 0.4);
+    }
+    // aposta, odd e prêmio
+    const tot = Number(b.potential) / Number(b.stake), vy = H - foot + 30 * u - off, vw = (bw - 40 * u) / 3, vh = (fmt === "quad" ? 130 : 150) * u;
+    [["APOSTA", brl(b.stake)], ["ODD", tot.toFixed(2)], ["PRÊMIO", brl(b.potential)]].forEach(([t, v], i) => {
+      const bx = pad + i * (vw + 20 * u), hi = i === 2;
+      x.fillStyle = hi ? "#1fbf5b" : "rgba(0,0,0,.6)"; rr(x, bx, vy, vw, vh, 20 * u); x.fill();
+      x.textAlign = "center"; x.fillStyle = "rgba(255,255,255,.85)"; x.font = `700 ${26 * u}px Roboto, Arial`; x.fillText(t, bx + vw / 2, vy + 38 * u);
+      x.fillStyle = hi ? "#fff" : "#ffd23f"; fit(x, v, vw - 24 * u, 50 * u); x.fillText(v, bx + vw / 2, vy + vh * 0.64);
+    });
+    const fy = vy + vh + (fmt === "quad" ? 30 : 50) * u, cw = 600 * u, ch = (fmt === "quad" ? 80 : 96) * u;
+    x.fillStyle = BRAND; rr(x, W / 2 - cw / 2, fy, cw, ch, ch / 2); x.fill();
+    x.fillStyle = "#fff"; x.textAlign = "center"; x.font = `900 ${42 * u}px Roboto, Arial`; x.fillText("APOSTE AGORA", W / 2, fy + ch / 2 + 2 * u);
+    x.font = `700 ${36 * u}px Roboto, Arial`; x.fillText(SITE, W / 2, fy + ch + 46 * u);
+    return key;
+  }
+  const ticketCaption = (b) => `🟢 GREEN NA REAL SPORTS!\n💰 ${brl(b.stake)} virou ${brl(b.potential)}\n`
+    + (b.bet_selections || []).map((s) => `✅ ${s.matches?.home} x ${s.matches?.away}: ${selText(s)} @${Number(s.odd).toFixed(2)}`).join("\n")
+    + `\n👉 Aposte em https://${SITE}`;
+
   // ---------- tela ----------
   async function art() {
     const { head } = window.RSadmin;
     main().innerHTML = head("Gerar arte") + `
       <div class="art">
         <div class="panel art-pick">
+          <div class="tabs-sm" id="art-mode" style="margin-bottom:10px"><button class="chip active" data-m="games">Jogos</button><button class="chip" data-m="won">Bilhetes ganhos</button></div>
+          <div id="art-games-ui">
           <div class="filters">
             <input class="input" id="art-q" placeholder="Buscar time ou liga" style="flex:1;min-width:160px">
             <select class="input" id="art-day"><option value="0">Hoje</option><option value="1">Amanhã</option><option value="7">Próximos 7 dias</option></select>
@@ -297,7 +381,9 @@
             </div>
             <small class="muted" id="art-bulk-msg">Brasileirão, Copa do Brasil, Libertadores, Champions, Premier, La Liga, Serie A, Bundesliga, Ligue 1… do dia escolhido acima.</small>
           </div>
+          </div>
           <div id="art-list" class="art-list"><p class="muted">Carregando jogos…</p></div>
+          <div id="art-won" class="art-list" style="display:none"></div>
         </div>
         <div class="panel art-view">
           <div class="filters">
@@ -319,7 +405,7 @@
       .eq("status", "open").gt("starts_at", new Date().toISOString()).order("starts_at").limit(1500);
     if (error) { RS.$("#art-list").innerHTML = `<p class="empty">Erro: ${esc(error.message)}</p>`; return; }
     const games = data || [];
-    let sel = null, variant = 0;
+    let sel = null, variant = 0, mode = "games", selBet = null, won = null;
     const cv = RS.$("#art-cv");
     const list = () => {
       const q = RS.$("#art-q").value.trim().toLowerCase(), days = +RS.$("#art-day").value;
@@ -333,14 +419,16 @@
       }).join("") : `<p class="empty">Nenhum jogo encontrado.</p>`;
     };
     const render = async () => {
-      if (!sel) return;
-      RS.$("#art-hint").hidden = true;
-      await draw(cv, sel, RS.$("#art-fmt").value, RS.$("#art-model").value, variant);
-      RS.$("#art-txt").value = caption(sel);
-      for (const id of ["#art-var", "#art-share", "#art-dl", "#art-copy"]) RS.$(id).disabled = false;
+      const cur = mode === "won" ? selBet : sel;
+      for (const id of ["#art-var", "#art-share", "#art-dl", "#art-copy"]) RS.$(id).disabled = !cur;
+      RS.$("#art-hint").hidden = !!cur;
+      if (!cur) { cv.width = cv.height = 0; RS.$("#art-txt").value = ""; return; }
+      if (mode === "won") await drawTicket(cv, cur, RS.$("#art-fmt").value, RS.$("#art-model").value, variant);
+      else await draw(cv, cur, RS.$("#art-fmt").value, RS.$("#art-model").value, variant);
+      RS.$("#art-txt").value = mode === "won" ? ticketCaption(cur) : caption(cur);
     };
     const slug = (g) => `real-sports-${g.home}-x-${g.away}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w-]+/g, "-").replace(/-+$/, "").toLowerCase();
-    const fileName = () => `real-sports-${sel.home}-x-${sel.away}`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w-]+/g, "-").replace(/-+$/, "").toLowerCase() + ".png";
+    const fileName = () => (mode === "won" ? `real-sports-bilhete-${selBet.id}` : slug(sel)) + ".png";
     const blob = () => new Promise((ok) => cv.toBlob(ok, "image/png"));
     const download = async () => {
       const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(await blob()), download: fileName() });
@@ -385,6 +473,38 @@
       const files = await Promise.all(bulk.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) })));
       const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(zip(files)), download: `real-sports-artes-${when(new Date().toISOString()).dayKey}.zip` });
       a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    };
+    // bilhetes ganhos dos clientes (sem contas da equipe)
+    const loadWon = async () => {
+      const el = RS.$("#art-won");
+      el.innerHTML = `<p class="muted">Carregando bilhetes…</p>`;
+      const { data, error } = await sb.from("bets")
+        .select("id,stake,total_odd,potential,settled_at,profiles(full_name,username,is_admin,staff_role),bet_selections(market,pick,odd,status,matches(home,away,league,home_logo,away_logo))")
+        .eq("status", "won").order("settled_at", { ascending: false }).limit(100);
+      if (error) { el.innerHTML = `<p class="empty">Erro: ${esc(error.message)}</p>`; return; }
+      won = (data || []).filter((b) => !b.profiles?.is_admin && !b.profiles?.staff_role);
+      el.innerHTML = won.length ? won.map((b) => {
+        const n = b.bet_selections.length, d = new Date(b.settled_at).toLocaleString("pt-BR", { timeZone: TZ, day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+        return `<button class="art-row" data-b="${b.id}"><small>${d} · ${esc(shortName(b.profiles))} · ${n} ${n > 1 ? "seleções" : "seleção"}</small>
+          <span>${brl(b.stake)} → <b>${brl(b.potential)}</b></span></button>`;
+      }).join("") : `<p class="empty">Nenhum bilhete ganho ainda.</p>`;
+    };
+    RS.$("#art-mode").onclick = (e) => {
+      const b = e.target.closest("[data-m]"); if (!b || b.dataset.m === mode) return;
+      mode = b.dataset.m; variant = 0;
+      RS.$$("#art-mode .chip").forEach((c) => c.classList.toggle("active", c === b));
+      RS.$("#art-games-ui").hidden = mode === "won";
+      RS.$("#art-list").style.display = mode === "won" ? "none" : "";
+      RS.$("#art-won").style.display = mode === "won" ? "" : "none";
+      if (mode === "won" && !won) loadWon();
+      render();
+    };
+    RS.$("#art-won").onclick = (e) => {
+      const b = e.target.closest("[data-b]"); if (!b) return;
+      selBet = won.find((w) => String(w.id) === b.dataset.b); variant = 0;
+      RS.$$(".art-row", RS.$("#art-won")).forEach((r) => r.classList.toggle("active", r === b));
+      render();
+      if (matchMedia("(max-width: 900px)").matches) RS.$(".art-view").scrollIntoView({ behavior: "smooth" });
     };
     RS.$("#art-q").oninput = list; RS.$("#art-day").onchange = list;
     RS.$("#art-fmt").onchange = render; RS.$("#art-model").onchange = render;
