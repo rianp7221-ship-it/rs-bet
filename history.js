@@ -11,7 +11,7 @@
   const badge = (s) => `<span class="badge b-${s}">${STATUS[s] || s}</span>`;
   const TYPE = (n) => (n === 1 ? "Simples" : n === 2 ? "Dupla" : n === 3 ? "Tripla" : "Múltipla");
   const MNAME = { "1x2": "Resultado Final", ou15: "Total de Gols", ou25: "Total de Gols", ou35: "Total de Gols", btts: "Ambas Marcam", dc: "Chance Dupla", dnb: "Empate Anula", c1x2: "Escanteios 1X2" };
-  const mname = (mk) => MNAME[mk] || (/^co\d+$/.test(mk) ? "Total de Escanteios" : RS.esc(mk));
+  const mname = (mk) => MNAME[mk] || (/^co\d+$/.test(mk) ? "Total de Escanteios" : /^k\d+$/.test(mk) ? "Total de Cartões" : RS.esc(mk));
   const LINE = { ou15: "1,5", ou25: "2,5", ou35: "3,5" };
   let bets = [], betTab = "open", betFilter = "";
   const folded = new Set();
@@ -20,6 +20,7 @@
     const { home, away } = s.matches, mk = s.market || "1x2";
     if (mk === "bb") return "Criar Aposta";
     if (LINE[mk]) return `${s.pick === "over" ? "Mais" : "Menos"} de ${LINE[mk]}`;
+    if (/^k\d+$/.test(mk)) return `${s.pick === "over" ? "Mais" : "Menos"} de ${(Number(mk.slice(1)) / 10).toLocaleString("pt-BR")} cartões`;
     if (/^co\d+$/.test(mk)) return `${s.pick === "over" ? "Mais" : "Menos"} de ${(Number(mk.slice(2)) / 10).toLocaleString("pt-BR")} escanteios`;
     if (mk === "btts") return s.pick === "yes" ? "Sim" : "Não";
     if (mk === "dc") return { "1x": `${home} ou Empate`, x2: `Empate ou ${away}`, "12": `${home} ou ${away}` }[s.pick] || s.pick;

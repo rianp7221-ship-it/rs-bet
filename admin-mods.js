@@ -306,7 +306,7 @@
           <small class="muted">${esc(g.league || "")} · ${RS.date(g.starts_at)} · ${badge(g.status)}${g.score_home != null ? ` ${g.score_home} x ${g.score_away}` : ""}</small>
           <div><b>${esc(g.home || "")} x ${esc(g.away || "")}</b></div>
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:4px">
-            <span>${MKN[s.market] || (/^co\d+$/.test(s.market) ? `Escanteios ${+s.market.slice(2) / 10}` : s.market)}: <b>${esc(pickName(s.market, s.pick, g))}</b> @ <b>${s.odd}</b></span>
+            <span>${MKN[s.market] || (/^co\d+$/.test(s.market) ? `Escanteios ${+s.market.slice(2) / 10}` : /^k\d+$/.test(s.market) ? `Cartões ${+s.market.slice(1) / 10}` : s.market)}: <b>${esc(pickName(s.market, s.pick, g))}</b> @ <b>${s.odd}</b></span>
             ${edit ? `<select class="input" data-sel="${s.id}" data-odd="${s.odd}" data-was="${s.status}" style="width:auto">${SEL.map(([v, t]) => `<option value="${v}" ${v === s.status ? "selected" : ""}>${t}</option>`).join("")}</select>` : badge(s.status === "canceled" ? "canceled" : s.status, s.status === "canceled" ? "Devolvida" : null)}
           </div></div>`; }).join("")}</div>
         ${edit ? `<p id="bv-prev" class="muted" style="margin:10px 0"></p>

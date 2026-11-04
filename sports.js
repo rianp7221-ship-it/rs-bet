@@ -21,7 +21,10 @@
   };
   const coKeys = (m) => Object.keys(m?.markets || {}).filter((k) => /^co\d+$/.test(k)).sort((a, b) => a.slice(2) - b.slice(2));
   const coLine = (k) => (Number(k.slice(2)) / 10).toLocaleString("pt-BR");
-  const mkDef = (k) => MK[k] || (/^co\d+$/.test(k) ? [`Escanteios ${coLine(k)}`, { over: `Mais de ${coLine(k)}`, under: `Menos de ${coLine(k)}` }] : [k, {}]);
+  const kKeys = (m) => Object.keys(m?.markets || {}).filter((k) => /^k\d+$/.test(k)).sort((a, b) => a.slice(1) - b.slice(1));
+  const kLine = (k) => (Number(k.slice(1)) / 10).toLocaleString("pt-BR");
+  const mkDef = (k) => MK[k] || (/^co\d+$/.test(k) ? [`Escanteios ${coLine(k)}`, { over: `Mais de ${coLine(k)}`, under: `Menos de ${coLine(k)}` }]
+    : /^k\d+$/.test(k) ? [`Cartões ${kLine(k)}`, { over: `Mais de ${kLine(k)}`, under: `Menos de ${kLine(k)}` }] : [k, {}]);
   const oddOf = (m, mk, pick) => mk === "bb" ? bbOdd(m, pick) : Number(mk === "1x2" ? m?.["odd_" + pick] : m?.markets?.[mk]?.[pick]) || 0;
   // Criar Aposta: mesmo modelo de Poisson do servidor (_bb_odd); o servidor recalcula a odd ao apostar
   const BB_MK = ["1x2", "ou15", "ou25", "ou35", "btts", "dc"], BB_MAX = 4;
@@ -53,7 +56,7 @@
     return v >= 1.05 ? v : 0;
   }
   const bbOn = new Set();
-  const extras = (m) => [...Object.keys(MK).filter((k) => m.markets?.[k]), ...coKeys(m)];
+  const extras = (m) => [...Object.keys(MK).filter((k) => m.markets?.[k]), ...coKeys(m), ...kKeys(m)];
   let mvId = null, mvTab = "all";
   const mvClosed = new Set();
   const isSel = (id, mk, pick) => legsOf(slip.get(id)).some(([k, p]) => k === mk && p === pick);
@@ -151,7 +154,7 @@
     </div>`;
 
   // tela do jogo: mercados em blocos que abrem e fecham, separados por abas
-  const MV_TABS = { all: "Todos", main: "Principais", goals: "Gols", corners: "Escanteios" };
+  const MV_TABS = { all: "Todos", main: "Principais", goals: "Gols", corners: "Escanteios", cards: "Cartões" };
   const MV_GROUPS = [
     { key: "r", tab: "main", name: "Resultado Final", rows: (m) => [[["1x2", "home", m.home], ["1x2", "draw", "Empate"], ["1x2", "away", m.away]]] },
     { key: "ou", tab: "goals", name: "Total de Gols Mais/Menos", rows: () => ["ou15", "ou25", "ou35"].map((k) => Object.entries(MK[k][1]).map(([p, l]) => [k, p, l])) },
@@ -160,6 +163,7 @@
     { key: "dnb", tab: "main", name: "Empate Anula", ca: false, rows: (m) => [[["dnb", "home", m.home], ["dnb", "away", m.away]]] },
     { key: "c1x2", tab: "corners", name: "Escanteios 1X2", ca: false, rows: (m) => [[["c1x2", "home", m.home], ["c1x2", "draw", "Empate"], ["c1x2", "away", m.away]]] },
     { key: "co", tab: "corners", name: "Total de Escanteios Mais/Menos", ca: false, rows: (m) => coKeys(m).map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
+    { key: "ko", tab: "cards", name: "Total de Cartões Mais/Menos", ca: false, rows: (m) => kKeys(m).map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
   ];
   const mvBtn = (m, [mk, p, label]) => {
     const odd = oddOf(m, mk, p);
