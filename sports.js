@@ -170,10 +170,21 @@
     render();
     if (document.activeElement?.id !== "stake") renderSlip();
   }
+  const LIST_COLS = "id,external_id,sport,league,home,away,starts_at,odd_home,odd_draw,odd_away,status,result,score_home,score_away,locked,suspended_until,suspend_reason,minute,bb_lh,bb_la,home_logo,away_logo,league_logo,odds_at,n_markets";
+  async function loadMarkets(ids) {
+    ids = ids.filter(Boolean);
+    if (!ids.length) return;
+    const { data } = await sb.from("matches").select("id,markets").in("id", ids);
+    for (const r of data || []) { const m = matches.find((x) => x.id === r.id); if (m) m.markets = r.markets; }
+    paint();
+  }
   async function load() {
-    const { data, error } = await sb.from("matches").select("*").in("status", ["open", "live"]).order("starts_at");
+    // lista sem os mercados extras (pesados): eles vêm só do jogo aberto e dos jogos no bilhete
+    const { data, error } = await sb.from("matches").select(LIST_COLS).in("status", ["open", "live"]).order("starts_at");
     if (error) { list.innerHTML = `<p class="empty">Erro ao carregar jogos.</p>`; return; }
-    matches = data;
+    const old = new Map(matches.map((m) => [m.id, m]));
+    matches = data.map((r) => (old.get(r.id)?.markets ? { ...r, markets: old.get(r.id).markets } : r));
+    loadMarkets([...slip.keys()]);
     lastFull = Date.now();
     paint();
   }
@@ -209,7 +220,7 @@
         <small>${lico(m.league)} ${RS.esc(lname(m.league))}</small></div>
       <div class="row-odds">${odds(m)}</div>
       <button class="fav ${favs.has(m.id) ? "on" : ""}" data-fav="${m.id}" aria-label="Favoritar">${RS.icon("star")}</button>
-      ${extras(m).length ? `<button class="more-mk" data-more="${m.id}">+${extras(m).length} mercados</button>` : ""}
+      ${(m.markets ? extras(m).length : m.n_markets) ? `<button class="more-mk" data-more="${m.id}">+${m.markets ? extras(m).length : m.n_markets} mercados</button>` : ""}
     </div>`;
 
   // tela do jogo: mercados em blocos que abrem e fecham, separados por abas
@@ -570,7 +581,7 @@
     const bt = t.closest("[data-bb]");
     if (bt) { const id = Number(bt.dataset.bb); if (bbOn.has(id)) bbOn.delete(id); else bbOn.add(id); render(); return; }
     const mo = t.closest("[data-more]");
-    if (mo) { mvId = Number(mo.dataset.more); mvTab = "all"; render(); return; }
+    if (mo) { mvId = Number(mo.dataset.more); mvTab = "all"; render(); loadMarkets([mvId]); return; }
     if (t.closest("[data-mvclose]")) { mvId = null; render(); return; }
     const mt = t.closest("[data-mvtab]");
     if (mt) { mvTab = mt.dataset.mvtab; render(); return; }
