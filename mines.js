@@ -4,12 +4,19 @@
 // =====================================================
 (() => {
   // jogos ligados e RTP definidos no Admin → Cassino
+  // ficam escondidos pelo CSS até a classe g-<jogo> entrar no <html>; a última lista conhecida vale já no carregamento
+  const GAMES = [["mines", "mines-card"], ["dice", "dice"], ["leao", "leao"]];
+  const apply = (on) => GAMES.forEach(([id, el]) => {
+    document.documentElement.classList.toggle(`g-${id}`, on.has(id));
+    RS.$$(`#${el}, [data-game="${el}"]`).forEach((n) => { n.style.display = on.has(id) ? "" : "none"; });
+  });
+  try { apply(new Set(JSON.parse(localStorage.getItem("rs-games-on") || "[]"))); } catch { /* sem cache */ }
   const lobby = sb.rpc("casino_lobby").then((r) => r.data || null, () => null);
   lobby.then((l) => {
     if (!l) return;
     const on = new Set(l.map((g) => g.id));
-    [["mines", "mines-card"], ["dice", "dice"], ["leao", "leao"]].forEach(([id, el]) =>
-      RS.$$(`#${el}, [data-game="${el}"]`).forEach((n) => { n.style.display = on.has(id) ? "" : "none"; }));
+    localStorage.setItem("rs-games-on", JSON.stringify([...on]));
+    apply(on);
     if (!l.length) RS.$(".casino-grid")?.insertAdjacentHTML("beforebegin", `<p class="muted" style="margin:12px 0">O cassino está temporariamente indisponível.</p>`);
   });
 
