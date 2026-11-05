@@ -25,8 +25,8 @@ Deno.serve(async (req) => {
 
   const errors: string[] = [];
   let applied = 0;
-  const { data: mx } = await sb.from("settings").select("value").eq("key", "live_odd_max").maybeSingle();
-  const maxOdd = Number(mx?.value) || 0;
+  const { data: mx } = await sb.from("settings").select("value").in("key", ["live_odd_max", "odd_max"]);
+  const maxOdd = (mx ?? []).map((r) => Number(r.value)).filter((x) => x > 1).reduce((x, y) => Math.min(x, y), Infinity);
   for (const ev of events) {
     const patch: Record<string, unknown> = { synced_at: new Date().toISOString() };
     if (ev.type === "danger" || ev.type === "suspend") {
