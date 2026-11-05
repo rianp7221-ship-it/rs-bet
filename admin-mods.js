@@ -289,12 +289,12 @@
         manage && b.status === "pending" ? `<input type="checkbox" data-bc="${b.id}">` : "", b.id, `<a href="#users" data-open-user="${b.user_id}" style="color:var(--primary)">${esc(b.profiles?.email || "")}</a>`, b.bet_selections[0]?.count,
         M(b.stake), b.total_odd, M(b.potential), badge(b.status), RS.date(b.created_at), `<button class="btn sm" data-bv="${b.id}">Abrir</button>`]), "Nenhum bilhete.");
     }
-    const MKN = { "1x2": "Resultado Final", dc: "Chance Dupla", ou15: "Gols 1,5", ou25: "Gols 2,5", ou35: "Gols 3,5", btts: "Ambas Marcam", dnb: "Empate Anula", ht1x2: "Resultado 1º Tempo", btts1: "Ambas Marcam 1º T", btts2: "Ambas Marcam 2º T", ou05: "Gols 0,5", ou45: "Gols 4,5", ou55: "Gols 5,5", c1x2: "Escanteios 1X2", s1x2: "Chutes 1X2", t1x2: "Chutes no Gol 1X2", bb: "Criar Aposta" };
+    const MKN = { "1x2": "Resultado Final", dc: "Chance Dupla", ou15: "Gols 1,5", ou25: "Gols 2,5", ou35: "Gols 3,5", btts: "Ambas Marcam", dnb: "Empate Anula", ht1x2: "Resultado 1º Tempo", btts1: "Ambas Marcam 1º T", btts2: "Ambas Marcam 2º T", ou05: "Gols 0,5", ou45: "Gols 4,5", ou55: "Gols 5,5", c1x2: "Escanteios 1X2", s1x2: "Chutes 1X2", t1x2: "Chutes no Gol 1X2", eg: "Gols exatos", bb: "Criar Aposta" };
     const mkLabel = (k) => MKN[k] || (/^co\d+$/.test(k) ? `Escanteios ${+k.slice(2) / 10}` : /^k\d+$/.test(k) ? `Cartões ${+k.slice(1) / 10}` : /^(hto|ch|ca|kh|ka|sh|sa)\d+$/.test(k) ? `${{ hto: "Gols 1º T", ch: "Escanteios casa", ca: "Escanteios fora", kh: "Cartões casa", ka: "Cartões fora", sh: "Chutes casa", sa: "Chutes fora" }[k.replace(/\d+$/, "")]} ${+k.replace(/^[a-z]+/, "") / 10}` : /^[st]\d+$/.test(k) ? `${k[0] === "s" ? "Chutes" : "Chutes no gol"} ${+k.slice(1) / 10}` : k);
     const PICK = { draw: "Empate", over: "Mais", under: "Menos", yes: "Sim", no: "Não", "1x": "Casa ou empate", "12": "Casa ou fora", x2: "Empate ou fora" };
     const pickName = (mk, p, m) => mk === "bb"
       ? p.split("|").map((l) => { const [k, v] = l.split(":"); return `${mkLabel(k)}: ${pickName(k, v, m)}`; }).join(" + ")
-      : p === "home" ? m.home : p === "away" ? m.away : PICK[p] || p;
+      : mk === "eg" ? `Exatamente ${p.slice(1)}` : p === "home" ? m.home : p === "away" ? m.away : PICK[p] || p;
     const SEL = [["pending", "Pendente"], ["won", "Ganhou"], ["lost", "Perdeu"], ["canceled", "Devolvida (odd 1)"]];
     async function openBet(id) {
       const { data: b, error } = await sb.from("bets").select("*, profiles(email), bet_selections(*, matches(home, away, league, status, score_home, score_away, result, starts_at))").eq("id", id).single();

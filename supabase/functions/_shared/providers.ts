@@ -159,6 +159,7 @@ const AF_S1X2 = ["Shots.1x2"], AF_T1X2 = ["ShotOnTarget 1x2", "1x2 shots on goal
 const AF_HT1X2 = ["First Half Winner", "1x2 (1st Half)"];
 const AF_BTTS1 = ["Both Teams Score - First Half", "Both Teams To Score (1st Half)"];
 const AF_BTTS2 = ["Both Teams To Score - Second Half", "Both Teams To Score (2nd Half)"];
+const AF_EG = ["Exact Goals Number"];
 const AF_OUX: [string[], string, number, number][] = [
   [["Goals Over/Under First Half", "Over/Under (1st Half)"], "hto", 0.5, 3.5],
   [["Home Corners Over/Under"], "ch", 0.5, 9.5], [["Away Corners Over/Under"], "ca", 0.5, 9.5],
@@ -235,6 +236,7 @@ function apiFootball(key: string): OddsProvider {
         else if (AF_HT1X2.includes(b.name) && AF_C1X2_PICK[v.value]) add("ht1x2", AF_C1X2_PICK[v.value], v);
         else if (AF_BTTS1.includes(b.name) && /^(Yes|No)$/.test(v.value)) add("btts1", v.value.toLowerCase(), v);
         else if (AF_BTTS2.includes(b.name) && /^(Yes|No)$/.test(v.value)) add("btts2", v.value.toLowerCase(), v);
+        else if (AF_EG.includes(b.name)) { if (/^[0-6]$/.test(String(v.value))) add("eg", `g${v.value}`, v); }
         else {
           const x = AF_OUX.find(([n]) => n.includes(b.name));
           const m = x && /^(Over|Under)\s*([\d.]+)?$/.exec(v.value);
@@ -249,6 +251,8 @@ function apiFootball(key: string): OddsProvider {
     need.c1x2 = need.s1x2 = need.t1x2 = need.ht1x2 = ["home", "draw", "away"];
     need.btts1 = need.btts2 = ["yes", "no"];
     for (const k of acc.keys()) if (/^(co|k|s|t|ou|hto|ch|ca|kh|ka|sh|sa)\d+$/.test(k.split(".")[0])) need[k.split(".")[0]] = ["over", "under"];
+    // gols exatos: 0 a 5 em todas as casas; 6 só onde a casa tem "exatamente 6"
+    if ([0, 1, 2, 3, 4, 5].every((n) => acc.has(`eg.g${n}`))) need.eg = [0, 1, 2, 3, 4, 5, 6].map((n) => `g${n}`).filter((k) => acc.has(`eg.${k}`));
     const out: Markets = {};
     for (const [mk, ks] of Object.entries(need)) {
       if (!ks.every((k) => acc.has(`${mk}.${k}`))) continue;

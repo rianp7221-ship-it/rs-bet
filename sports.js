@@ -4,7 +4,6 @@
 (() => {
   const list = RS.$("#matches"), slipEl = RS.$("#slip"), box = RS.$("#slip-box");
   if (!list) return;
-  const MAX = 12;
   // texto do botão enquanto uma aposta está em andamento; impede um segundo pedido
   // quando a lista é redesenhada durante a espera do ao vivo
   let placing = "";
@@ -26,6 +25,7 @@
     c1x2: ["Escanteios 1X2", { home: "1", draw: "X", away: "2" }],
     s1x2: ["Chutes 1X2", { home: "1", draw: "X", away: "2" }],
     t1x2: ["Chutes no Gol 1X2", { home: "1", draw: "X", away: "2" }],
+    eg: ["Gols Exatos", Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((n) => ["g" + n, `Exatamente ${n} ${n === 1 ? "gol" : "gols"}`]))],
   };
   const coKeys = (m) => Object.keys(m?.markets || {}).filter((k) => /^co\d+$/.test(k)).sort((a, b) => a.slice(2) - b.slice(2));
   const coLine = (k) => (Number(k.slice(2)) / 10).toLocaleString("pt-BR");
@@ -43,7 +43,7 @@
   const oddOf = (m, mk, pick) => mk === "bb" ? bbOdd(m, pick) : Number(mk === "1x2" ? m?.["odd_" + pick] : m?.markets?.[mk]?.[pick]) || 0;
   // Criar Aposta: mesmo modelo de Poisson do servidor (_bb_odd); o servidor recalcula a odd ao apostar
   // pernas de gols: Poisson do placar; escanteios/cartões/chutes: odd justa do próprio mercado, 1 perna por grupo
-  const GOAL_RE = /^(1x2|dc|btts|btts1|btts2|ht1x2|ou\d+|hto\d+)$/, HALF_RE = /^(ht1x2|btts1|btts2|hto\d+)$/, BB_MAX = 13;
+  const GOAL_RE = /^(1x2|dc|btts|btts1|btts2|ht1x2|eg|ou\d+|hto\d+)$/, HALF_RE = /^(ht1x2|btts1|btts2|hto\d+)$/, BB_MAX = 13;
   const bbFam = (mk) => /^(c1x2|co\d+|ch\d+|ca\d+)$/.test(mk) ? "c" : /^(k\d+|kh\d+|ka\d+)$/.test(mk) ? "k" : /^(s1x2|t1x2|[st]\d+|sh\d+|sa\d+)$/.test(mk) ? "s" : null;
   const bbOk = (mk) => GOAL_RE.test(mk) || !!bbFam(mk);
   let bbMargin = 10;
@@ -54,6 +54,7 @@
     if (mk === "1x2") return (h > a ? "home" : h < a ? "away" : "draw") === p;
     if (mk === "btts") return (h > 0 && a > 0) === (p === "yes");
     if (mk === "dc") return p === "1x" ? h >= a : p === "x2" ? h <= a : h !== a;
+    if (mk === "eg") return h + a === Number(p.slice(1));
     if (mk === "ht1x2") return (h1 > a1 ? "home" : h1 < a1 ? "away" : "draw") === p;
     if (mk === "btts1") return (h1 > 0 && a1 > 0) === (p === "yes");
     if (mk === "btts2") return (h - h1 > 0 && a - a1 > 0) === (p === "yes");
@@ -229,6 +230,7 @@
     { key: "r", tab: "main", name: "Resultado Final", rows: (m) => [[["1x2", "home", m.home], ["1x2", "draw", "Empate"], ["1x2", "away", m.away]]] },
     { key: "ht", tab: "main", name: "Resultado 1º Tempo", rows: (m) => [[["ht1x2", "home", m.home], ["ht1x2", "draw", "Empate"], ["ht1x2", "away", m.away]]] },
     { key: "ou", tab: "goals", name: "Total de Gols Mais/Menos", rows: () => ["ou05", "ou15", "ou25", "ou35", "ou45", "ou55"].map((k) => Object.entries(MK[k][1]).map(([p, l]) => [k, p, l])) },
+    { key: "eg", tab: "goals", name: "Gols Exatos", rows: () => [[0, 1, 2], [3, 4, 5], [6]].map((r) => r.map((n) => ["eg", "g" + n, `${n} ${n === 1 ? "gol" : "gols"}`])) },
     { key: "hto", tab: "goals", name: "Gols 1º Tempo Mais/Menos", rows: pxRows("hto") },
     { key: "btts", tab: "goals", name: "Ambas equipes Marcam", rows: () => [[["btts", "yes", "Sim"], ["btts", "no", "Não"]]] },
     { key: "btts1", tab: "goals", name: "Ambas Marcam 1º Tempo", rows: () => [[["btts1", "yes", "Sim"], ["btts1", "no", "Não"]]] },
@@ -396,7 +398,6 @@
       else if (legs.some(([k]) => k === market)) legs = legs.map(([k, p]) => [k, k === market ? pick : p]);
       else if (legs.length >= BB_MAX) { RS.toast(`Criar Aposta: até ${BB_MAX} mercados por jogo.`, "error"); return; }
       else legs.push([market, pick]);
-      if (!cur && slip.size >= MAX) { RS.toast(`Máximo de ${MAX} seleções por bilhete.`, "error"); return; }
       if (!legs.length) slip.delete(id);
       else {
         const [mk, pk] = legs.length > 1 ? ["bb", legs.map((l) => l.join(":")).join("|")] : legs[0];
@@ -406,7 +407,6 @@
       }
     } else if (cur?.market === market && cur.pick === pick) slip.delete(id);
     else {
-      if (!slip.has(id) && slip.size >= MAX) { RS.toast(`Máximo de ${MAX} seleções por bilhete.`, "error"); return; }
       const odd = oddOf(m, market, pick);
       if (!odd) return;
       slip.set(id, { market, pick, odd, base: odd });
@@ -422,7 +422,7 @@
       const [market, pick] = mp ? mp.split(".") : ["1x2", UNCODE[part.slice(-1)]];
       const m = matches.find((x) => x.id === id);
       const odd = oddOf(m, market, pick);
-      if (odd && !suspended(m) && (slip.has(id) || slip.size < MAX)) slip.set(id, { market, pick, odd, base: odd });
+      if (odd && !suspended(m)) slip.set(id, { market, pick, odd, base: odd });
     }
     render(); renderSlip(); persist();
   }
@@ -436,7 +436,7 @@
     const n = items.length;
     const total = capOdd(items.reduce((a, [, s]) => a * s.odd, 1));
     const saved = localStorage.getItem("rs-saved-slip");
-    RS.$("#slip-count").textContent = `${n}/${MAX}`;
+    RS.$("#slip-count").textContent = n;
     box.classList.toggle("empty", !n && !saved);
     RS.$("#slip-fab").classList.toggle("hidden", !n);
     RS.$("#fab-odd").textContent = total.toFixed(2);
