@@ -26,6 +26,7 @@
     s1x2: ["Chutes 1X2", { home: "1", draw: "X", away: "2" }],
     t1x2: ["Chutes no Gol 1X2", { home: "1", draw: "X", away: "2" }],
     eg: ["Gols Exatos", Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((n) => ["g" + n, `Exatamente ${n} ${n === 1 ? "gol" : "gols"}`]))],
+    cs: ["Placar Exato", Object.fromEntries([0, 1, 2, 3, 4, 5, 6].flatMap((h) => [0, 1, 2, 3, 4, 5, 6].map((a) => [`s${h}${a}`, `${h} - ${a}`])))],
   };
   const coKeys = (m) => Object.keys(m?.markets || {}).filter((k) => /^co\d+$/.test(k)).sort((a, b) => a.slice(2) - b.slice(2));
   const coLine = (k) => (Number(k.slice(2)) / 10).toLocaleString("pt-BR");
@@ -43,7 +44,7 @@
   const oddOf = (m, mk, pick) => mk === "bb" ? bbOdd(m, pick) : Number(mk === "1x2" ? m?.["odd_" + pick] : m?.markets?.[mk]?.[pick]) || 0;
   // Criar Aposta: mesmo modelo de Poisson do servidor (_bb_odd); o servidor recalcula a odd ao apostar
   // pernas de gols: Poisson do placar; escanteios/cartões/chutes: odd justa do próprio mercado, 1 perna por grupo
-  const GOAL_RE = /^(1x2|dc|btts|btts1|btts2|ht1x2|eg|ou\d+|hto\d+)$/, HALF_RE = /^(ht1x2|btts1|btts2|hto\d+)$/, BB_MAX = 13;
+  const GOAL_RE = /^(1x2|dc|btts|btts1|btts2|ht1x2|eg|cs|ou\d+|hto\d+)$/, HALF_RE = /^(ht1x2|btts1|btts2|hto\d+)$/, BB_MAX = 13;
   const bbFam = (mk) => /^(c1x2|co\d+|ch\d+|ca\d+)$/.test(mk) ? "c" : /^(k\d+|kh\d+|ka\d+)$/.test(mk) ? "k" : /^(s1x2|t1x2|[st]\d+|sh\d+|sa\d+)$/.test(mk) ? "s" : null;
   const bbOk = (mk) => GOAL_RE.test(mk) || !!bbFam(mk);
   let bbMargin = 10;
@@ -55,6 +56,7 @@
     if (mk === "btts") return (h > 0 && a > 0) === (p === "yes");
     if (mk === "dc") return p === "1x" ? h >= a : p === "x2" ? h <= a : h !== a;
     if (mk === "eg") return h + a === Number(p.slice(1));
+    if (mk === "cs") return h === Number(p[1]) && a === Number(p[2]);
     if (mk === "ht1x2") return (h1 > a1 ? "home" : h1 < a1 ? "away" : "draw") === p;
     if (mk === "btts1") return (h1 > 0 && a1 > 0) === (p === "yes");
     if (mk === "btts2") return (h - h1 > 0 && a - a1 > 0) === (p === "yes");
@@ -226,11 +228,19 @@
 
   // tela do jogo: mercados em blocos que abrem e fecham, separados por abas
   const MV_TABS = { all: "Todos", main: "Principais", goals: "Gols", corners: "Escanteios", cards: "Cartões", shots: "Chutes" };
+  // placar exato em 3 colunas: vitória da casa, empate, vitória do visitante
+  const CS_COLS = [(h, a) => h > a, (h, a) => h === a, (h, a) => h < a];
+  const csRows = (m) => {
+    const ks = Object.keys(m.markets?.cs || {}).sort((x, y) => (+x[1] + +x[2]) - (+y[1] + +y[2]) || Math.abs(x[1] - x[2]) - Math.abs(y[1] - y[2]) || x[1] - y[1] || x[2] - y[2]);
+    const cols = CS_COLS.map((f) => ks.filter((k) => f(+k[1], +k[2])));
+    return Array.from({ length: Math.max(...cols.map((c) => c.length)) }, (_, i) => cols.map((c) => c[i] ? ["cs", c[i], MK.cs[1][c[i]]] : [null]));
+  };
   const MV_GROUPS = [
     { key: "r", tab: "main", name: "Resultado Final", rows: (m) => [[["1x2", "home", m.home], ["1x2", "draw", "Empate"], ["1x2", "away", m.away]]] },
     { key: "ht", tab: "main", name: "Resultado 1º Tempo", rows: (m) => [[["ht1x2", "home", m.home], ["ht1x2", "draw", "Empate"], ["ht1x2", "away", m.away]]] },
     { key: "ou", tab: "goals", name: "Total de Gols Mais/Menos", rows: () => ["ou05", "ou15", "ou25", "ou35", "ou45", "ou55"].map((k) => Object.entries(MK[k][1]).map(([p, l]) => [k, p, l])) },
     { key: "eg", tab: "goals", name: "Gols Exatos", rows: () => [[0, 1, 2], [3, 4, 5], [6]].map((r) => r.map((n) => ["eg", "g" + n, `${n} ${n === 1 ? "gol" : "gols"}`])) },
+    { key: "cs", tab: "goals", name: "Placar Exato", rows: csRows },
     { key: "hto", tab: "goals", name: "Gols 1º Tempo Mais/Menos", rows: pxRows("hto") },
     { key: "btts", tab: "goals", name: "Ambas equipes Marcam", rows: () => [[["btts", "yes", "Sim"], ["btts", "no", "Não"]]] },
     { key: "btts1", tab: "goals", name: "Ambas Marcam 1º Tempo", rows: () => [[["btts1", "yes", "Sim"], ["btts1", "no", "Não"]]] },
@@ -252,6 +262,7 @@
     { key: "to", tab: "shots", name: "Total de Chutes no Gol Mais/Menos", rows: (m) => stKeys(m, "t").map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
   ];
   const mvBtn = (m, [mk, p, label]) => {
+    if (!mk) return `<span></span>`;
     const odd = oddOf(m, mk, p);
     if (!odd) return "";
     if (suspended(m)) return `<button class="odd" disabled><small>${RS.esc(label)}</small><b>${RS.icon("lock")}</b></button>`;
