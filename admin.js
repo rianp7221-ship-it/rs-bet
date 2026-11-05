@@ -120,7 +120,8 @@
   // ---------- 1. VISÃO GERAL ----------
   async function dash() {
     main.innerHTML = head("Visão geral", `<select class="input" id="d-range">
-        <option value="today">Hoje</option><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="month">Este mês</option></select>`) + `
+        <option value="today">Hoje</option><option value="yesterday">Ontem</option><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="month">Este mês</option><option value="custom">Personalizado</option></select>
+      <span id="d-custom" style="display:none;gap:6px;align-items:center;flex-wrap:wrap"><input type="date" class="input" id="d-from" aria-label="De"> até <input type="date" class="input" id="d-to" aria-label="Até"></span>`) + `
       <div class="kpis" id="d-kpis"></div>
       <div class="charts">
         <div class="chart-card"><h3>Fluxo de caixa</h3><div><canvas id="c-cash"></canvas></div></div>
@@ -133,6 +134,14 @@
     const range = () => {
       const v = RS.$("#d-range").value, now = new Date();
       let from = new Date();
+      if (v === "custom" || v === "yesterday") {
+        const day = (x) => new Date(x + "T00:00:00");
+        let a = day(RS.$("#d-from").value), b = day(RS.$("#d-to").value);
+        if (v === "yesterday") { a = new Date(); a.setHours(0, 0, 0, 0); a.setDate(a.getDate() - 1); b = new Date(a); }
+        if (b < a) [a, b] = [b, a];
+        const to = new Date(b); to.setDate(to.getDate() + 1);
+        return { from: a.toISOString(), to: to.toISOString(), bucket: +a === +b ? "hour" : "day" };
+      }
       if (v === "today") from.setHours(0, 0, 0, 0);
       else if (v === "month") from = new Date(now.getFullYear(), now.getMonth(), 1);
       else { from.setDate(from.getDate() - Number(v) + 1); from.setHours(0, 0, 0, 0); }
@@ -172,7 +181,12 @@
           (data || []).map((a) => [RS.date(a.created_at), `<span class="badge sev-${a.severity}">${a.severity}</span>`, esc(a.message)]), "Nenhum alerta aberto.");
       }
     }
-    RS.$("#d-range").onchange = load;
+    const ymd = (d) => d.toLocaleDateString("sv-SE");
+    const today = new Date(), weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 6);
+    Object.assign(RS.$("#d-from"), { value: ymd(weekAgo), max: ymd(today) });
+    Object.assign(RS.$("#d-to"), { value: ymd(today), max: ymd(today) });
+    RS.$("#d-range").onchange = () => { RS.$("#d-custom").style.display = RS.$("#d-range").value === "custom" ? "inline-flex" : "none"; load(); };
+    RS.$("#d-from").onchange = RS.$("#d-to").onchange = () => RS.$("#d-from").value && RS.$("#d-to").value && load();
     current.refresh = load;
     window.RSadmin.onLeave(() => { charts.forEach((c) => c.destroy()); current.refresh = null; });
     await load();
