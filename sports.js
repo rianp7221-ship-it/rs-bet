@@ -173,7 +173,7 @@
     render();
     if (document.activeElement?.id !== "stake") renderSlip();
   }
-  const LIST_COLS = "id,external_id,sport,league,home,away,starts_at,odd_home,odd_draw,odd_away,status,result,score_home,score_away,locked,suspended_until,suspend_reason,minute,bb_lh,bb_la,home_logo,away_logo,league_logo,odds_at,n_markets";
+  const LIST_COLS = "id,external_id,sport,league,home,away,starts_at,odd_home,odd_draw,odd_away,status,result,score_home,score_away,locked,suspended_until,suspend_reason,minute,period,bb_lh,bb_la,home_logo,away_logo,league_logo,odds_at,n_markets";
   async function loadMarkets(ids) {
     ids = ids.filter(Boolean);
     if (!ids.length) return;
@@ -218,7 +218,7 @@
   const score = (m) => (m.score_home != null ? `<b class="score">${m.score_home} - ${m.score_away}</b>` : "");
 
   const row = (m) => `<div class="row">
-      <div class="row-time">${live(m) ? `<i class="live">${m.minute ? m.minute + "'" : "AO VIVO"}</i>${score(m)}` : `${ddmm(m.starts_at)} <br>${hhmm(m.starts_at)}`}</div>
+      <div class="row-time">${live(m) ? `<i class="live">${m.period === "HT" ? "Intervalo" : m.minute ? m.minute + "'" : "AO VIVO"}</i>${score(m)}` : `${ddmm(m.starts_at)} <br>${hhmm(m.starts_at)}`}</div>
       <div class="row-teams"><span>${crest(m, "home")}${RS.esc(m.home)}</span><span>${crest(m, "away")}${RS.esc(m.away)}</span>
         <small>${lico(m.league)} ${RS.esc(lname(m.league))}</small></div>
       <div class="row-odds">${odds(m)}</div>
@@ -282,7 +282,7 @@
     const groups = avail.filter((g) => mvTab === "all" || g.tab === mvTab);
     const allClosed = groups.length && groups.every((g) => mvClosed.has(g.key));
     const top = live(m)
-      ? `<i class="live">${m.minute ? m.minute + "' " : ""}AO VIVO</i>`
+      ? `<i class="live">${m.period === "HT" ? "Intervalo" : (m.minute ? m.minute + "' " : "") + "AO VIVO"}</i>`
       : new Date(m.starts_at).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" }) + " " + hhmm(m.starts_at);
     const sc = m.score_home != null ? `<b class="mv-score">${m.score_home} - ${m.score_away}</b>` : `<i class="mv-vs">x</i>`;
     const keep = el.querySelector(".mv-body")?.scrollTop || 0;
@@ -303,7 +303,7 @@
   function feat(m) {
     const sp = "sp-" + m.sport.normalize("NFD").replace(/[^\w]/g, "").toLowerCase();
     const top = live(m)
-      ? `<i class="live">${m.minute ? m.minute + "' AO VIVO" : "AO VIVO"}</i>${m.score_home != null ? ` ${m.score_home} - ${m.score_away}` : ""}`
+      ? `<i class="live">${m.period === "HT" ? "Intervalo" : m.minute ? m.minute + "' AO VIVO" : "AO VIVO"}</i>${m.score_home != null ? ` ${m.score_home} - ${m.score_away}` : ""}`
       : `${RS.icon("clock")} ${dayLabel(m.starts_at)} ${hhmm(m.starts_at)}`;
     const big = safeUrl(m.home_logo) && safeUrl(m.away_logo)
       ? `<div class="feat-crests"><img src="${RS.esc(m.home_logo)}" alt=""><img src="${RS.esc(m.away_logo)}" alt=""></div>` : "";
