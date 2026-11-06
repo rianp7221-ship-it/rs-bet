@@ -60,7 +60,7 @@
   const scoreCol = (m) => (m.score_home != null ? `<span class="bc-score"><b>${m.score_home}</b><b>${m.score_away}</b></span>` : "");
   function selState(s) {
     const m = s.matches;
-    if (isLive(s)) return `<span class="bc-clock">⚡<b data-clock="${s.match_id}">${clock({ ...m, id: s.match_id })}</b></span>${scoreCol(m)}`;
+    if (isLive(s)) return `<span class="bc-clock">⚡<b data-clock="${s.match_id}">${clock({ ...m, id: s.match_id })}</b></span>${scoreCol(m)}${m.ext365_id ? `<button class="bc-track" data-track="${s.match_id}" aria-label="Acompanhar jogo">${RS.icon("chart")}</button>` : ""}`;
     if (s.status !== "pending" || m.status !== "open") return scoreCol(m) || badge(s.status);
     return `<span class="bc-when">${when(m.starts_at)}</span>`;
   }
@@ -118,7 +118,7 @@
 
     if (kind === "bets") {
       const { data } = await sb.from("bets")
-        .select("*, bet_selections(match_id, market, pick, odd, status, matches(home, away, league, status, starts_at, score_home, score_away, minute, period, clock_secs, clock_at, home_logo, away_logo))")
+        .select("*, bet_selections(match_id, market, pick, odd, status, matches(home, away, league, status, starts_at, score_home, score_away, minute, period, clock_secs, clock_at, ext365_id, home_logo, away_logo))")
         .eq("user_id", u.id).order("created_at", { ascending: false }).limit(50);
       bets = data || [];
       renderBets();
@@ -151,7 +151,7 @@
   async function refreshLive() {
     const ids = [...new Set(bets.filter((b) => b.status === "pending").flatMap((b) => b.bet_selections.map((s) => s.match_id)))];
     if (!ids.length) return;
-    const { data } = await sb.from("matches").select("id, status, starts_at, score_home, score_away, minute, period, clock_secs, clock_at").in("id", ids);
+    const { data } = await sb.from("matches").select("id, status, starts_at, score_home, score_away, minute, period, clock_secs, clock_at, ext365_id").in("id", ids);
     const byId = new Map((data || []).map((m) => [m.id, m]));
     for (const b of bets) for (const s of b.bet_selections) { const m = byId.get(s.match_id); if (m) Object.assign(s.matches, m); }
     for (const el of RS.$$("[data-st]", box)) {
@@ -213,6 +213,12 @@
       const id = Number(fold.dataset.fold);
       if (folded.has(id)) folded.delete(id); else folded.add(id);
       fold.parentElement.classList.toggle("closed", folded.has(id));
+      return;
+    }
+    const tr = t.closest("[data-track]") || (t.closest(".bc-teams") && t.closest(".bc-sel")?.querySelector("[data-track]"));
+    if (tr) {
+      const s = bets.flatMap((x) => x.bet_selections).find((x) => x.match_id === Number(tr.dataset.track));
+      if (s) RS.track({ ...s.matches, id: s.match_id });
       return;
     }
     const rb = t.closest("[data-rebet]"), sh = t.closest("[data-share]");

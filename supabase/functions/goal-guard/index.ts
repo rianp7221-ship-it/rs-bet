@@ -141,6 +141,7 @@ Deno.serve(async (req) => {
     const patch: Record<string, unknown> = pt?.autoProgress
       ? { clock_secs: min * 60 + (Number(pt.seconds) || 0), clock_at: new Date().toISOString() }
       : { clock_at: null };
+    patch.ext365_id = Number(gid);
     const varMin = Number(String(g.eventChartPenaltiesDetails?.uniqueHashEvent ?? "").match(/^var_.*_(\d+)$/)?.[1]);
     const ev = ((g.events ?? []) as { gameTime: number; addedTime?: number; statusId?: number; eventType?: { name?: string; subTypeName?: string } }[])
       .find((e) => e.statusId === g.statusId && e.gameTime + (e.addedTime ?? 0) >= min - 1 && /red card|penalt|var/i.test(`${e.eventType?.name} ${e.eventType?.subTypeName ?? ""}`));
