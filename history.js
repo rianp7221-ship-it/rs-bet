@@ -79,7 +79,7 @@
       <div class="bc-head" data-fold="${b.id}"><b>${TYPE(sels.length)}</b><span>${RS.money(b.stake)}</span>${b.status !== "pending" ? badge(b.status) : ""}
         <span class="bc-odd">${Number(b.total_odd).toFixed(2)}</span><i class="bc-chev"></i></div>
       <div class="bc-body">
-        ${sels.map((s) => `<div class="bc-sel">
+        ${sels.map((s) => `<div class="bc-sel" data-m="${s.match_id}">
           <div class="bc-l1">${RS.icon("ball")}<b${s.market === "bb" ? ' class="bc-bb"' : ""}>${RS.esc(selName(s))}</b>${mark(s)}<span>${Number(s.odd).toFixed(2)}</span></div>
           ${s.market === "bb" ? "" : `<div class="bc-mk">${mname(s.market || "1x2")}</div>`}
           <div class="bc-l3"><span class="bc-teams">${logo(s.matches.home_logo)}${RS.esc(s.matches.home)}<br>${logo(s.matches.away_logo)}${RS.esc(s.matches.away)}</span><span class="bc-st" data-st="${s.match_id}">${selState(s)}</span></div>
@@ -160,6 +160,8 @@
   function coButton(el, q, id) {
     const card = el.closest(".bet-card");
     card?.classList.toggle("co-ok", !!q && !q.suspended);
+    // barra laranja no jogo que está travando o cashout
+    for (const sel of RS.$$(".bc-sel[data-m]", card || el)) sel.classList.toggle("co-block", !!q?.suspended && Number(sel.dataset.m) === Number(q.match));
     if (!q || q.suspended) { el.innerHTML = CO_OFF; return; }
     const prev = lastCo.get(id), trend = prev == null || prev === q.value ? "" : q.value > prev ? "co-up" : "co-down";
     lastCo.set(id, q.value);
@@ -251,6 +253,7 @@
       if (b.status !== "pending" || !b.bet_selections.some((s) => mine.has(Number(s.match_id)))) continue;
       const el = box.querySelector(`[data-co="${b.id}"]`);
       if (!el) continue;
+      for (const sel of RS.$$(".bc-sel[data-m]", el.closest(".bet-card"))) if (mine.has(Number(sel.dataset.m))) sel.classList.add("co-block");
       el.innerHTML = goal
         ? `<button class="btn btn-co w-full" disabled>Cash out indisponível — gol no jogo</button>`
         : CO_OFF;
