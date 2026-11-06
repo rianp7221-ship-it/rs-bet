@@ -88,6 +88,7 @@ Deno.serve(async (req) => {
 
   const now = Date.now();
   let matched = 0, locked = 0;
+  const var365: { m: Live; gid: string }[] = [];
   for (const m of live) {
     const mh = tokens(m.home), ma = tokens(m.away);
     let best: { ev: Ev; h: number; a: number } | null = null, bestScore = 0, tie = false;
@@ -111,6 +112,8 @@ Deno.serve(async (req) => {
       const k = x.id.split(":")[0], cur = bySrc.get(k);
       if (!cur || sc > cur.sc) bySrc.set(k, { x, sc, tie: false }); else if (sc === cur.sc && cur.x.id !== x.id) cur.tie = true;
     }
+    const s365 = bySrc.get("365");
+    if (s365 && !s365.tie) var365.push({ m, gid: s365.x.id.slice(4) });
     for (const { x, tie: t } of bySrc.values()) {
       if (t) continue;
       if (!best || tie || x.h + x.a > best.h + best.a) { best = { ev: { id: x.id }, h: x.h, a: x.a }; tie = false; }
@@ -129,6 +132,23 @@ Deno.serve(async (req) => {
     }
     locked++;
   }
+  // VAR/pênalti/vermelho no 365Scores (aparece lá antes da API-Football): trava enquanto o lance é do minuto atual ou do anterior
+  let vars = 0;
+  await Promise.all(var365.map(async ({ m, gid }) => {
+    const g = (await get(`https://webws.365scores.com/web/game/?appTypeId=5&langId=1&timezoneName=UTC&userCountryId=21&gameId=${gid}`).catch(() => null))?.game;
+    const min = Number(g?.preciseGameTime?.minutes ?? g?.gameTime);
+    if (!g || !(min > 0) || g.statusGroup !== 3) return;
+    const varMin = Number(String(g.eventChartPenaltiesDetails?.uniqueHashEvent ?? "").match(/^var_.*_(\d+)$/)?.[1]);
+    const ev = ((g.events ?? []) as { gameTime: number; addedTime?: number; statusId?: number; eventType?: { name?: string; subTypeName?: string } }[])
+      .find((e) => e.statusId === g.statusId && e.gameTime + (e.addedTime ?? 0) >= min - 1 && /red card|penalt|var/i.test(`${e.eventType?.name} ${e.eventType?.subTypeName ?? ""}`));
+    const why = varMin >= min - 1 ? "Revisão do VAR" : ev ? (/red/i.test(ev.eventType?.name ?? "") ? "Expulsão" : /var/i.test(ev.eventType?.name ?? "") ? "Revisão do VAR" : "Pênalti") : null;
+    if (!why) return;
+    vars++;
+    const until = Date.now() + LOCK_MS;
+    if ((Date.parse(m.suspended_until ?? "") || 0) < until) {
+      await sb.from("matches").update({ suspended_until: new Date(until).toISOString(), suspend_reason: why }).eq("id", m.id);
+    }
+  }));
   const per = Object.fromEntries(["365", "fm", "lsc"].map((k) => [k, ext.filter((x) => x.id.startsWith(k + ":")).length]));
-  return json({ live: live.length, leagues: slugs.length, ext: per, matched, locked });
+  return json({ live: live.length, leagues: slugs.length, ext: per, matched, locked, vars });
 });
