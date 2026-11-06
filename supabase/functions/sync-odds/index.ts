@@ -153,6 +153,7 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
         if (u.ht) { patch.ht_home = u.ht.home; patch.ht_away = u.ht.away; }
         if (!u.completed && !u.cancelled) patch.status = "live";
         if (u.minute != null) patch.minute = u.minute;
+        if (u.period !== undefined) patch.period = u.period;
         if (u.home_logo && !m.home_logo?.includes("/storage/v1/object/public/logos/")) { patch.home_logo = await mirrorLogo(sb, u.home_logo); patch.away_logo = await mirrorLogo(sb, u.away_logo); patch.league_logo = await mirrorLogo(sb, u.league_logo); }
         // uma suspensão nova nunca encurta a que já está valendo (ex.: 90 s do gol)
         const lockedUntil = Date.parse(m.suspended_until ?? "") || 0;

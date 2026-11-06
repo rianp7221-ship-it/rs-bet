@@ -17,6 +17,7 @@ export type LiveUpdate = {
   ht?: { home: number; away: number } | null; // placar do 1º tempo
   cancelled: boolean; // adiado ou cancelado: trava o mercado
   voided: boolean; // cancelado de vez: anula as seleções
+  period?: string | null; // status curto da fonte (1H, HT, 2H, ET, BT, P)
   odds: MatchOdds | null; markets?: Markets | null;
   home_logo?: string; away_logo?: string; league_logo?: string;
   minute?: number | null; // minuto de jogo
@@ -325,7 +326,8 @@ function apiFootball(key: string): OddsProvider {
         const el = f.fixture.status.elapsed ?? 0;
         // lance importante (gol, pênalti, cartão vermelho, VAR): trava no minuto do lance e no seguinte; cartão amarelo não trava
         const red = (d: string) => d === "Red Card" || d === "Second Yellow card";
-        const hot = (f.events ?? []).find((e) => e.time.elapsed + (e.time.extra ?? 0) >= el - 1 &&
+        // no intervalo o minuto para (ex.: 45+3): um gol no último minuto travaria o intervalo todo; ali vale só a trava do gol (GOAL_LOCK_MS)
+        const hot = st === "HT" ? null : (f.events ?? []).find((e) => e.time.elapsed + (e.time.extra ?? 0) >= el - 1 &&
           (e.type === "Var" || e.type === "Goal" || red(e.detail) || /penalty/i.test(e.detail)));
         const hotWhy = !hot ? null : hot.type === "Var" ? "Revisão do VAR" : red(hot.detail) ? "Expulsão"
           : /penalty/i.test(hot.detail) ? "Pênalti" : "Gol";
@@ -341,7 +343,7 @@ function apiFootball(key: string): OddsProvider {
           home_logo: f.teams.home.logo, away_logo: f.teams.away.logo, league_logo: f.league.logo,
           completed: AF_DONE.includes(st), cancelled: AF_CANCEL.includes(st), voided: AF_VOID.includes(st),
           odds: lo ? pick(lo.odds) : null, markets: lo && !locked ? extra(lo.odds) : null,
-          minute: f.fixture.status.elapsed != null ? f.fixture.status.elapsed + (f.fixture.status.extra ?? 0) : null, suspended,
+          minute: f.fixture.status.elapsed != null ? f.fixture.status.elapsed + (f.fixture.status.extra ?? 0) : null, suspended, period: st,
         });
       }
       return out;
