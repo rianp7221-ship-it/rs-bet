@@ -60,12 +60,13 @@ async function mirrorLogo(sb: any, url?: string | null): Promise<string | null> 
 
 type Started = { id: number; external_id: string; home: string; away: string; score_home: number | null; score_away: number | null; suspended_until: string | null;
   odd_home: number | null; odd_draw: number | null; odd_away: number | null; home_logo?: string | null };
-// odd que salta de uma leitura para a outra costuma ser lance (gol, pênalti, expulsão) antes de o placar chegar
+// odd que salta de uma leitura para a outra costuma ser lance (gol, pênalti, expulsão) antes de o placar chegar.
+// Mede em pontos de probabilidade (1/odd): zebra subindo 8 → 9,5 no fim do jogo (12,5% → 10,5%) não trava; gol (2,0 → 1,4 = 50% → 71%) trava.
 const JUMP_LOCK_MS = 45_000;
-const oddsJump = (m: Started, o: { home?: number | null; draw?: number | null; away?: number | null }, pct: number) =>
-  pct > 0 && (["home", "draw", "away"] as const).some((k) => {
+const oddsJump = (m: Started, o: { home?: number | null; draw?: number | null; away?: number | null }, pts: number) =>
+  pts > 0 && (["home", "draw", "away"] as const).some((k) => {
     const a = Number(m[`odd_${k}`]), b = Number(o[k]);
-    return a > 1 && b > 1 && Math.abs(b - a) / a * 100 >= pct;
+    return a > 1 && b > 1 && Math.abs(1 / b - 1 / a) * 100 >= pts;
   });
 // placar mudou desde a última leitura = gol (o evento de gol da API às vezes chega depois do placar)
 const GOAL_LOCK_MS = 90_000;
@@ -75,13 +76,25 @@ const scoreChanged = (m: Started, home?: number | null, away?: number | null) =>
 // para de consultar ao vivo quando a cota está acabando (reserva 20% para a busca completa)
 const liveReserve = (limit: number) => Math.max(20, Math.floor(limit * 0.2));
 
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const sb = await adminClient(req);
   if (sb instanceof Response) return sb;
+  const body: { mode?: string; leagues?: unknown[] } | null = await req.json().catch(() => ({}));
+  // full do cron roda em segundo plano: a chamada do pg_net fecha na hora e não segura o ao vivo e o goal-guard (~2 min a cada 15)
+  if (body?.mode !== "live" && !Array.isArray(body?.leagues) && req.headers.get("x-cron-secret")) {
+    EdgeRuntime.waitUntil(run(req, sb, body).catch((e) => console.error("sync-odds full", e)));
+    return json({ modo: "full", segundo_plano: true }, 202);
+  }
+  return run(req, sb, body);
+});
+
+type Admin = Exclude<Awaited<ReturnType<typeof adminClient>>, Response>;
+async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unknown[] } | null): Promise<Response> {
   let feed;
   try { feed = getProvider(); } catch (e) { return json({ error: (e as Error).message }); }
-  const body = await req.json().catch(() => ({}));
   const mode = body?.mode === "live" ? "live" : "full";
   const only: string[] | null = mode === "full" && Array.isArray(body?.leagues) ? body.leagues.map(String) : null;
   // jogos de fontes antigas saem do catálogo e são liquidados pelo mesmo jogo da fonte atual
@@ -279,4 +292,4 @@ Deno.serve(async (req) => {
 
   await saveRemaining();
   return json({ modo: mode, jogos_atualizados: updated, jogos_liquidados: settled, creditos_restantes: feed.remaining(), fonte: feed.info?.() ?? null, errors });
-});
+}

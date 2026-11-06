@@ -323,14 +323,17 @@ function apiFootball(key: string): OddsProvider {
         const st = f.fixture.status.short;
         const lo = live.get(f.fixture.id);
         const el = f.fixture.status.elapsed ?? 0;
-        // lance que mexe no jogo nos últimos ~2 min: pênalti, expulsão, VAR, gol
-        const hot = (f.events ?? []).find((e) => e.time.elapsed + (e.time.extra ?? 0) >= el - 2 &&
-          (e.type === "Var" || e.type === "Goal" || e.detail === "Red Card" || /penalty/i.test(e.detail)));
-        const hotWhy = !hot ? null : hot.type === "Var" ? "Revisão do VAR" : hot.detail === "Red Card" ? "Expulsão"
-          : /penalty/i.test(hot.detail) ? "Pênalti" : "Gol";
-        // a fonte reprecifica a cada 5–60 s: odds paradas há mais de 90 s com o jogo rolando não servem para cashout
+        // lance importante: gol, pênalti, expulsão e VAR travam no minuto do lance e no seguinte; cartão amarelo só no minuto do lance
+        const hot = (f.events ?? []).find((e) => {
+          const t = e.time.elapsed + (e.time.extra ?? 0);
+          if (e.type === "Var" || e.type === "Goal" || e.detail === "Red Card" || e.detail === "Second Yellow card" || /penalty/i.test(e.detail)) return t >= el - 1;
+          return e.type === "Card" && t >= el;
+        });
+        const hotWhy = !hot ? null : hot.type === "Var" ? "Revisão do VAR" : hot.detail === "Red Card" || hot.detail === "Second Yellow card" ? "Expulsão"
+          : /penalty/i.test(hot.detail) ? "Pênalti" : hot.type === "Card" ? "Cartão" : "Gol";
+        // o /odds/live costuma ficar 60–90 s sem "update" mesmo com o jogo normal: só odds paradas há mais de 3 min não servem para cashout
         const at = Date.parse(lo?.update ?? "");
-        const stale = lo && at > 0 && Date.now() - at > 90_000 && !AF_DONE.includes(st) && st !== "HT" ? "Odds desatualizadas na fonte" : null;
+        const stale = lo && at > 0 && Date.now() - at > 180_000 && !AF_DONE.includes(st) && st !== "HT" ? "Odds desatualizadas na fonte" : null;
         // no intervalo a fonte marca "stopped" (bola parada), mas segue com odds válidas: só "blocked" trava
         const locked = !!(lo?.status?.blocked || (lo?.status?.stopped && st !== "HT"));
         const suspended = AF_PAUSE[st] ?? (locked ? "Mercado travado na fonte" : hotWhy ?? stale);
