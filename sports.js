@@ -334,7 +334,7 @@
   function render() {
     const byLeague = {};
     matches.forEach((m) => { (byLeague[m.league] ||= { n: 0, sport: m.sport }).n++; });
-    RS.morph(RS.$("#comp-list"), Object.entries(byLeague).sort(byTop).slice(0, 12).map(([l, v]) =>
+    RS.morph(RS.$("#comp-list"), Object.entries(byLeague).sort(byTop).filter(([l], i) => i < 12 || TOP.includes(l)).map(([l, v]) =>
       `<button class="comp-item ${league === l ? "active" : ""}" data-league="${RS.esc(l)}"><span class="comp-ico">${lico(l)}</span>
         <span><b>${RS.esc(lname(l))}</b><small>${RS.esc(v.sport)}</small></span><em>${v.n}</em></button>`).join("")
       || `<p class="muted small" style="padding:0 6px">Sem competições no momento.</p>`);
