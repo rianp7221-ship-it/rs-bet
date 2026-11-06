@@ -323,14 +323,12 @@ function apiFootball(key: string): OddsProvider {
         const st = f.fixture.status.short;
         const lo = live.get(f.fixture.id);
         const el = f.fixture.status.elapsed ?? 0;
-        // lance importante: gol, pênalti, expulsão e VAR travam no minuto do lance e no seguinte; cartão amarelo só no minuto do lance
-        const hot = (f.events ?? []).find((e) => {
-          const t = e.time.elapsed + (e.time.extra ?? 0);
-          if (e.type === "Var" || e.type === "Goal" || e.detail === "Red Card" || e.detail === "Second Yellow card" || /penalty/i.test(e.detail)) return t >= el - 1;
-          return e.type === "Card" && t >= el;
-        });
-        const hotWhy = !hot ? null : hot.type === "Var" ? "Revisão do VAR" : hot.detail === "Red Card" || hot.detail === "Second Yellow card" ? "Expulsão"
-          : /penalty/i.test(hot.detail) ? "Pênalti" : hot.type === "Card" ? "Cartão" : "Gol";
+        // lance importante (gol, pênalti, cartão vermelho, VAR): trava no minuto do lance e no seguinte; cartão amarelo não trava
+        const red = (d: string) => d === "Red Card" || d === "Second Yellow card";
+        const hot = (f.events ?? []).find((e) => e.time.elapsed + (e.time.extra ?? 0) >= el - 1 &&
+          (e.type === "Var" || e.type === "Goal" || red(e.detail) || /penalty/i.test(e.detail)));
+        const hotWhy = !hot ? null : hot.type === "Var" ? "Revisão do VAR" : red(hot.detail) ? "Expulsão"
+          : /penalty/i.test(hot.detail) ? "Pênalti" : "Gol";
         // o /odds/live costuma ficar 60–90 s sem "update" mesmo com o jogo normal: só odds paradas há mais de 3 min não servem para cashout
         const at = Date.parse(lo?.update ?? "");
         const stale = lo && at > 0 && Date.now() - at > 180_000 && !AF_DONE.includes(st) && st !== "HT" ? "Odds desatualizadas na fonte" : null;
