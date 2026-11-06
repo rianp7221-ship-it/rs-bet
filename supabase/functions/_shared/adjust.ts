@@ -32,6 +32,14 @@ export function capOdds<T extends { home?: number | null; draw?: number | null; 
   for (const k of ["home", "draw", "away"] as const) if (o[k] != null) out[k] = cap(o[k], max) as T[typeof k];
   return out;
 }
+// odds reais (sem teto) dos palpites que passaram do teto: o cashout usa elas pra calcular um valor justo
+export function overCap(o: { home?: number | null; draw?: number | null; away?: number | null } | null | undefined, mk: Markets | null | undefined, max: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!(max > 1)) return out;
+  for (const k of ["home", "draw", "away"] as const) if (o?.[k] && o[k]! > max) out[`1x2:${k}`] = o[k]!;
+  for (const [mkt, ps] of Object.entries(mk ?? {})) for (const [p, x] of Object.entries(ps)) if (x > max) out[`${mkt}:${p}`] = x;
+  return out;
+}
 export function capMarkets(mk: Markets | null | undefined, max: number): Markets | null {
   if (!mk || !(max > 1)) return mk ?? null;
   return Object.fromEntries(Object.entries(mk).map(([k, o]) => [k, Object.fromEntries(Object.entries(o).map(([p, x]) => [p, cap(x, max) as number]))]));
