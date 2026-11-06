@@ -132,22 +132,23 @@ Deno.serve(async (req) => {
     }
     locked++;
   }
-  // VAR/pênalti/vermelho no 365Scores (aparece lá antes da API-Football): trava enquanto o lance é do minuto atual ou do anterior
+  // relógio exato do 365Scores + VAR/pênalti/vermelho no 365Scores (aparece lá antes da API-Football): trava enquanto o lance é do minuto atual ou do anterior
   let vars = 0;
   await Promise.all(var365.map(async ({ m, gid }) => {
     const g = (await get(`https://webws.365scores.com/web/game/?appTypeId=5&langId=1&timezoneName=UTC&userCountryId=21&gameId=${gid}`).catch(() => null))?.game;
-    const min = Number(g?.preciseGameTime?.minutes ?? g?.gameTime);
+    const pt = g?.preciseGameTime, min = Number(pt?.minutes ?? g?.gameTime);
     if (!g || !(min > 0) || g.statusGroup !== 3) return;
+    const patch: Record<string, unknown> = pt?.autoProgress
+      ? { clock_secs: min * 60 + (Number(pt.seconds) || 0), clock_at: new Date().toISOString() }
+      : { clock_at: null };
     const varMin = Number(String(g.eventChartPenaltiesDetails?.uniqueHashEvent ?? "").match(/^var_.*_(\d+)$/)?.[1]);
     const ev = ((g.events ?? []) as { gameTime: number; addedTime?: number; statusId?: number; eventType?: { name?: string; subTypeName?: string } }[])
       .find((e) => e.statusId === g.statusId && e.gameTime + (e.addedTime ?? 0) >= min - 1 && /red card|penalt|var/i.test(`${e.eventType?.name} ${e.eventType?.subTypeName ?? ""}`));
     const why = varMin >= min - 1 ? "Revisão do VAR" : ev ? (/red/i.test(ev.eventType?.name ?? "") ? "Expulsão" : /var/i.test(ev.eventType?.name ?? "") ? "Revisão do VAR" : "Pênalti") : null;
-    if (!why) return;
-    vars++;
     const until = Date.now() + LOCK_MS;
-    if ((Date.parse(m.suspended_until ?? "") || 0) < until) {
-      await sb.from("matches").update({ suspended_until: new Date(until).toISOString(), suspend_reason: why }).eq("id", m.id);
-    }
+    if (why) vars++;
+    if (why && (Date.parse(m.suspended_until ?? "") || 0) < until) Object.assign(patch, { suspended_until: new Date(until).toISOString(), suspend_reason: why });
+    await sb.from("matches").update(patch).eq("id", m.id);
   }));
   const per = Object.fromEntries(["365", "fm", "lsc"].map((k) => [k, ext.filter((x) => x.id.startsWith(k + ":")).length]));
   return json({ live: live.length, leagues: slugs.length, ext: per, matched, locked, vars });
