@@ -162,7 +162,10 @@
     card?.classList.toggle("co-ok", !!q && !q.suspended);
     // barra laranja no jogo que está travando o cashout
     for (const sel of RS.$$(".bc-sel[data-m]", card || el)) sel.classList.toggle("co-block", !!q?.suspended && Number(sel.dataset.m) === Number(q.match));
-    if (!q || q.suspended) { el.innerHTML = CO_OFF; return; }
+    if (!q || q.suspended) {
+      el.innerHTML = CO_OFF + (q?.min ? `<p class="co-min">O valor do cash out está em ${RS.money(q.now)}. O mínimo para cash out é ${RS.money(q.min)}.</p>` : "");
+      return;
+    }
     const prev = lastCo.get(id), trend = prev == null || prev === q.value ? "" : q.value > prev ? "co-up" : "co-down";
     lastCo.set(id, q.value);
     const label = `CASH OUT ${RS.money(q.value)}${trend ? (trend === "co-up" ? " ▲" : " ▼") : ""}`;

@@ -4,7 +4,7 @@
 // No full com muitas ligas, a função chama a si mesma com { mode: "full", leagues: [...] } em grupos (limite de CPU por execução).
 import { adminClient, cors, json } from "../_shared/auth.ts";
 import { getProvider, type Markets } from "../_shared/providers.ts";
-import { adjustMarkets, adjustOdds, capMarkets, capOdds, type Adjust } from "../_shared/adjust.ts";
+import { adjustMarkets, adjustOdds, capMarkets, capOdds, overCap, type Adjust } from "../_shared/adjust.ts";
 
 type Odds = { home: number | null; draw?: number | null; away: number | null };
 // margem da casa: tira a margem do mercado (probabilidade justa) e aplica a margem configurada
@@ -59,7 +59,7 @@ async function mirrorLogo(sb: any, url?: string | null): Promise<string | null> 
 }
 
 type Started = { id: number; external_id: string; home: string; away: string; score_home: number | null; score_away: number | null; suspended_until: string | null;
-  odd_home: number | null; odd_draw: number | null; odd_away: number | null; home_logo?: string | null };
+  odd_home: number | null; odd_draw: number | null; odd_away: number | null; home_logo?: string | null; cashout_odds?: Record<string, number> | null };
 // odd que salta de uma leitura para a outra costuma ser lance (gol, pênalti, expulsão) antes de o placar chegar.
 // Mede em pontos de probabilidade (1/odd): zebra subindo 8 → 9,5 no fim do jogo (12,5% → 10,5%) não trava; gol (2,0 → 1,4 = 50% → 71%) trava.
 const JUMP_LOCK_MS = 45_000;
@@ -101,7 +101,7 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
   if (feed.prefix && !only) await sb.rpc("sync_orphan_matches", { p_prefix: feed.prefix });
 
   // jogos já iniciados e ainda não liquidados (ao vivo)
-  const { data: started } = await sb.from("matches").select("id, external_id, home, away, score_home, score_away, suspended_until, odd_home, odd_draw, odd_away, home_logo")
+  const { data: started } = await sb.from("matches").select("id, external_id, home, away, score_home, score_away, suspended_until, odd_home, odd_draw, odd_away, home_logo, cashout_odds")
     .in("status", ["open", "live"]).lt("starts_at", new Date().toISOString()).not("external_id", "is", null);
   const startedBySport = new Map<string, Started[]>();
   const sportOf = (ext: string) => {
@@ -157,14 +157,24 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
         // uma suspensão nova nunca encurta a que já está valendo (ex.: 90 s do gol)
         const lockedUntil = Date.parse(m.suspended_until ?? "") || 0;
         let jumped = false;
+        const co: Record<string, number> = { ...(m.cashout_odds ?? {}) };
         if (u.odds) {
           // ao vivo: odds da fonte sem o ajuste do Gerenciar odds (igual ao realsports.top), com teto
-          const o = capOdds(applyMargin(u.odds, margin("odds_margin_live")), liveCap);
+          const raw = applyMargin(u.odds, margin("odds_margin_live"));
+          const o = capOdds(raw, liveCap);
+          for (const k of Object.keys(co)) if (k.startsWith("1x2:")) delete co[k];
+          Object.assign(co, overCap(raw, null, liveCap));
           jumped = oddsJump(m, o, margin("odds_jump_pct"));
           patch.odd_home = o.home; patch.odd_draw = o.draw; patch.odd_away = o.away;
           patch.odds_at = patch.synced_at;
         }
-        if (u.markets !== undefined) patch.markets = capMarkets(marginMarkets(u.markets, margin("odds_margin_live")), liveCap);
+        if (u.markets !== undefined) {
+          const raw = marginMarkets(u.markets, margin("odds_margin_live"));
+          patch.markets = capMarkets(raw, liveCap);
+          for (const k of Object.keys(co)) if (!k.startsWith("1x2:")) delete co[k];
+          Object.assign(co, overCap(null, raw, liveCap));
+        }
+        if (u.odds || u.markets !== undefined) patch.cashout_odds = Object.keys(co).length ? co : null;
         if (scoreChanged(m, u.home, u.away) && !u.completed) {
           patch.suspended_until = new Date(Date.now() + GOAL_LOCK_MS).toISOString(); patch.suspend_reason = "Gol";
         } else if (u.cancelled) { patch.suspended_until = new Date(Date.now() + 600_000).toISOString(); patch.suspend_reason = "Jogo adiado ou cancelado"; }
@@ -241,7 +251,10 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
           synced_at: new Date().toISOString(),
         };
         // feed sem ao vivo (The Odds API): o /odds já traz as odds em jogo
-        if (isLive && !feed.live) Object.assign(row, { odds_at: row.synced_at });
+        if (isLive && !feed.live) {
+          const co = overCap(applyMargin(ev.odds, margin("odds_margin_live")), ev.markets ? marginMarkets(ev.markets, margin("odds_margin_live")) : null, liveCap);
+          Object.assign(row, { odds_at: row.synced_at, cashout_odds: Object.keys(co).length ? co : null });
+        }
         priced.add(row.external_id);
         const cur = byExt.get(row.external_id);
         if (cur && !["open", "live"].includes(cur.status)) continue;
