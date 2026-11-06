@@ -114,13 +114,16 @@
     [/nba|nfl|mlb|nhl|ncaa|usa|mls/i, "🇺🇸"], [/uefa|champions|europa|conference/i, "🇪🇺"], [/libertadores|sudamericana|conmebol/i, "🌎"]];
   const flag = (l) => (FLAGS.find(([r]) => r.test(l)) || [null, "🌍"])[1];
   const LEAGUE_PT = { "Brazil Série A": "Brasileirão Série A", "Brazil Série B": "Brasileirão Série B", EPL: "Premier League",
-    "UEFA Champions League": "Liga dos Campeões da UEFA", "UEFA Europa League": "Liga Europa da UEFA", "La Liga - Spain": "La Liga", "Serie A - Italy": "Serie A Itália" };
+    "UEFA Champions League": "Liga dos Campeões da UEFA", "UEFA Europa League": "Liga Europa da UEFA", "La Liga - Spain": "La Liga", "Serie A - Italy": "Serie A Itália",
+    "Saudi Pro League": "Pro League Arábia Saudita" };
   const lname = (l) => LEAGUE_PT[l] || l;
   // ligas principais primeiro nas listas; o resto pela quantidade de jogos
   const TOP = ["Brazil Série A", "Brazil Série B", "Copa do Brasil", "CONMEBOL Libertadores", "CONMEBOL Sudamericana",
     "UEFA Champions League", "Premier League", "La Liga", "Serie A - Italy", "Bundesliga", "Ligue 1", "UEFA Europa League",
     "UEFA Conference League", "Primeira Liga Portugal", "Liga Profesional Argentina", "Copa del Rey", "FA Cup Inglaterra",
-    "Championship Inglaterra", "Eredivisie Holanda", "Liga MX México", "MLS EUA", "Saudi Pro League"];
+    "Championship Inglaterra", "Eredivisie Holanda", "Liga MX México", "MLS EUA", "Saudi Pro League", "Süper Lig Turquia",
+    "Super League Suíça", "Pro League Bélgica", "Premiership Escócia", "Allsvenskan Suécia", "Eliteserien Noruega",
+    "Superliga Dinamarca", "HNL Croácia"];
   const rank = (l) => { const i = TOP.indexOf(l); return i < 0 ? TOP.length : i; };
   const byTop = (a, b) => rank(a[0]) - rank(b[0]) || b[1].n - a[1].n;
   // escudo do time (API-Football); sem escudo, camisa com a cor do nome
@@ -359,7 +362,7 @@
     RS.morph(RS.$("#feat-cards"), home ? top.map(feat).join("") : "");
     RS.$("#casino-strip").classList.toggle("hidden", !home);
     document.body.classList.toggle("is-home", home);
-    const pop = Object.entries(byLeague).sort(byTop).slice(0, 10);
+    const pop = Object.entries(byLeague).sort(byTop).filter(([l], i) => i < 10 || TOP.includes(l));
     RS.$("#league-sec").classList.toggle("hidden", !home || !pop.length);
     RS.morph(RS.$("#league-chips"), home ? pop.map(([l]) =>
       `<button class="league-chip" data-league="${RS.esc(l)}"><span class="comp-ico">${lico(l)}</span>${RS.esc(lname(l))}</button>`).join("") : "");
