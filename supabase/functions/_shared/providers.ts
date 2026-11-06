@@ -327,7 +327,11 @@ function apiFootball(key: string): OddsProvider {
         // lance importante (gol, pênalti, cartão vermelho, VAR): trava no minuto do lance e no seguinte; cartão amarelo não trava
         const red = (d: string) => d === "Red Card" || d === "Second Yellow card";
         // no intervalo o minuto para (ex.: 45+3): um gol no último minuto travaria o intervalo todo; ali vale só a trava do gol (GOAL_LOCK_MS)
-        const hot = st === "HT" ? null : (f.events ?? []).find((e) => e.time.elapsed + (e.time.extra ?? 0) >= el - 1 &&
+        // lance recente = minuto do lance ou o anterior, no mesmo período: gol aos 45+3 não pode contar como 48' do 2º tempo
+        const ex = f.fixture.status.extra ?? 0;
+        const recent = (t: { elapsed: number; extra: number | null }) =>
+          ex ? t.elapsed === el && (t.extra ?? 0) >= ex - 1 : t.extra ? t.elapsed >= el : t.elapsed >= el - 1;
+        const hot = st === "HT" ? null : (f.events ?? []).find((e) => recent(e.time) &&
           (e.type === "Var" || e.type === "Goal" || red(e.detail) || /penalty/i.test(e.detail)));
         const hotWhy = !hot ? null : hot.type === "Var" ? "Revisão do VAR" : red(hot.detail) ? "Expulsão"
           : /penalty/i.test(hot.detail) ? "Pênalti" : "Gol";
