@@ -106,6 +106,7 @@ document.addEventListener("click", (e) => {
 
 // Ícones (SVG próprios, traço)
 RS.ICONS = {
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M2 20h20"/>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
   back: '<path d="M9 14l-4-4 4-4"/><path d="M5 10h9a5 5 0 0 1 0 10h-3"/>',
   logout: '<path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 17l-5-5 5-5M5 12h11"/>',
