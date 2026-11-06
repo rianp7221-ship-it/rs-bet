@@ -103,7 +103,7 @@
   const isSel = (id, mk, pick) => legsOf(slip.get(id)).some(([k, p]) => k === mk && p === pick);
   const ICON = { Futebol: "⚽", Basquete: "🏀", "Tênis": "🎾", "Vôlei": "🏐", "Futebol Americano": "🏈", Beisebol: "⚾", "Hóquei": "🏒", MMA: "🥊", "E-sports": "🎮" };
   const icon = (s) => ICON[s] || "🏅";
-  const FLAGS = [[/portugal/i, "🇵🇹"], [/holanda/i, "🇳🇱"], [/bélgica/i, "🇧🇪"], [/turquia/i, "🇹🇷"], [/escócia/i, "🏴󠁧󠁢󠁳󠁣󠁴󠁿"],
+  const FLAGS = [[/portugal/i, "🇵🇹"], [/alemanha/i, "🇩🇪"], [/eua/i, "🇺🇸"], [/holanda/i, "🇳🇱"], [/bélgica/i, "🇧🇪"], [/turquia/i, "🇹🇷"], [/escócia/i, "🏴󠁧󠁢󠁳󠁣󠁴󠁿"],
     [/suíça/i, "🇨🇭"], [/áustria/i, "🇦🇹"], [/dinamarca/i, "🇩🇰"], [/noruega/i, "🇳🇴"], [/suécia/i, "🇸🇪"], [/polônia/i, "🇵🇱"],
     [/tcheca/i, "🇨🇿"], [/grécia/i, "🇬🇷"], [/croácia/i, "🇭🇷"], [/romênia/i, "🇷🇴"], [/sérvia/i, "🇷🇸"], [/ucrânia/i, "🇺🇦"],
     [/méxico/i, "🇲🇽"], [/colômbia/i, "🇨🇴"], [/chile/i, "🇨🇱"], [/uruguai/i, "🇺🇾"], [/peru/i, "🇵🇪"], [/equador/i, "🇪🇨"],
@@ -121,7 +121,8 @@
   const TOP = ["Brazil Série A", "Brazil Série B", "Copa do Brasil", "CONMEBOL Libertadores", "CONMEBOL Sudamericana",
     "UEFA Champions League", "Premier League", "La Liga", "Serie A - Italy", "Bundesliga", "Ligue 1", "UEFA Europa League",
     "UEFA Conference League", "Primeira Liga Portugal", "Liga Profesional Argentina", "Copa del Rey", "FA Cup Inglaterra",
-    "Championship Inglaterra", "Eredivisie Holanda", "Liga MX México", "MLS EUA", "Saudi Pro League", "Süper Lig Turquia",
+    "Championship Inglaterra", "2. Bundesliga Alemanha", "3. Liga Alemanha", "Eredivisie Holanda", "Eerste Divisie Holanda",
+    "Liga MX México", "MLS EUA", "USL Championship EUA", "Saudi Pro League", "Süper Lig Turquia",
     "Super League Suíça", "Pro League Bélgica", "Premiership Escócia", "Allsvenskan Suécia", "Eliteserien Noruega",
     "Superliga Dinamarca", "HNL Croácia"];
   const rank = (l) => { const i = TOP.indexOf(l); return i < 0 ? TOP.length : i; };
