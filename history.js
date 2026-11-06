@@ -42,10 +42,15 @@
   }
   const isLive = (s) => s.status === "pending" && s.matches.status === "live";
   const isFar = (s) => s.status === "pending" && new Date(s.matches.starts_at) - Date.now() > 7 * 864e5;
-  // relógio do jogo: minuto da fonte + segundos contados aqui desde que esse minuto chegou
+  // relógio do jogo: tempo exato do 365Scores (clock_secs em clock_at); sem ele, minuto da fonte + segundos contados aqui
   const seen = new Map();
   function clock(m) {
     if (m.period === "HT") return "Intervalo";
+    const age = (Date.now() - Date.parse(m.clock_at || "")) / 1000;
+    if (age >= 0 && age < 60) {
+      const t = m.clock_secs + Math.floor(age);
+      return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+    }
     if (m.minute == null) return "AO VIVO";
     const v = seen.get(m.id);
     if (!v || v.min !== m.minute) seen.set(m.id, { min: m.minute, t: Date.now() });
@@ -113,7 +118,7 @@
 
     if (kind === "bets") {
       const { data } = await sb.from("bets")
-        .select("*, bet_selections(match_id, market, pick, odd, status, matches(home, away, league, status, starts_at, score_home, score_away, minute, period, home_logo, away_logo))")
+        .select("*, bet_selections(match_id, market, pick, odd, status, matches(home, away, league, status, starts_at, score_home, score_away, minute, period, clock_secs, clock_at, home_logo, away_logo))")
         .eq("user_id", u.id).order("created_at", { ascending: false }).limit(50);
       bets = data || [];
       renderBets();
@@ -146,7 +151,7 @@
   async function refreshLive() {
     const ids = [...new Set(bets.filter((b) => b.status === "pending").flatMap((b) => b.bet_selections.map((s) => s.match_id)))];
     if (!ids.length) return;
-    const { data } = await sb.from("matches").select("id, status, starts_at, score_home, score_away, minute, period").in("id", ids);
+    const { data } = await sb.from("matches").select("id, status, starts_at, score_home, score_away, minute, period, clock_secs, clock_at").in("id", ids);
     const byId = new Map((data || []).map((m) => [m.id, m]));
     for (const b of bets) for (const s of b.bet_selections) { const m = byId.get(s.match_id); if (m) Object.assign(s.matches, m); }
     for (const el of RS.$$("[data-st]", box)) {
