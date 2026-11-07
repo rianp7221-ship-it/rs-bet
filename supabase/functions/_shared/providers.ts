@@ -18,6 +18,8 @@ export type LiveUpdate = {
   cancelled: boolean; // adiado ou cancelado: trava o mercado
   voided: boolean; // cancelado de vez: anula as seleções
   period?: string | null; // status curto da fonte (1H, HT, 2H, ET, BT, P)
+  started?: boolean; // false = a fonte diz que ainda não começou (marcado, atrasado ou adiado)
+  starts_at?: string; // horário atual na fonte (muda quando o jogo é remarcado)
   odds: MatchOdds | null; markets?: Markets | null;
   home_logo?: string; away_logo?: string; league_logo?: string;
   minute?: number | null; // minuto de jogo
@@ -112,6 +114,7 @@ type AfValue = AfBet["values"][number] & { handicap?: string | null };
 const AF_DONE = ["FT", "AET", "PEN"];
 const AF_VOID = ["CANC", "ABD", "AWD", "WO"];
 const AF_CANCEL = ["PST", ...AF_VOID];
+const AF_PRE = ["TBD", "NS", ...AF_CANCEL];
 // o mercado 1X2 vale só pelos 90 min: na prorrogação/pênaltis usa o placar do tempo normal
 const afGoals = (f: AfFixture) =>
   ["AET", "PEN"].includes(f.fixture.status.short) && f.score?.fulltime?.home != null && f.score.fulltime.away != null
@@ -310,7 +313,7 @@ function apiFootball(key: string): OddsProvider {
     async scores(league) {
       const y = await season(league);
       const { response } = await get<AfFixture>(`/fixtures?league=${league}&season=${y}&from=${day(-3)}&to=${day(0)}&timezone=UTC`);
-      return response.map((f) => ({ f, g: afGoals(f) })).filter(({ g }) => g.home != null && g.away != null).map(({ f, g }) => ({
+      return response.filter((f) => !AF_CANCEL.includes(f.fixture.status.short)).map((f) => ({ f, g: afGoals(f) })).filter(({ g }) => g.home != null && g.away != null).map(({ f, g }) => ({
         id: String(f.fixture.id), home: g.home!, away: g.away!, completed: AF_DONE.includes(f.fixture.status.short), ht: afHt(f),
       }));
     },
@@ -349,6 +352,7 @@ function apiFootball(key: string): OddsProvider {
           completed: AF_DONE.includes(st), cancelled: AF_CANCEL.includes(st), voided: AF_VOID.includes(st),
           odds: lo ? pick(lo.odds) : null, markets: lo && !locked ? extra(lo.odds) : null,
           minute: f.fixture.status.elapsed != null ? f.fixture.status.elapsed + (f.fixture.status.extra ?? 0) : null, suspended, period: st,
+          started: !AF_PRE.includes(st), starts_at: f.fixture.date,
         });
       }
       return out;

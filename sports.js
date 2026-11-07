@@ -152,6 +152,10 @@
   const slip = new Map(); // match_id -> { market, pick, odd, base }
   const favs = new Set(JSON.parse(localStorage.getItem("rs-favs") || "[]"));
   const live = (m) => m.status === "live";
+  // adiado/cancelado na fonte, ou já devia ter começado há mais de 3 h e não começou: some da lista
+  const OFF = ["PST", "CANC", "ABD", "AWD", "WO"];
+  const listed = (m) => (m.status === "open" || m.status === "live") && !OFF.includes(m.period)
+    && (live(m) || !m.external_id || Date.now() - new Date(m.starts_at) < 3 * 3600_000);
   // ao vivo sem odds novas do feed ao vivo: cadeado (o servidor recusa igual)
   const staleLive = (m) => !!m.external_id && (m.status === "live" || new Date(m.starts_at) <= new Date())
     && (!m.odds_at || Date.now() - new Date(m.odds_at) > 45_000);
@@ -192,7 +196,7 @@
     const { data, error } = await sb.from("matches").select(LIST_COLS).in("status", ["open", "live"]).order("starts_at");
     if (error) { list.innerHTML = `<p class="empty">Erro ao carregar jogos.</p>`; return; }
     const old = new Map(matches.map((m) => [m.id, m]));
-    matches = data.map((r) => (old.get(r.id)?.markets ? { ...r, markets: old.get(r.id).markets } : r));
+    matches = data.filter(listed).map((r) => (old.get(r.id)?.markets ? { ...r, markets: old.get(r.id).markets } : r));
     loadMarkets([...slip.keys()]);
     lastFull = Date.now();
     paint();
@@ -203,7 +207,7 @@
     const id = row?.id || payload.old?.id;
     if (!id) return;
     const i = matches.findIndex((m) => m.id === id);
-    const visible = row && (row.status === "open" || row.status === "live");
+    const visible = row && listed(i >= 0 ? { ...matches[i], ...row } : row);
     if (!visible) { if (i >= 0) matches.splice(i, 1); return; }
     if (i >= 0) matches[i] = { ...matches[i], ...row };
     else {

@@ -153,7 +153,9 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
         const patch: Record<string, unknown> = { synced_at: new Date().toISOString() };
         if (u.home != null && u.away != null) { patch.score_home = u.home; patch.score_away = u.away; }
         if (u.ht) { patch.ht_home = u.ht.home; patch.ht_away = u.ht.away; }
-        if (!u.completed && !u.cancelled) patch.status = "live";
+        // não começou na fonte (atrasado, remarcado ou adiado): volta para pré-jogo com o horário da fonte, fora do Ao vivo
+        if (u.started === false) { patch.status = "open"; if (u.starts_at) patch.starts_at = u.starts_at; }
+        else if (!u.completed && !u.cancelled) patch.status = "live";
         if (u.minute != null) patch.minute = u.minute;
         if (u.period !== undefined) patch.period = u.period;
         if (u.home_logo && !m.home_logo?.includes("/storage/v1/object/public/logos/")) { patch.home_logo = await mirrorLogo(sb, u.home_logo); patch.away_logo = await mirrorLogo(sb, u.away_logo); patch.league_logo = await mirrorLogo(sb, u.league_logo); }
