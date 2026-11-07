@@ -60,7 +60,7 @@ async function mirrorLogo(sb: any, url?: string | null): Promise<string | null> 
 
 type Started = { id: number; external_id: string; home: string; away: string; score_home: number | null; score_away: number | null; suspended_until: string | null;
   odd_home: number | null; odd_draw: number | null; odd_away: number | null; home_logo?: string | null; cashout_odds?: Record<string, number> | null;
-  suspend_reason?: string | null; odds_at?: string | null };
+  suspend_reason?: string | null; odds_at?: string | null; period?: string | null };
 // odd que salta de uma leitura para a outra costuma ser lance (gol, pênalti, expulsão) antes de o placar chegar.
 // Mede em pontos de probabilidade (1/odd): zebra subindo 8 → 9,5 no fim do jogo (12,5% → 10,5%) não trava; gol (2,0 → 1,4 = 50% → 71%) trava.
 const JUMP_LOCK_MS = 45_000;
@@ -71,6 +71,8 @@ const oddsJump = (m: Started, o: { home?: number | null; draw?: number | null; a
   });
 // placar mudou desde a última leitura = gol (o evento de gol da API às vezes chega depois do placar)
 const GOAL_LOCK_MS = 90_000;
+// busca completa: ligas com jogo dentro deste prazo atualizam a cada rodada, as demais 1 vez por hora
+const NEAR_MS = 6 * 3600_000;
 const SOURCE_LOCKS = ["Mercado suspenso nas casas", "Mercado travado na fonte", "Odds desatualizadas na fonte"];
 const scoreChanged = (m: Started, home?: number | null, away?: number | null) =>
   home != null && away != null && m.score_home != null && m.score_away != null && (home !== m.score_home || away !== m.score_away);
@@ -106,7 +108,7 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
   if (feed.prefix && !only) await sb.rpc("sync_orphan_matches", { p_prefix: feed.prefix });
 
   // jogos já iniciados e ainda não liquidados (ao vivo)
-  const { data: started } = await sb.from("matches").select("id, external_id, home, away, score_home, score_away, suspended_until, odd_home, odd_draw, odd_away, home_logo, cashout_odds, suspend_reason, odds_at")
+  const { data: started } = await sb.from("matches").select("id, external_id, home, away, score_home, score_away, suspended_until, odd_home, odd_draw, odd_away, home_logo, cashout_odds, suspend_reason, odds_at, period")
     .in("status", ["open", "live"]).lt("starts_at", new Date().toISOString()).not("external_id", "is", null);
   const startedBySport = new Map<string, Started[]>();
   const sportOf = (ext: string) => {
@@ -119,11 +121,12 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
     if (!startedBySport.has(sport)) startedBySport.set(sport, []);
     startedBySport.get(sport)!.push(m);
   }
-  const sports = mode === "live"
+  let sports = mode === "live"
     ? [...startedBySport.keys()]
     : only ?? (Deno.env.get("ODDS_SPORTS") || feed.defaultSports).split(",").map((s) => s.trim()).filter(Boolean);
   const { data: cfg } = await sb.from("settings").select("key, value, updated_at")
-    .in("key", ["odds_margin_pre", "odds_margin_live", "feed_remaining", "feed_limit", "odds_jump_pct", "odds_adjust", "live_odd_max", "odds_extra_pct", "odd_max"]);
+    .in("key", ["odds_margin_pre", "odds_margin_live", "feed_remaining", "feed_limit", "odds_jump_pct", "odds_adjust", "live_odd_max", "odds_extra_pct", "odd_max", "feed_cache"]);
+  feed.cache?.load(cfg?.find((c) => c.key === "feed_cache")?.value);
   const margin = (k: string) => Number(cfg?.find((c) => c.key === k)?.value ?? 0) || 0;
   // teto por palpite em todos os mercados (odd_max); ao vivo vale o menor entre ele e o live_odd_max
   const preCap = margin("odd_max");
@@ -151,7 +154,9 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
     }
     const byId = new Map(ids.map((m) => [m.external_id.split(":")[1], m]));
     try {
-      for (const u of await feed.live([...byId.keys()])) {
+      // jogos que ainda não começaram ou foram adiados: entram no "ao vivo" quando começam; por id só 1 vez por minuto
+      const idle = new Set(ids.filter((m) => !m.period || ["NS", "TBD", "PST"].includes(m.period)).map((m) => m.external_id.split(":")[1]));
+      for (const u of await feed.live([...byId.keys()], idle)) {
         const m = byId.get(u.id);
         if (!m) continue;
         const patch: Record<string, unknown> = { synced_at: new Date().toISOString() };
@@ -216,6 +221,14 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
 
   if (rem && Number(rem.value) < fullReserve(lim) && freshRemaining(rem.updated_at)) {
     return json({ modo: mode, pulado: "cota diária da API reservada para o ao vivo", creditos_restantes: rem.value, errors });
+  }
+
+  // ligas sem jogo nas próximas 6 h só na rodada do começo de cada hora; as com jogo perto, em toda rodada (15 min)
+  if (mode === "full" && !only && new Date().getUTCMinutes() >= 10) {
+    const { data: soon } = await sb.from("matches").select("external_id").eq("status", "open").not("external_id", "is", null)
+      .gte("starts_at", new Date().toISOString()).lt("starts_at", new Date(Date.now() + NEAR_MS).toISOString());
+    const near = new Set((soon ?? []).map((m) => sportOf(m.external_id)));
+    sports = sports.filter((s) => near.has(s));
   }
 
   // 1) jogos e odds; com muitas ligas, cada grupo roda numa execução separada da função
@@ -317,6 +330,14 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
     }
   }
 
+  const cache = feed.cache?.dump();
+  if (cache) {
+    // grupos rodam em paralelo: junta com o que já está salvo
+    const { data: cur } = await sb.from("settings").select("value").eq("key", "feed_cache").maybeSingle();
+    const old = (cur?.value ?? {}) as Record<string, Record<string, unknown>>;
+    const merged = Object.fromEntries(Object.entries(cache).map(([k, v]) => [k, { ...(old[k] ?? {}), ...(v as Record<string, unknown>) }]));
+    await sb.from("settings").upsert({ key: "feed_cache", value: { ...old, ...merged }, label: "Cache interno da API de odds (temporada das ligas) — não editar", updated_at: new Date().toISOString() });
+  }
   await saveRemaining();
-  return json({ modo: mode, jogos_atualizados: updated, jogos_liquidados: settled, creditos_restantes: feed.remaining(), fonte: feed.info?.() ?? null, errors });
+  return json({ modo: mode, ligas: sports.length, jogos_atualizados: updated, jogos_liquidados: settled, creditos_restantes: feed.remaining(), fonte: feed.info?.() ?? null, errors });
 }

@@ -30,11 +30,12 @@ export interface OddsProvider {
   defaultSports: string;
   odds(sport: string): Promise<FeedEvent[]>;
   scores(sport: string, ids?: string[]): Promise<FeedScore[]>; // ids = jogos já iniciados dessa liga
-  live?(ids: string[]): Promise<LiveUpdate[]>;
+  live?(ids: string[], idle?: Set<string>): Promise<LiveUpdate[]>; // idle = jogos sem bola rolando (podem ser consultados com menos frequência)
   corners?(id: string): Promise<{ home: number; away: number; cards: { home: number; away: number }; shots: { home: number; away: number }; sot: { home: number; away: number } } | null>; // escanteios, cartões e chutes finais
   remaining(): string | null;
   limit?(): number | null; // cota do plano (por dia ou por hora)
   info?(): string | null; // resumo da última busca (diagnóstico)
+  cache?: { load(v: unknown): void; dump(): Record<string, unknown> | null }; // dados guardados entre execuções (settings.feed_cache)
 }
 
 const SPORT_PT: Record<string, string> = {
@@ -177,7 +178,10 @@ const AF_DC_PICK: Record<string, string> = {
 function apiFootball(key: string): OddsProvider {
   const API = "https://v3.football.api-sports.io";
   let left: string | null = null, daily: number | null = null;
-  const seasons = new Map<string, number>();
+  // temporada atual de cada liga, guardada por 1 dia entre execuções (economiza 1 consulta por liga a cada rodada)
+  const SEASON_TTL = 86400_000;
+  const seasons = new Map<string, { y: number; at: number }>();
+  let seasonsChanged = false;
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   // limite por minuto do plano (Ultra: 450): espera e tenta de novo em vez de perder a liga
   const get = async <T>(path: string, tries = 4): Promise<{ response: T[]; paging?: { current: number; total: number } }> => {
@@ -271,13 +275,14 @@ function apiFootball(key: string): OddsProvider {
     return Object.keys(out).length ? out : null;
   };
   const season = async (league: string) => {
-    if (!seasons.has(league)) {
-      const { response } = await get<{ seasons: { year: number; current: boolean }[] }>(`/leagues?id=${league}&current=true`);
-      const y = response[0]?.seasons.find((s) => s.current)?.year;
-      if (!y) throw new Error(`liga ${league} sem temporada atual`);
-      seasons.set(league, y);
-    }
-    return seasons.get(league)!;
+    const c = seasons.get(league);
+    if (c && Date.now() - c.at < SEASON_TTL) return c.y;
+    const { response } = await get<{ seasons: { year: number; current: boolean }[] }>(`/leagues?id=${league}&current=true`);
+    const y = response[0]?.seasons.find((s) => s.current)?.year;
+    if (!y) throw new Error(`liga ${league} sem temporada atual`);
+    seasons.set(league, { y, at: Date.now() });
+    seasonsChanged = true;
+    return y;
   };
   const day = (d: number) => new Date(Date.now() + d * 86400_000).toISOString().slice(0, 10);
   return {
@@ -314,11 +319,15 @@ function apiFootball(key: string): OddsProvider {
         id: String(f.fixture.id), home: g.home!, away: g.away!, completed: AF_DONE.includes(f.fixture.status.short), ht: afHt(f),
       }));
     },
-    async live(ids) {
+    async live(ids, idle) {
       const out: LiveUpdate[] = [];
       if (!ids.length) return out;
-      const fixtures: AfFixture[] = [];
-      for (let i = 0; i < ids.length; i += 20) fixtures.push(...(await get<AfFixture>(`/fixtures?ids=${ids.slice(i, i + 20).join("-")}`)).response);
+      // 1 consulta traz todos os jogos em andamento; por id só os que não estão nela (acabaram, adiados, atrasados)
+      const want = new Set(ids);
+      const fixtures = (await get<AfFixture>(`/fixtures?live=all`)).response.filter((f) => want.delete(String(f.fixture.id)));
+      const minuteTick = Math.floor(Date.now() / 10_000) % 6 === 0;
+      const rest = [...want].filter((id) => minuteTick || !idle?.has(id));
+      for (let i = 0; i < rest.length; i += 20) fixtures.push(...(await get<AfFixture>(`/fixtures?ids=${rest.slice(i, i + 20).join("-")}`)).response);
       const live = fixtures.some((f) => !AF_DONE.includes(f.fixture.status.short) && !AF_CANCEL.includes(f.fixture.status.short) && f.fixture.status.short !== "NS")
         ? new Map((await get<AfLiveOdds>(`/odds/live`)).response.map((o) => [o.fixture.id, o])) : new Map<number, AfLiveOdds>();
       for (const f of fixtures) {
@@ -366,6 +375,13 @@ function apiFootball(key: string): OddsProvider {
     },
     remaining: () => left,
     limit: () => daily,
+    cache: {
+      load(v) {
+        const all = (v as { seasons?: Record<string, [number, number]> } | null)?.seasons ?? {};
+        for (const [k, [y, at]] of Object.entries(all)) if (!seasons.has(k) && y > 0) seasons.set(k, { y, at });
+      },
+      dump: () => seasonsChanged ? { seasons: Object.fromEntries([...seasons].map(([k, c]) => [k, [c.y, c.at]])) } : null,
+    },
   };
 }
 
