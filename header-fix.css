@@ -5,7 +5,7 @@
 .hdr { max-width: 1480px; margin: 0 auto; padding: 0 16px; display: flex; align-items: center; gap: 28px; height: 64px; }
 #rs-header .logo { color: #fff; font-size: 26px; }
 #rs-header .logo span { color: #fff; opacity: .85; }
-.logo-mark { display: none; width: auto; height: 38px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.18)); }
+.logo-mark { display: none; width: auto; height: 26px; }
 .hdr-nav { display: flex; gap: 2px; align-self: stretch; }
 .hdr-nav a { display: flex; align-items: center; padding: 0 9px; color: #fff; font-weight: 700; font-size: 14px; text-transform: uppercase; border-bottom: 3px solid transparent; }
 .hdr-nav a:hover, .hdr-nav a.active { border-bottom-color: #fff; }
@@ -63,7 +63,7 @@
   .hdr { height: 60px; gap: 8px; padding: 0 12px; }
   .hdr-nav { display: none; }
   .logo-word { display: none; }
-  .logo-mark { display: block; height: 30px; }
+  .logo-mark { display: block; }
   .balance { padding: 5px 10px; }
   .balance b { white-space: nowrap; }
   .hdr-right { gap: 6px; }
