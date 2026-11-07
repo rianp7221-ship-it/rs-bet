@@ -10,14 +10,17 @@ Deno.serve(async (req) => {
   const userSb = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, {
     global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
   });
-  const { data: { user } } = await userSb.auth.getUser();
-  if (!user) return json({ error: "Faça login" }, 401);
   const txId = Number((await req.json().catch(() => ({})))?.tx_id);
   if (!Number.isInteger(txId) || txId <= 0) return json({ error: "Depósito inválido" }, 400);
 
+  // login, depósito e prazo do PIX em paralelo (cada ida ao banco/auth custa uma viagem)
   const sb = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const { data: tx } = await sb.from("transactions").select("id, user_id, type, status, amount, gateway, provider_id, expires_at")
-    .eq("id", txId).maybeSingle();
+  const [{ data: { user } }, { data: tx }, { data: s }] = await Promise.all([
+    userSb.auth.getUser(),
+    sb.from("transactions").select("id, user_id, type, status, amount, gateway, provider_id, expires_at").eq("id", txId).maybeSingle(),
+    sb.from("settings").select("value").eq("key", "pix_expire_minutes").maybeSingle(),
+  ]);
+  if (!user) return json({ error: "Faça login" }, 401);
   if (!tx || tx.user_id !== user.id || tx.type !== "deposit") return json({ error: "Depósito não encontrado" }, 404);
   if (tx.status !== "pending") return json({ error: "Este depósito não está mais pendente" }, 409);
 
@@ -31,7 +34,6 @@ Deno.serve(async (req) => {
       }
       return json({ error: "Este PIX expirou. Gere um novo depósito." }, 409);
     }
-    const { data: s } = await sb.from("settings").select("value").eq("key", "pix_expire_minutes").maybeSingle();
     const minutes = Math.min(Math.max(Number(s?.value) || 30, 30), 1440);
     const c = await gw.createPix({
       reference: String(tx.id), amount: Number(tx.amount), description: `Depósito Real Sports #${tx.id}`,

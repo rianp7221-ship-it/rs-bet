@@ -480,8 +480,10 @@
     if (!dep) sb.rpc("my_last_pix_key").then(({ data }) => {
       if (data?.key && !RS.$("#mm-key", m).value) { RS.$("#mm-key", m).value = data.key; RS.$("#mm-ktype", m).value = data.type; }
     });
-    RS.$("#mm-go", m).onclick = async () => {
-      const v = Number(RS.$("#mm-amount", m).value);
+    if (dep) warmPix();
+    RS.$("#mm-go", m).onclick = async (e) => {
+      const btn = e.currentTarget, v = Number(RS.$("#mm-amount", m).value);
+      btn.disabled = true;
       try {
         const id = await RS.rpc(dep ? "request_deposit" : "request_withdraw", dep ? { p_amount: v }
           : { p_amount: v, p_pix_key: RS.$("#mm-key", m).value, p_pix_type: RS.$("#mm-ktype", m).value });
@@ -489,7 +491,7 @@
         if (dep) await showPix(id, v);
         else RS.toast(`Saque #${id} solicitado. O PIX cai na chave informada após a aprovação.`, "ok");
         RS.refreshBalance();
-      } catch (e) { RS.toast(e.message, "error"); }
+      } catch (err) { RS.toast(err.message, "error"); btn.disabled = false; }
     };
   }
 
@@ -537,19 +539,32 @@
   }
 
   // Gera o PIX no servidor (função pix-create) e mostra QR + copia e cola
+  // Acorda a função pix-create (cold start) enquanto o jogador escolhe o valor
+  let pixWarm = 0;
+  function warmPix() {
+    if (Date.now() - pixWarm < 60_000) return;
+    pixWarm = Date.now();
+    fetch(`${SUPABASE_URL}/functions/v1/pix-create`, { method: "OPTIONS" }).catch(() => {});
+  }
+
   async function showPix(id, v) {
+    const w = RS.modal(`<h3>Pague com PIX</h3>
+      <p class="muted">Valor: <b>${RS.money(v)}</b>. O saldo entra sozinho assim que o pagamento for confirmado.</p>
+      <div class="pix-wait"><span class="pix-spin"></span>Gerando QR code…</div>`);
     const { data, error } = await sb.functions.invoke("pix-create", { body: { tx_id: id } });
     if (error || data?.error) {
+      w.remove();
       RS.toast(`Depósito #${id} criado, mas o PIX não foi gerado: ${data?.error || "provedor indisponível"}`, "error");
       return;
     }
-    const w = RS.modal(`
+    if (!document.body.contains(w)) return;
+    RS.$(".rs-modal-box", w).innerHTML = `<button class="rs-modal-x" aria-label="Fechar">×</button>
       <h3>Pague com PIX</h3>
       <p class="muted">Valor: <b>${RS.money(v)}</b>. O saldo entra sozinho assim que o pagamento for confirmado.</p>
       ${data.qr_base64 ? `<img src="data:image/png;base64,${data.qr_base64}" alt="QR code PIX" style="width:220px;margin:12px auto;display:block;background:#fff;padding:8px;border-radius:8px">` : ""}
       <textarea class="input" id="pix-code" readonly rows="3">${RS.esc(data.qr_code || "")}</textarea>
       <button class="btn btn-primary w-full" id="pix-copy">Copiar código PIX</button>
-      <p class="muted small" id="pix-exp" style="margin-top:8px;text-align:center"></p>`);
+      <p class="muted small" id="pix-exp" style="margin-top:8px;text-align:center"></p>`;
     RS.$("#pix-copy", w).onclick = async () => {
       try { await navigator.clipboard.writeText(data.qr_code); } catch { RS.$("#pix-code", w).select(); document.execCommand("copy"); }
       RS.toast("Código copiado!", "ok");
