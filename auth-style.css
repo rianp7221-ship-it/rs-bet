@@ -785,7 +785,6 @@ html:not(.g-leao) [data-game="leao"] { display: none !important; }
 .cz-promo b { position: relative; font-size: 13px; font-weight: 800; line-height: 1.15; }
 .p-fort { background-image: linear-gradient(150deg, #ffb300, #d84315); }
 .p-feat { background-image: linear-gradient(150deg, #7b1fa2, #e91e63); }
-.p-crash { background-image: linear-gradient(150deg, #0d47a1, #00bcd4); }
 .p-orig { background-image: radial-gradient(circle at 70% 25%, #3fd28a, #0b5d48 70%); }
 .p-slots { background-image: linear-gradient(150deg, #c62828, #ff7043); }
 .p-prov { background-image: linear-gradient(150deg, #263238, #546e7a); background-size: 70%; background-color: #2c3653; }
