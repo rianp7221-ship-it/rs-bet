@@ -75,8 +75,11 @@ const SOURCE_LOCKS = ["Mercado suspenso nas casas", "Mercado travado na fonte", 
 const scoreChanged = (m: Started, home?: number | null, away?: number | null) =>
   home != null && away != null && m.score_home != null && m.score_away != null && (home !== m.score_home || away !== m.score_away);
 
-// para de consultar ao vivo quando a cota está acabando (reserva 20% para a busca completa)
-const liveReserve = (limit: number) => Math.max(20, Math.floor(limit * 0.2));
+// ao vivo tem prioridade: a busca completa para com 20% da cota e o ao vivo só para perto de zerar
+const fullReserve = (limit: number) => Math.max(20, Math.floor(limit * 0.2));
+const liveReserve = (limit: number) => Math.max(20, Math.floor(limit * 0.005));
+// saldo lido nesta hora e no mesmo dia UTC (a cota da API reinicia à meia-noite UTC)
+const freshRemaining = (at: string) => Date.now() - Date.parse(at) < 3600_000 && new Date(at).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10);
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
 
@@ -136,13 +139,14 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
     if (lim) await sb.from("settings").upsert({ key: "feed_limit", value: lim, label: "Cota da API de odds (por dia ou por hora, conforme o plano)", updated_at: at });
   };
 
+  const rem = cfg?.find((c) => c.key === "feed_remaining");
+  const lim = Number(cfg?.find((c) => c.key === "feed_limit")?.value) || 7500;
+
   // ao vivo com feed próprio: 1 rodada para todos os jogos (placar, odds, suspensão e resultado)
   if (mode === "live" && feed.live) {
     const ids = [...startedBySport.values()].flat();
     if (!ids.length) return json({ modo: mode, jogos_atualizados: 0, jogos_liquidados: 0, creditos_restantes: null, errors });
-    const rem = cfg?.find((c) => c.key === "feed_remaining");
-    const lim = Number(cfg?.find((c) => c.key === "feed_limit")?.value) || 7500;
-    if (rem && Number(rem.value) < liveReserve(lim) && Date.now() - Date.parse(rem.updated_at) < 3600_000) {
+    if (rem && Number(rem.value) < liveReserve(lim) && freshRemaining(rem.updated_at)) {
       return json({ modo: mode, pulado: "cota diária da API quase no fim", creditos_restantes: rem.value, errors });
     }
     const byId = new Map(ids.map((m) => [m.external_id.split(":")[1], m]));
@@ -208,6 +212,10 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
     }
     await saveRemaining();
     return json({ modo: mode, jogos_atualizados: updated, jogos_liquidados: settled, creditos_restantes: feed.remaining(), errors });
+  }
+
+  if (rem && Number(rem.value) < fullReserve(lim) && freshRemaining(rem.updated_at)) {
+    return json({ modo: mode, pulado: "cota diária da API reservada para o ao vivo", creditos_restantes: rem.value, errors });
   }
 
   // 1) jogos e odds; com muitas ligas, cada grupo roda numa execução separada da função
