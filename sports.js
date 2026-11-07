@@ -30,7 +30,7 @@
   };
   const coKeys = (m) => Object.keys(m?.markets || {}).filter((k) => /^co\d+$/.test(k)).sort((a, b) => a.slice(2) - b.slice(2));
   const coLine = (k) => (Number(k.slice(2)) / 10).toLocaleString("pt-BR");
-  const PX = { hto: "Gols 1º Tempo", ch: "Escanteios Casa", ca: "Escanteios Fora", kh: "Cartões Casa", ka: "Cartões Fora", sh: "Chutes Casa", sa: "Chutes Fora" };
+  const PX = { hto: "Gols 1º Tempo", gh: "Gols Casa", ga: "Gols Fora", ch: "Escanteios Casa", ca: "Escanteios Fora", kh: "Cartões Casa", ka: "Cartões Fora", sh: "Chutes Casa", sa: "Chutes Fora" };
   const pxKeys = (m, p) => Object.keys(m?.markets || {}).filter((k) => k.startsWith(p) && /^\d+$/.test(k.slice(p.length))).sort((a, b) => a.slice(p.length) - b.slice(p.length));
   const pxLine = (k) => (Number(k.replace(/^[a-z]+/, "")) / 10).toLocaleString("pt-BR");
   const pxRows = (p) => (m) => pxKeys(m, p).map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]);
@@ -44,7 +44,7 @@
   const oddOf = (m, mk, pick) => mk === "bb" ? bbOdd(m, pick) : Number(mk === "1x2" ? m?.["odd_" + pick] : m?.markets?.[mk]?.[pick]) || 0;
   // Criar Aposta: mesmo modelo de Poisson do servidor (_bb_odd); o servidor recalcula a odd ao apostar
   // pernas de gols: Poisson do placar; escanteios/cartões/chutes: odd justa do próprio mercado, 1 perna por grupo
-  const GOAL_RE = /^(1x2|dc|btts|btts1|btts2|ht1x2|eg|cs|ou\d+|hto\d+)$/, HALF_RE = /^(ht1x2|btts1|btts2|hto\d+)$/, BB_MAX = 13;
+  const GOAL_RE = /^(1x2|dc|btts|btts1|btts2|ht1x2|eg|cs|ou\d+|hto\d+|gh\d+|ga\d+)$/, HALF_RE = /^(ht1x2|btts1|btts2|hto\d+)$/, BB_MAX = 13;
   const bbFam = (mk) => /^(c1x2|co\d+|ch\d+|ca\d+)$/.test(mk) ? "c" : /^(k\d+|kh\d+|ka\d+)$/.test(mk) ? "k" : /^(s1x2|t1x2|[st]\d+|sh\d+|sa\d+)$/.test(mk) ? "s" : null;
   const bbOk = (mk) => GOAL_RE.test(mk) || !!bbFam(mk);
   let bbMargin = 10;
@@ -61,6 +61,8 @@
     if (mk === "btts1") return (h1 > 0 && a1 > 0) === (p === "yes");
     if (mk === "btts2") return (h - h1 > 0 && a - a1 > 0) === (p === "yes");
     if (/^hto\d+$/.test(mk)) return (h1 + a1 > ouL(mk)) === (p === "over");
+    if (/^gh\d+$/.test(mk)) return (h > ouL(mk)) === (p === "over");
+    if (/^ga\d+$/.test(mk)) return (a > ouL(mk)) === (p === "over");
     return (h + a > ouL(mk)) === (p === "over");
   };
   const bbReady = (m) => !!m && m.status === "open" && m.bb_lh != null && new Date(m.starts_at) > new Date();
@@ -245,6 +247,8 @@
     { key: "ou", tab: "goals", name: "Total de Gols Mais/Menos", rows: () => ["ou05", "ou15", "ou25", "ou35", "ou45", "ou55"].map((k) => Object.entries(MK[k][1]).map(([p, l]) => [k, p, l])) },
     { key: "eg", tab: "goals", name: "Gols Exatos", rows: () => [[0, 1, 2], [3, 4, 5], [6]].map((r) => r.map((n) => ["eg", "g" + n, `${n} ${n === 1 ? "gol" : "gols"}`])) },
     { key: "cs", tab: "goals", name: "Placar Exato", rows: csRows },
+    { key: "gh", tab: "goals", name: "Gols Casa Mais/Menos", rows: pxRows("gh") },
+    { key: "ga", tab: "goals", name: "Gols Fora Mais/Menos", rows: pxRows("ga") },
     { key: "hto", tab: "goals", name: "Gols 1º Tempo Mais/Menos", rows: pxRows("hto") },
     { key: "btts", tab: "goals", name: "Ambas equipes Marcam", rows: () => [[["btts", "yes", "Sim"], ["btts", "no", "Não"]]] },
     { key: "btts1", tab: "goals", name: "Ambas Marcam 1º Tempo", rows: () => [[["btts1", "yes", "Sim"], ["btts1", "no", "Não"]]] },
