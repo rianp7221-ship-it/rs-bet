@@ -63,7 +63,9 @@
   .hdr { height: 60px; gap: 8px; padding: 0 12px; }
   .hdr-nav { display: none; }
   .logo-word { display: none; }
-  .logo-mark { display: block; }
+  .logo-mark { display: block; height: 30px; }
+  .balance { padding: 5px 10px; }
+  .balance b { white-space: nowrap; }
   .hdr-right { gap: 6px; }
   .hdr-right .btn { padding: 9px 12px; font-size: 13px; }
   .acct-pop { position: fixed; top: auto; bottom: 0; left: 0; right: 0; width: auto; border-radius: 18px 18px 0 0; padding: 22px 18px 28px; }
