@@ -38,7 +38,7 @@
     me = await RS.profile();
     el.innerHTML = `
       <div class="hdr">
-        <a href="index.html" class="logo" aria-label="Real Sports"><b class="logo-mark">RS</b><span class="logo-word">Real<em>Sports</em></span></a>
+        <a href="index.html" class="logo" aria-label="Real Sports"><img class="logo-mark" src="/icons/rs-mark.png" alt="RS" width="68" height="38"><span class="logo-word">Real<em>Sports</em></span></a>
         <nav class="hdr-nav">
           ${navLink("index.html#sports", "Apostas esportivas", "sports")}
           ${navLink("index.html#proximos", "Próximos jogos", "proximos")}
