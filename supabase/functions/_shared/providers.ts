@@ -164,6 +164,7 @@ const AF_EG = ["Exact Goals Number"];
 const AF_CS = ["Exact Score", "Correct Score"];
 const AF_OUX: [string[], string, number, number][] = [
   [["Goals Over/Under First Half", "Over/Under (1st Half)"], "hto", 0.5, 3.5],
+  [["Total - Home", "Home Team Goals"], "gh", 0.5, 4.5], [["Total - Away", "Away Team Goals"], "ga", 0.5, 4.5],
   [["Home Corners Over/Under"], "ch", 0.5, 9.5], [["Away Corners Over/Under"], "ca", 0.5, 9.5],
   [["Home Team Total Cards"], "kh", 0.5, 5.5], [["Away Team Total Cards"], "ka", 0.5, 5.5],
   [["Home Total Shots", "Home Player Shots Total"], "sh", 3.5, 30.5], [["Away Total Shots", "Away Player Shots Total"], "sa", 3.5, 30.5],
@@ -253,7 +254,7 @@ function apiFootball(key: string): OddsProvider {
     };
     need.c1x2 = need.s1x2 = need.t1x2 = need.ht1x2 = ["home", "draw", "away"];
     need.btts1 = need.btts2 = ["yes", "no"];
-    for (const k of acc.keys()) if (/^(co|k|s|t|ou|hto|ch|ca|kh|ka|sh|sa)\d+$/.test(k.split(".")[0])) need[k.split(".")[0]] = ["over", "under"];
+    for (const k of acc.keys()) if (/^(co|k|s|t|ou|hto|gh|ga|ch|ca|kh|ka|sh|sa)\d+$/.test(k.split(".")[0])) need[k.split(".")[0]] = ["over", "under"];
     // gols exatos: 0 a 5 em todas as casas; 6 só onde a casa tem "exatamente 6"
     if ([0, 1, 2, 3, 4, 5].every((n) => acc.has(`eg.g${n}`))) need.eg = [0, 1, 2, 3, 4, 5, 6].map((n) => `g${n}`).filter((k) => acc.has(`eg.${k}`));
     // placar exato: precisa dos placares até 2x2; os demais (até 6 gols por time) entram se a casa tiver

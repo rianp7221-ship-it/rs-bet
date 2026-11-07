@@ -13,7 +13,7 @@
   const MNAME = { "1x2": "Resultado Final", ou15: "Total de Gols", ou25: "Total de Gols", ou35: "Total de Gols", btts: "Ambas Marcam", btts1: "Ambas Marcam 1º Tempo", btts2: "Ambas Marcam 2º Tempo", ht1x2: "Resultado 1º Tempo", ou05: "Total de Gols", ou45: "Total de Gols", ou55: "Total de Gols", dc: "Chance Dupla", dnb: "Empate Anula", c1x2: "Escanteios 1X2", s1x2: "Chutes 1X2", t1x2: "Chutes no Gol 1X2", eg: "Gols Exatos", cs: "Placar Exato" };
   const mname = (mk) => MNAME[mk] || (/^co\d+$/.test(mk) ? "Total de Escanteios" : /^k\d+$/.test(mk) ? "Total de Cartões" : PXN[mk.replace(/\d+$/, "")] && /\d$/.test(mk) ? PXN[mk.replace(/\d+$/, "")] : /^s\d+$/.test(mk) ? "Total de Chutes" : /^t\d+$/.test(mk) ? "Total de Chutes no Gol" : RS.esc(mk));
   const LINE = { ou05: "0,5", ou15: "1,5", ou25: "2,5", ou35: "3,5", ou45: "4,5", ou55: "5,5" };
-  const PXN = { hto: "Gols 1º Tempo", ch: "Escanteios Casa", ca: "Escanteios Fora", kh: "Cartões Casa", ka: "Cartões Fora", sh: "Chutes Casa", sa: "Chutes Fora" };
+  const PXN = { hto: "Gols 1º Tempo", gh: "Gols Casa", ga: "Gols Fora", ch: "Escanteios Casa", ca: "Escanteios Fora", kh: "Cartões Casa", ka: "Cartões Fora", sh: "Chutes Casa", sa: "Chutes Fora" };
   let bets = [], betTab = "open", betFilter = "";
   const folded = new Set();
 
@@ -24,7 +24,7 @@
     if (mk === "eg") return `Exatamente ${s.pick.slice(1)} ${s.pick === "g1" ? "gol" : "gols"}`;
     if (LINE[mk]) return `${s.pick === "over" ? "Mais" : "Menos"} de ${LINE[mk]}`;
     if (/^k\d+$/.test(mk)) return `${s.pick === "over" ? "Mais" : "Menos"} de ${(Number(mk.slice(1)) / 10).toLocaleString("pt-BR")} cartões`;
-    if (/^(hto|ch|ca|kh|ka|sh|sa)\d+$/.test(mk)) return `${s.pick === "over" ? "Mais" : "Menos"} de ${(Number(mk.replace(/^[a-z]+/, "")) / 10).toLocaleString("pt-BR")}`;
+    if (/^(hto|gh|ga|ch|ca|kh|ka|sh|sa)\d+$/.test(mk)) return `${s.pick === "over" ? "Mais" : "Menos"} de ${(Number(mk.replace(/^[a-z]+/, "")) / 10).toLocaleString("pt-BR")}`;
     if (/^[st]\d+$/.test(mk)) return `${s.pick === "over" ? "Mais" : "Menos"} de ${(Number(mk.slice(1)) / 10).toLocaleString("pt-BR")} ${mk[0] === "s" ? "chutes" : "chutes no gol"}`;
     if (/^co\d+$/.test(mk)) return `${s.pick === "over" ? "Mais" : "Menos"} de ${(Number(mk.slice(2)) / 10).toLocaleString("pt-BR")} escanteios`;
     if (/^btts[12]?$/.test(mk)) return s.pick === "yes" ? "Sim" : "Não";

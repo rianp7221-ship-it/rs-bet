@@ -287,7 +287,7 @@
     return (p?.username || "cliente").slice(0, 3) + "***";
   };
   const MKT = { dnb: "Empate Anula", ht1x2: "1º Tempo", c1x2: "Escanteios", s1x2: "Chutes", t1x2: "Chutes no gol", btts: "Ambas Marcam", btts1: "Ambas Marcam 1º T", btts2: "Ambas Marcam 2º T" };
-  const PXT = { ou: "gols", hto: "gols 1º T", co: "escanteios", ch: "escanteios casa", ca: "escanteios fora", k: "cartões", kh: "cartões casa", ka: "cartões fora", s: "chutes", t: "chutes no gol", sh: "chutes casa", sa: "chutes fora" };
+  const PXT = { ou: "gols", hto: "gols 1º T", gh: "gols casa", ga: "gols fora", co: "escanteios", ch: "escanteios casa", ca: "escanteios fora", k: "cartões", kh: "cartões casa", ka: "cartões fora", s: "chutes", t: "chutes no gol", sh: "chutes casa", sa: "chutes fora" };
   function selText(s) {
     const m = s.matches || {}, mk = s.market || "1x2", px = mk.replace(/\d+$/, "");
     if (mk === "bb") return "Criar Aposta";
