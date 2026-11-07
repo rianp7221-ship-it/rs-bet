@@ -815,13 +815,13 @@ html:not(.g-leao) [data-game="leao"] { display: none !important; }
 .cz .cs-rail { grid-auto-columns: 158px; gap: 12px 12px; }
 .cz .cs-rail.cz-2r { grid-template-rows: repeat(2, auto); }
 .cz .pf-tile { background: none; border-radius: 0; overflow: visible; }
-.cz .pf-tile img, .cz .cs-int i { aspect-ratio: 4 / 3; border-radius: 10px; background-color: #1b2233; transition: transform .15s; }
+.cz .pf-tile img, .cz .cs-int i { aspect-ratio: 1; border-radius: 10px; background-color: #1b2233; transition: transform .15s; }
 .cz .pf-tile:hover img, .cz .cs-int:hover i { transform: translateY(-3px); }
 .cz .pf-tile span { padding: 6px 2px 0; font-size: 12px; font-weight: 600; color: #dfe4f5; background: none; }
 .cz .pf-tile span small { display: none; }
 .cz .cs-int i { font-size: 46px; }
 .cz .cs-int i.t-leao { color: transparent; }
-.cz-ph { display: block; aspect-ratio: 4 / 3; border-radius: 10px; background: #1b2233; }
+.cz-ph { display: block; aspect-ratio: 1; border-radius: 10px; background: #1b2233; }
 .cz .cs-orig { display: grid; grid-auto-flow: column; grid-auto-columns: 220px; grid-template-columns: none; overflow-x: auto; scrollbar-width: none; }
 .cz .pf-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px 12px; }
 .cz .pf-tile span { min-width: 0; }
