@@ -761,3 +761,7 @@ html:not(.g-leao) [data-game="leao"] { display: none !important; }
 .trk-min { color: #ff7a00; font-weight: 700; font-variant-numeric: tabular-nums; }
 .trk-empty { text-align: center; padding: 20px 0; color: #9aa6b8; }
 .trk-src { margin: 12px 0 0; text-align: right; font-size: 11px; color: #6b778a; }
+
+.pix-wait { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px 0; color: var(--muted); }
+.pix-spin { width: 36px; height: 36px; border: 3px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: pix-spin .7s linear infinite; }
+@keyframes pix-spin { to { transform: rotate(360deg); } }
