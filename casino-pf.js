@@ -127,12 +127,6 @@
     promo("fort", list[0]?.image);
     RS.$("#cz-ban-art").innerHTML = list.slice(0, 3).map((g) => `<img src="${esc(g.image || "")}" alt="">`).join("");
   }
-  async function loadCrash() {
-    const { data } = await sb.from("casino_catalog").select(COLS).eq("category", "crash").not("pf_code", "is", null).eq("active", true)
-      .in("provider", provs.map((p) => p.id)).order("sort").limit(24);
-    fill("pf-crash", (data || []).map(pfTile).join(""));
-    promo("crash", data?.[0]?.image);
-  }
   function loadProvs() {
     fill("pf-provs", provs.map((p) => `<button class="cs-prov" data-prov="${esc(p.id)}">${p.image ? `<img loading="lazy" src="${esc(p.image)}" alt="" onerror="this.remove()">` : ""}<b>${esc(nice(p.name))}</b></button>`).join(""));
   }
@@ -190,7 +184,7 @@
     const card = g.getAttribute("href")?.startsWith("#") && document.getElementById(g.getAttribute("href").slice(1));
     if (card) { e.preventDefault(); card.scrollIntoView({ behavior: "smooth", block: "start" }); }
   });
-  // barra inferior no cassino: Cassino, Fortuna, Crash Games, Explorar
+  // barra inferior no cassino: Cassino, Fortuna, Mais jogados, Explorar
   document.addEventListener("click", (e) => {
     const a = e.target.closest(".bn-cz");
     if (!a) return;
@@ -209,6 +203,6 @@
     if (!provs.length) return;
     prov.insertAdjacentHTML("beforeend", provs.map((p) => `<option value="${esc(p.id)}">${esc(nice(p.name))}</option>`).join(""));
     RS.$("#pf-wrap").dataset.empty = "";
-    recent(); loadFeat(); loadFort(); loadCrash(); loadProvs(); buildStudios(); load(true); show();
+    recent(); loadFeat(); loadFort(); loadProvs(); buildStudios(); load(true); show();
   });
 })();
