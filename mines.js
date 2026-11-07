@@ -17,7 +17,6 @@
     const on = new Set(l.map((g) => g.id));
     localStorage.setItem("rs-games-on", JSON.stringify([...on]));
     apply(on);
-    if (!l.length) RS.$(".casino-grid")?.insertAdjacentHTML("beforebegin", `<p class="muted" style="margin:12px 0">O cassino está temporariamente indisponível.</p>`);
   });
 
   // ---------------- MINES ----------------

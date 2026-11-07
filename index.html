@@ -71,26 +71,50 @@
       </section>
 
       <!-- CASSINO -->
-      <section id="casino" class="tab-panel hidden casino-dark">
-        <div class="casino-hero">
-          <div><small>Cassino</small><h1>Slots, <span>originais</span> e mais</h1><p>Milhares de jogos com o seu saldo.</p></div>
+      <section id="casino" class="tab-panel hidden casino-dark cz">
+        <aside class="cz-side" id="cz-side">
+          <a data-sec="recent"><i>🕘</i>Continuar jogando</a>
+          <a data-sec="all" class="active"><i>❤️</i>Para Você</a>
+          <a data-sec="feat"><i>🔥</i>Mais jogados</a>
+          <a data-sec="fort"><i>🐯</i>Jogos da Fortuna</a>
+          <a data-sec="crash"><i>🚀</i>Crash Games</a>
+          <a data-sec="orig"><i>💎</i>Originais</a>
+          <a data-sec="slots"><i>🎰</i>Todos os jogos</a>
+          <a data-sec="prov"><i>🏢</i>Estúdios</a>
+          <h5>Estúdios</h5>
+          <div id="cz-side-provs"></div>
+        </aside>
+        <div class="cz-main">
+        <div class="cz-promos cz-lobby" id="cz-promos">
+          <button type="button" class="cz-promo p-fort" data-sec="fort"><em>🐯</em><b>Jogos da Fortuna</b></button>
+          <button type="button" class="cz-promo p-feat" data-sec="feat"><em>🔥</em><b>Mais jogados</b></button>
+          <button type="button" class="cz-promo p-crash" data-sec="crash"><em>🚀</em><b>Crash Games</b></button>
+          <button type="button" class="cz-promo p-orig" data-sec="orig"><em>💎</em><b>Originais Real Sports</b></button>
+          <button type="button" class="cz-promo p-slots" data-sec="slots"><em>🎰</em><b>Todos os jogos</b></button>
+          <button type="button" class="cz-promo p-prov" data-sec="prov"><em>🏢</em><b>Estúdios</b></button>
         </div>
-        <div class="cs-nav" id="cat-chips"><button class="active" data-sec="all">🏠 Lobby</button><button data-sec="feat">⭐ Destaques</button><button data-sec="fort">🐯 Fortuna</button><button data-sec="orig">💎 Originais</button><button data-sec="slots">🎰 Slots</button><button data-sec="crash">🚀 Crash</button><button data-sec="prov">🏢 Provedores</button></div>
-        <div class="cs-search"><input class="input" id="pf-q" type="search" placeholder="🔍 Buscar jogo (ex.: Fortune Tiger)"></div>
-        <div class="cs-sec hidden" data-sec="recent" id="recent-wrap" data-empty="1"><div class="cs-head"><h2>🕘 Continuar jogando</h2><span class="cs-arr"><button type="button" data-arr="-1" aria-label="Anterior">‹</button><button type="button" data-arr="1" aria-label="Próximo">›</button></span></div><div class="cs-rail" id="recent-tiles"></div></div>
-        <div class="cs-sec hidden" data-sec="feat" data-empty="1"><div class="cs-head"><h2>⭐ Em destaque</h2><span class="cs-arr"><button type="button" data-arr="-1" aria-label="Anterior">‹</button><button type="button" data-arr="1" aria-label="Próximo">›</button></span></div><div class="cs-rail cs-big" id="pf-feat"></div></div>
-        <div class="cs-sec hidden" data-sec="fort" data-empty="1"><div class="cs-head"><h2>🐯 Jogos da Fortuna</h2><span class="cs-arr"><button type="button" data-arr="-1" aria-label="Anterior">‹</button><button type="button" data-arr="1" aria-label="Próximo">›</button></span></div><div class="cs-rail" id="pf-fort"></div></div>
-        <div class="cs-sec" data-sec="orig"><div class="cs-head"><h2>💎 Originais Real Sports</h2></div>
+        <div class="cs-nav cz-cats" id="cat-chips"><button class="active" data-sec="all">❤️ Para Você</button><button data-sec="feat">🔥 Mais jogados</button><button data-sec="fort">🐯 Fortuna</button><button data-sec="crash">🚀 Crash</button><button data-sec="orig">💎 Originais</button><button data-sec="prov">🏢 Estúdios</button></div>
+        <div class="cz-tags cz-lobby" id="cz-tags"><button type="button" class="cz-find" id="cz-find" aria-label="Buscar jogo">🔍</button><button type="button" data-tag="Fortune">Fortune</button><button type="button" data-tag="Megaways">Megaways</button><button type="button" data-tag="Olympus">Olympus</button><button type="button" data-tag="Bonanza">Bonanza</button><button type="button" data-tag="Dragon">Dragon</button><button type="button" data-tag="Book">Book</button><button type="button" data-tag="Wild">Wild</button><button type="button" data-tag="Gold">Gold</button></div>
+        <div class="cs-search hidden" id="cz-search"><input class="input" id="pf-q" type="search" placeholder="🔍 Buscar jogo (ex.: Fortune Tiger)"></div>
+        <div class="cz-banner cz-lobby">
+          <div class="cz-ban-txt"><small>Real Sports</small><h3>Jogos da Fortuna</h3><p>Tiger, Ox, Mouse, Rabbit e mais.</p><button type="button" class="cz-more" data-sec="fort">Mostrar mais ›</button></div>
+          <span class="cz-ban-art" id="cz-ban-art"></span>
+        </div>
+        <div class="cs-sec hidden" data-sec="recent" id="recent-wrap" data-empty="1"><div class="cs-head"><h2>Continuar jogando</h2><div class="cz-hr"><span class="cs-arr"><button type="button" data-arr="-1" aria-label="Anterior">‹</button><button type="button" data-arr="1" aria-label="Próximo">›</button></span><button type="button" class="cz-count" data-sec="recent">Ver todos</button></div></div><div class="cs-rail" id="recent-tiles"></div></div>
+        <div class="cs-sec hidden" data-sec="feat" data-empty="1"><div class="cs-head"><h2>Mais jogados</h2><div class="cz-hr"><span class="cs-arr"><button type="button" data-arr="-1" aria-label="Anterior">‹</button><button type="button" data-arr="1" aria-label="Próximo">›</button></span><button type="button" class="cz-count" data-sec="feat">Ver todos</button></div></div><div class="cs-rail" id="pf-feat"></div></div>
+        <div class="cs-sec hidden" data-sec="fort" data-empty="1"><div class="cs-head"><h2>Jogos da Fortuna</h2><div class="cz-hr"><span class="cs-arr"><button type="button" data-arr="-1" aria-label="Anterior">‹</button><button type="button" data-arr="1" aria-label="Próximo">›</button></span><button type="button" class="cz-count" data-sec="fort">Ver todos</button></div></div><div class="cs-rail" id="pf-fort"></div></div>
+        <div class="cs-sec hidden" data-sec="crash" data-empty="1"><div class="cs-head"><h2>Crash Games</h2><div class="cz-hr"><span class="cs-arr"><button type="button" data-arr="-1" aria-label="Anterior">‹</button><button type="button" data-arr="1" aria-label="Próximo">›</button></span><button type="button" class="cz-count" data-sec="crash">Ver todos</button></div></div><div class="cs-rail" id="pf-crash"></div></div>
+        <div class="cs-sec" data-sec="orig"><div class="cs-head"><h2>Originais Real Sports</h2></div>
           <div class="game-tiles cs-orig">
             <a class="tile t-leao" href="leao.html" data-game="leao"><i>🦁</i><b>Leão da Sorte</b><small>Slot 3x3 · até 2.500x</small></a>
             <a class="tile t-mines" href="#mines-card" data-game="mines-card"><i>💎</i><b>Mines</b><small>Até 24 minas</small></a>
             <a class="tile t-dice" href="#dice" data-game="dice"><i>🎲</i><b>Dados</b><small>Escolha sua chance</small></a>
           </div>
         </div>
-        <div class="cs-sec hidden" data-sec="crash" data-empty="1"><div class="cs-head"><h2>🚀 Crash</h2><span class="cs-arr"><button type="button" data-arr="-1" aria-label="Anterior">‹</button><button type="button" data-arr="1" aria-label="Próximo">›</button></span></div><div class="cs-rail" id="pf-crash"></div></div>
-        <div class="cs-sec hidden" data-sec="prov" data-empty="1"><div class="cs-head"><h2>🏢 Provedores</h2><span class="cs-arr"><button type="button" data-arr="-1" aria-label="Anterior">‹</button><button type="button" data-arr="1" aria-label="Próximo">›</button></span></div><div class="cs-provs cs-rail" id="pf-provs"></div></div>
+        <div id="cz-studios"></div>
+        <div class="cs-sec hidden" data-sec="prov" data-empty="1"><div class="cs-head"><h2>Estúdios</h2><div class="cz-hr"><span class="cs-arr"><button type="button" data-arr="-1" aria-label="Anterior">‹</button><button type="button" data-arr="1" aria-label="Próximo">›</button></span><button type="button" class="cz-count" data-sec="prov">Ver todos</button></div></div><div class="cs-provs cs-rail" id="pf-provs"></div></div>
         <div class="cs-sec hidden" data-sec="slots" id="pf-wrap" data-empty="1">
-          <div class="cs-head"><h2 id="pf-title">🎰 Todos os slots</h2><select class="input" id="pf-prov"><option value="">Todos os provedores</option></select></div>
+          <div class="cs-head"><h2 id="pf-title">Todos os jogos</h2><select class="input" id="pf-prov"><option value="">Todos os estúdios</option></select></div>
           <div class="pf-grid" id="pf-grid"></div>
           <button class="btn btn-outline w-full hidden" id="pf-more">Carregar mais</button>
         </div>
@@ -123,6 +147,7 @@
             <label>Valor (R$)<input type="number" id="dice-stake" class="input" value="5" min="1" step="0.01"></label>
             <button class="btn btn-primary w-full" id="dice-roll">Rolar</button>
           </div>
+        </div>
         </div>
       </section>
 
@@ -190,6 +215,10 @@
     <a href="#sports" data-view="live"><i data-ic="live"></i>Ao Vivo</a>
     <a href="#" data-open-menu><i data-ic="grid"></i>Esportes</a>
     <a href="#history" data-bets><i data-ic="receipt"></i>Apostas<em class="bn-badge hidden" id="bn-count">0</em></a>
+    <a href="#casino" class="bn-cz" data-cz="all"><i data-ic="dice"></i>Cassino</a>
+    <a href="#casino" class="bn-cz" data-cz="fort"><i data-ic="star"></i>Fortuna</a>
+    <a href="#casino" class="bn-cz" data-cz="crash"><i data-ic="rocket"></i>Crash Games</a>
+    <a href="#casino" class="bn-cz" data-cz="search"><i data-ic="search"></i>Explorar</a>
     <a href="#casino" class="bn-switch" id="bn-switch" aria-label="Cassino"><span class="bn-chip"><i data-ic="chip"></i></span><span class="bn-ball"><i data-ic="ball"></i></span></a>
   </nav>
 
