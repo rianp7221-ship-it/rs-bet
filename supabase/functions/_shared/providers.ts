@@ -22,6 +22,7 @@ export type LiveUpdate = {
   home_logo?: string; away_logo?: string; league_logo?: string;
   minute?: number | null; // minuto de jogo
   suspended: string | null; // motivo de suspensão (lance perigoso, pênalti, mercado travado...)
+  absent?: boolean; // jogo ausente do feed de odds ao vivo nesta leitura (snapshot parcial da fonte)
 };
 
 export interface OddsProvider {
@@ -358,6 +359,7 @@ function apiFootball(key: string): OddsProvider {
           completed: AF_DONE.includes(st), cancelled: AF_CANCEL.includes(st), voided: AF_VOID.includes(st),
           odds: lo ? pick(lo.odds) : null, markets: lo && !locked ? extra(lo.odds) : null,
           minute: f.fixture.status.elapsed != null ? f.fixture.status.elapsed + (f.fixture.status.extra ?? 0) : null, suspended, period: st,
+          absent: !lo,
         });
       }
       return out;
