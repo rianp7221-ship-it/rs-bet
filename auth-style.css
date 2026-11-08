@@ -263,6 +263,9 @@ body.slip-open .overlay, body.menu-open .overlay { display: block; }
 .b-won, .b-done, .b-aprovado { background: #e2f6ea; color: var(--ok); }
 .b-lost, .b-rejected, .b-canceled, .b-rejeitado { background: #fde8ea; color: var(--danger); }
 .b-pending, .b-active, .b-live, .b-cashout, .b-em_analise { background: #fff3dc; color: var(--gold); }
+.b-cashout.co-gain { background: #e2f6ea; color: var(--ok); }
+.b-cashout.co-loss { background: #fde8ea; color: var(--danger); }
+.bt-week { text-align: center; margin: 10px 0 4px; }
 
 /* admin */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }

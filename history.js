@@ -9,6 +9,9 @@
   const PICK = { home: "Casa", draw: "Empate", away: "Fora", over: "Mais", under: "Menos", yes: "Sim", no: "Não", "1x": "1X", x2: "X2", "12": "12" };
   const MKT = { dc: "Chance Dupla", ou15: "Gols 1,5", ou25: "Gols 2,5", ou35: "Gols 3,5", btts: "Ambas Marcam", dnb: "Empate Anula" };
   const badge = (s) => `<span class="badge b-${s}">${STATUS[s] || s}</span>`;
+  // cashout acima do apostado = verde, abaixo = vermelho
+  const betBadge = (b) => b.status !== "cashout" ? badge(b.status)
+    : `<span class="badge b-cashout${Number(b.cashout_amount) > Number(b.stake) ? " co-gain" : Number(b.cashout_amount) < Number(b.stake) ? " co-loss" : ""}">Cashout</span>`;
   const TYPE = (n) => (n === 1 ? "Simples" : n === 2 ? "Dupla" : n === 3 ? "Tripla" : "Múltipla");
   const MNAME = { "1x2": "Resultado Final", ou15: "Total de Gols", ou25: "Total de Gols", ou35: "Total de Gols", btts: "Ambas Marcam", btts1: "Ambas Marcam 1º Tempo", btts2: "Ambas Marcam 2º Tempo", ht1x2: "Resultado 1º Tempo", ou05: "Total de Gols", ou45: "Total de Gols", ou55: "Total de Gols", dc: "Chance Dupla", dnb: "Empate Anula", c1x2: "Escanteios 1X2", s1x2: "Chutes 1X2", t1x2: "Chutes no Gol 1X2", eg: "Gols Exatos", cs: "Placar Exato" };
   const mname = (mk) => MNAME[mk] || (/^co\d+$/.test(mk) ? "Total de Escanteios" : /^k\d+$/.test(mk) ? "Total de Cartões" : PXN[mk.replace(/\d+$/, "")] && /\d$/.test(mk) ? PXN[mk.replace(/\d+$/, "")] : /^s\d+$/.test(mk) ? "Total de Chutes" : /^t\d+$/.test(mk) ? "Total de Chutes no Gol" : RS.esc(mk));
@@ -82,7 +85,7 @@
   const card = (b) => {
     const sels = b.bet_selections, [wl, wv] = winLine(b);
     return `<div class="bet-card${folded.has(b.id) ? " closed" : ""}" data-bet="${b.id}">
-      <div class="bc-head" data-fold="${b.id}"><b>${TYPE(sels.length)}</b><span>${RS.money(b.stake)}</span>${b.status !== "pending" ? badge(b.status) : ""}
+      <div class="bc-head" data-fold="${b.id}"><b>${TYPE(sels.length)}</b><span>${RS.money(b.stake)}</span>${b.status !== "pending" ? betBadge(b) : ""}
         <span class="bc-odd">${Number(b.total_odd).toFixed(2)}</span><i class="bc-chev"></i></div>
       <div class="bc-body">
         ${sels.map((s) => `<div class="bc-sel" data-m="${s.match_id}">
@@ -101,12 +104,13 @@
     let list = betTab === "open" ? open : bets.filter((b) => b.status !== "pending");
     if (betTab === "open" && betFilter === "live") list = list.filter((b) => b.bet_selections.some(isLive));
     if (betTab === "open" && betFilter === "long") list = list.filter((b) => b.bet_selections.some(isFar));
-    const empty = betTab === "open" ? "Nenhuma aposta em aberto." : "Nenhuma aposta resolvida.";
+    const empty = betTab === "open" ? "Nenhuma aposta em aberto." : "Nenhuma aposta resolvida nos últimos 7 dias.";
     box.innerHTML = `<div class="bt-tabs"><button data-bt="open" class="${betTab === "open" ? "active" : ""}">Em Aberto (${open.length})</button>
         <button data-bt="done" class="${betTab === "done" ? "active" : ""}">Resolvidas</button></div>
       ${betTab === "open" ? `<div class="bt-filters">${[["live", "Ao Vivo"], ["cash", "Cash Out"], ["long", "Apostas a Longo Prazo"]]
         .map(([k, l]) => `<button class="bt-f${betFilter === k ? " active" : ""}" data-bf="${k}">${l}</button>`).join("")}</div>` : ""}
-      <div class="${betFilter === "cash" && betTab === "open" ? "only-cash" : ""}">${list.map(card).join("") || `<p class="muted">${empty}</p>`}</div>`;
+      <div class="${betFilter === "cash" && betTab === "open" ? "only-cash" : ""}">${list.map(card).join("") || `<p class="muted">${empty}</p>`}</div>
+      ${betTab === "done" && list.length ? `<p class="muted small bt-week">Mostrando os bilhetes dos últimos 7 dias.</p>` : ""}`;
     loadCashouts();
   }
   const selCode = (b) => b.bet_selections.map((s) => `${s.match_id}~${s.market || "1x2"}.${s.pick}`).join(",");
@@ -119,7 +123,8 @@
     if (kind === "bets") {
       const { data } = await sb.from("bets")
         .select("*, bet_selections(match_id, market, pick, odd, status, matches(home, away, league, status, starts_at, score_home, score_away, minute, period, clock_secs, clock_at, ext365_id, home_logo, away_logo))")
-        .eq("user_id", u.id).order("created_at", { ascending: false }).limit(50);
+        .eq("user_id", u.id).or(`status.eq.pending,created_at.gte.${new Date(Date.now() - 7 * 864e5).toISOString()}`)
+        .order("created_at", { ascending: false }).limit(1000);
       bets = data || [];
       renderBets();
       return;
