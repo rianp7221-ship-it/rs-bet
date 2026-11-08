@@ -155,21 +155,16 @@
     if (old) { old.remove(); return; }
     const d = document.createElement("div");
     d.className = "acct-pop";
+    const item = (a, ic, t) => `<button data-a="${a}">${RS.icon(ic)}<span>${t}</span><i>›</i></button>`;
     d.innerHTML = `
-      <div class="acct-who"><span class="avatar">${RS.esc(initial(me))}</span><div><b>${RS.esc(nameOf(me))}</b><small>${RS.esc(me.email || "")}</small></div></div>
-      <div class="acct-bal"><div><span>Carteira</span><b id="pop-balance">${RS.money(me.balance)}</b></div></div>
-      <div class="acct-grid">
-        <button class="btn btn-outline" data-a="refresh">${RS.icon("refresh")} Atualizar</button>
-        <button class="btn btn-outline orange" data-a="refer">${RS.icon("share")} Indicações</button>
-      </div>
-      <button class="btn btn-dark" data-a="panel">Detalhes da conta</button>
-      <div class="acct-grid three">
-        <button class="btn btn-outline" data-a="data" title="Meus dados" aria-label="Meus dados">${RS.icon("id")}</button>
-        <button class="btn btn-outline" data-a="pass" title="Trocar senha" aria-label="Trocar senha">${RS.icon("key")}</button>
-        <button class="btn btn-outline" data-a="support" title="Suporte" aria-label="Suporte">${RS.icon("headset")}</button>
-      </div>
-      ${me.is_admin || me.staff_role ? `<a class="btn btn-primary" href="admin.html" style="margin-bottom:8px">Painel Admin</a>` : ""}
-      <button class="btn btn-outline" data-a="logout">Sair</button>`;
+      <div class="acct-who"><span class="avatar">${RS.esc(initial(me))}</span><div><b>${RS.esc(nameOf(me))}</b><small>ID ${RS.esc(String(me.id).slice(0, 8))}</small></div></div>
+      <div class="acct-bal2"><div><small>Saldo total</small><b id="pop-balance">${RS.money(me.balance)}</b></div><button class="icon-btn" data-a="refresh" aria-label="Atualizar saldo">${RS.icon("refresh")}</button></div>
+      <div class="acct-grid"><button class="btn btn-outline" data-a="withdraw">Sacar</button><button class="btn btn-green" data-a="deposit">Depositar</button></div>
+      <nav class="acct-menu">${item("overview", "grid", "Minha conta")}${item("tx", "card", "Transações")}${item("bets", "receipt", "Minhas apostas")}${item("bonus", "gift", "Bônus")}
+        ${item("wheel", "star", "Roda da Sorte")}${item("refer", "share", "Indique e ganhe")}${item("data", "user", "Dados pessoais")}${item("security", "key", "Login & Segurança")}
+        ${item("limits", "lock", "Jogo responsável")}${item("support", "headset", "Suporte")}</nav>
+      ${me.is_admin || me.staff_role ? `<a class="btn btn-primary" href="admin.html" style="margin:8px 0">Painel Admin</a>` : ""}
+      <button class="acct-out" data-a="logout">${RS.icon("logout")} Sair</button>`;
     RS.$(".hdr-right", el).appendChild(d);
     d.onclick = async (e) => {
       const a = e.target.closest("[data-a]")?.dataset.a;
@@ -182,6 +177,10 @@
       if (a === "pass") resetPass();
       if (a === "support") RS.support();
       if (a === "logout") { await sb.auth.signOut(); location.href = "index.html"; }
+      if (a === "deposit" || a === "withdraw") moneyModal(a);
+      if (a === "wheel") { if (window.RSwheel) window.RSwheel(); else location.href = "index.html"; }
+      if (a === "bets") { const t = document.querySelector('[data-tabs] [data-tab="history"]'); if (t) t.click(); else location.href = "index.html#history"; }
+      if (a !== "data" && TABS[a]) panel(a);
     };
   }
   document.addEventListener("click", (e) => {
@@ -213,6 +212,7 @@
       ${t.type === "deposit" && t.status === "pending" && t.provider_id && new Date(t.expires_at) > new Date() ? `<button class="btn sm btn-outline w-full" data-ap="pix:${t.id}:${t.amount}">Ver PIX</button>` : ""}
     </div>`;
 
+  const AP_GROUPS = [["Carteira", ["overview", "tx", "bonus"]], ["Conta", ["data", "security", "kyc", "privacy"]], ["Apostas e jogo responsável", ["betcfg", "limits"]]];
   function panel(tab) {
     RS.$(".acct-panel")?.remove();
     const w = document.createElement("div");
@@ -220,7 +220,9 @@
     w.innerHTML = `<div class="ap-box">
       <div class="ap-head"><button class="icon-btn ap-menu" data-side aria-label="Menu da conta">${RS.icon("menu")}</button><span id="ap-title"></span>
         <button class="icon-btn" data-x aria-label="Fechar">${RS.icon("x")}</button></div>
-      <div class="ap-main"><nav class="ap-side">${Object.entries(TABS).map(([k, [ic, t]]) => `<button data-t="${k}">${RS.icon(ic)}<span>${t}</span></button>`).join("")}</nav>
+      <div class="ap-main"><nav class="ap-side"><div class="ap-who"><span class="avatar">${RS.esc(initial(me))}</span><div><b>${RS.esc(nameOf(me))}</b><small>ID ${RS.esc(String(me.id).slice(0, 8))}</small></div></div>
+        ${AP_GROUPS.map(([g, ks]) => `<small class="ap-g">${g}</small>${ks.map((k) => `<button data-t="${k}">${RS.icon(TABS[k][0])}<span>${TABS[k][1]}</span></button>`).join("")}`).join("")}
+        <button class="ap-out" data-ap="logout">${RS.icon("logout")}<span>Sair</span></button></nav>
         <div class="ap-body" id="ap-body"></div></div></div>`;
     document.body.appendChild(w);
     let cur = tab;
@@ -234,12 +236,14 @@
       if (k === "overview") {
         const { data: deps } = await sb.from("transactions").select("*").eq("user_id", p.id).eq("type", "deposit")
           .order("created_at", { ascending: false }).limit(5);
-        body.innerHTML = `<div class="ap-card"><h3>Olá, ${RS.esc(nameOf(p))}<button class="btn btn-outline sm" data-ap="refresh">${RS.icon("refresh")} Atualizar</button></h3>
-            <div class="ap-saldo">${RS.icon("wallet")}<b>${RS.money(p.balance)}</b><small class="muted">Saldo</small><hr>
-              <div><span>Disponível para apostar</span><span>${RS.money(p.balance)}</span></div>
-              <div><span>Disponível para saque</span><span>${RS.money(p.balance)}</span></div></div>
-            <div class="ap-btns"><button class="btn btn-outline" data-ap="withdraw">Sacar</button><button class="btn btn-green" data-ap="deposit">Depositar</button></div></div>
-          <h3 style="margin:6px 2px 10px">Últimos depósitos</h3>
+        const q = (k, ic, t) => `<button ${k === "bets" ? 'data-ap="bets"' : `data-t="${k}"`}>${RS.icon(ic)}<span>${t}</span></button>`;
+        body.innerHTML = `<div class="ap-hero"><div class="ap-hero-top"><span>Olá, <b>${RS.esc(nameOf(p))}</b></span><button class="icon-btn" data-ap="refresh" aria-label="Atualizar">${RS.icon("refresh")}</button></div>
+            <small>Saldo total</small><b class="ap-hero-v">${RS.money(p.balance)}</b>
+            <div class="ap-hero-row"><div><small>Disponível para apostar</small><b>${RS.money(p.balance)}</b></div><div><small>Disponível para saque</small><b>${RS.money(p.balance)}</b></div></div>
+            <div class="ap-btns"><button class="btn ap-wd" data-ap="withdraw">Sacar</button><button class="btn btn-green" data-ap="deposit">Depositar</button></div></div>
+          <div class="ap-quick">${q("tx", "card", "Transações")}${q("bonus", "gift", "Bônus")}${q("bets", "receipt", "Minhas apostas")}${q("kyc", "id", "Verificação")}</div>
+          <button class="bz-wheel" data-ap="wheel"><span class="bz-wi">🎡</span><span><b>Roda da Sorte</b><small>Gire todo dia e ganhe apostas e rodadas grátis</small></span><i>Girar</i></button>
+          <h3 class="ap-sub">Últimos depósitos</h3>
           <div class="ap-card ap-list">${deps?.length ? deps.map(txRow).join("") : `<p class="muted">Nenhum depósito ainda.</p>`}</div>`;
       }
       if (k === "tx") {
@@ -343,7 +347,7 @@
             <div class="bz-foot">${o.exp ? `<span class="bz-exp">${RS.icon("clock")} Expira em ${o.exp}</span>` : `<span class="bz-st">${o.st || ""}</span>`}${o.btns || ""}</div>
             <details class="bz-terms"><summary>Termos e condições</summary><p>${o.terms}</p></details></div></div>`;
         const rwCard = (r) => {
-          const on = live(r), src = r.source?.startsWith("roleta") ? "Roleta diária" : "Promoção";
+          const on = live(r), src = r.source?.startsWith("roleta") ? "Roda da Sorte" : "Promoção";
           if (r.kind === "freebet") return card({ ic: "gift", cls: "bz-fb", title: `Aposta grátis ${RS.money(r.amount)}`, sub: `${src} · odd mínima ${(+r.min_odd).toFixed(2)}`,
             exp: on && left(r.expires_at), st: on ? "" : ST[r.status], btns: on ? `<button class="btn btn-green sm" data-fbuse="${r.id}">Usar agora</button>` : "",
             terms: `Vale para um bilhete simples ou múltiplo com jogos que ainda não começaram e odd total mínima de ${(+r.min_odd).toFixed(2)}. O valor da aposta grátis não volta: se o bilhete ganhar, você recebe só o lucro, direto no saldo e sem rollover. Não tem cashout. Uso único, válida até ${RS.date(r.expires_at)}.` });
@@ -365,7 +369,7 @@
           .sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).map((x) => (x.kind === "freebet" || x.kind === "freespins" ? rwCard(x) : bnCard(x)));
         const list = (id, arr, empty, on) => `<div class="bz-list${on ? "" : " hidden"}" data-bzl="${id}">${arr.length ? arr.join("") : `<p class="muted center small bz-empty">${empty}</p>`}</div>`;
         const whTxt = !wh?.on ? "" : wh.spun ? `Você já girou hoje: ${RS.esc(wh.label)}` : wh.bet >= wh.min ? "Seu giro de hoje está liberado!" : `Aposte ${RS.money(wh.min)} hoje e gire (falta ${RS.money(wh.min - wh.bet)})`;
-        body.innerHTML = `${wh?.on ? `<button class="bz-wheel" data-bzw><span class="bz-wi">🎡</span><span><b>Roleta diária</b><small>${whTxt}</small></span><i>${wh.spun ? "Ver" : "Girar"}</i></button>` : ""}
+        body.innerHTML = `${wh?.on ? `<button class="bz-wheel" data-bzw><span class="bz-wi">🎡</span><span><b>Roda da Sorte</b><small>${whTxt}</small></span><i>${wh.spun ? "Ver" : "Girar"}</i></button>` : ""}
           <div class="ap-card"><h3>Código promocional</h3>
             <form id="cp-f" style="display:flex;gap:8px"><input class="input" name="c" placeholder="Digite o código" required style="text-transform:uppercase"><button class="btn btn-dark">Resgatar</button></form></div>
           <div class="bz-tabs"><button data-bz="a" class="active">Disponíveis${avail.length ? ` <i>${avail.length}</i>` : ""}</button><button data-bz="b">Em andamento${active.length ? ` <i>${active.length}</i>` : ""}</button><button data-bz="h">Histórico</button></div>
@@ -489,6 +493,8 @@
       if (a === "deposit" || a === "withdraw") moneyModal(a);
       if (a === "pass") resetPass();
       if (a === "logout-all" && confirm("Sair da conta em todos os aparelhos?")) sb.auth.signOut({ scope: "global" }).then(() => (location.href = "index.html"));
+      if (a === "bets" || a === "wheel") { w.remove(); if (a === "wheel") { if (window.RSwheel) window.RSwheel(); else location.href = "index.html"; } else document.querySelector('[data-tabs] [data-tab="history"]')?.click(); }
+      if (a === "logout") sb.auth.signOut().then(() => (location.href = "index.html"));
       if (a === "export") exportData();
       if (a === "delete") RS.support();
       const cp = e.target.closest("[data-copy]")?.dataset.copy;

@@ -88,3 +88,45 @@
 .app-banner b { display: block; font-size: 14px; }
 .app-banner small { color: var(--muted); font-size: 12px; }
 .app-banner .btn { flex: none; }
+
+/* conta no estilo Betano */
+.acct-pop { padding: 14px; }
+.acct-who small { font-size: 12px; }
+.acct-bal2 { display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, #1c2233, #2c3447); color: #fff; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+.acct-bal2 small { display: block; font-size: 12px; opacity: .75; }
+.acct-bal2 b { font-size: 22px; font-weight: 900; }
+.acct-bal2 .icon-btn { color: #fff; background: rgba(255,255,255,.12); border-radius: 50%; width: 36px; height: 36px; }
+.acct-menu { display: grid; border-top: 1px solid var(--line); margin: 4px -14px 0; max-height: 46vh; overflow-y: auto; }
+.acct-menu button { display: flex; align-items: center; gap: 12px; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 12px 16px; font: inherit; font-size: 15px; color: var(--text); cursor: pointer; text-align: left; }
+.acct-menu button:hover { background: var(--card-2); }
+.acct-menu svg.i { width: 20px; height: 20px; color: var(--primary); flex: none; }
+.acct-menu span { flex: 1; }
+.acct-menu i { font-style: normal; font-size: 20px; color: var(--muted); }
+.acct-out { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 10px; background: none; border: 0; color: var(--primary); font: inherit; font-weight: 700; font-size: 15px; padding: 10px; cursor: pointer; }
+.acct-out svg.i { width: 18px; height: 18px; }
+.ap-head { background: linear-gradient(90deg, #ff5a00, #ff7a1a); box-shadow: 0 2px 10px rgba(255,90,0,.3); }
+.ap-side { padding-top: 0; }
+.ap-who { display: flex; align-items: center; gap: 10px; padding: 16px 12px 12px; margin: 0 -8px 6px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, #fff3ec, #fff); }
+.ap-who .avatar { background: var(--primary); color: #fff; width: 42px; height: 42px; cursor: default; flex: none; }
+.ap-who b { display: block; font-size: 15px; } .ap-who small { color: var(--muted); font-size: 12px; }
+.ap-g { display: block; padding: 12px 12px 4px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.ap-out { display: flex; align-items: center; gap: 12px; margin-top: auto; background: none; border: 0; border-top: 1px solid var(--line); padding: 14px 12px; font: inherit; font-size: 15px; font-weight: 700; color: var(--primary); cursor: pointer; }
+.ap-out svg.i { width: 20px; height: 20px; }
+.ap-body { background: #f3f4f8; }
+.ap-card { border: 0; box-shadow: 0 1px 4px rgba(20,30,60,.08); }
+.ap-card h3 { font-size: 16px; }
+.ap-field label { display: block; margin-bottom: 5px; color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+.ap-field .input { border-radius: 10px; background: #f7f8fb; }
+.ap-hero { position: relative; overflow: hidden; color: #fff; border-radius: 16px; padding: 16px; margin-bottom: 14px; background: radial-gradient(circle at 100% 0, rgba(255,90,0,.55), transparent 55%), linear-gradient(135deg, #1c2233, #10131d); box-shadow: 0 8px 20px -8px rgba(0,0,0,.5); }
+.ap-hero-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 15px; }
+.ap-hero-top .icon-btn { color: #fff; background: rgba(255,255,255,.12); border-radius: 50%; width: 36px; height: 36px; }
+.ap-hero > small { font-size: 12px; opacity: .75; }
+.ap-hero-v { display: block; font-size: 30px; font-weight: 900; margin: 2px 0 12px; }
+.ap-hero-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 0; margin-bottom: 12px; border-top: 1px solid rgba(255,255,255,.12); border-bottom: 1px solid rgba(255,255,255,.12); }
+.ap-hero-row small { display: block; font-size: 11px; opacity: .7; } .ap-hero-row b { font-size: 15px; }
+.ap-hero .ap-wd { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.3); }
+.ap-quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+.ap-quick button { display: grid; justify-items: center; gap: 6px; background: #fff; border: 0; border-radius: 14px; padding: 12px 4px; font: inherit; font-size: 11.5px; font-weight: 700; color: var(--text); cursor: pointer; box-shadow: 0 1px 4px rgba(20,30,60,.08); }
+.ap-quick svg.i { width: 34px; height: 34px; padding: 7px; border-radius: 50%; background: #ffe7da; color: var(--primary); }
+.ap-sub { margin: 6px 2px 10px; font-size: 16px; }
+.acct-who .avatar, .ap-who .avatar { display: grid; place-items: center; font-size: 18px; }

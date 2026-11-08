@@ -31,15 +31,14 @@
     };
     (async () => {
       const { data } = await sb.from("banners").select("*").order("sort").order("id");
-      const promo = `<a class="pc pc-dark pc-wheel" href="#" data-wheel><span class="pc-glow"></span><span class="pc-shine"></span><span class="pc-art pc-wheel-art"></span>
-          <span class="pc-body"><b>Roleta diária</b><small id="pc-wheel-sub">Gire e ganhe apostas e rodadas grátis</small><span class="pc-cta">Girar agora <i>→</i></span></span></a>
-        <a class="pc pc-navy pc-top hidden" href="#" id="pc-top"></a>`;
-      strip.insertAdjacentHTML("beforebegin", `<div class="pc-strip" id="pc-strip">${promo}${(data || []).map((b) => `<a class="pc pc-${RS.esc(b.theme)}${b.image_url ? " pc-img" : ""}" ${linkOf(b)}
+      const promo = `<a class="pt pt-wheel" href="#" data-wheel><span class="pt-ic">${RS.icon("star")}</span><span class="pt-art pc-wheel-art"></span>
+          <span class="pt-t"><b>Roda da Sorte</b><small id="pc-wheel-sub">Gire grátis todo dia</small></span></a>
+        <a class="pt pt-wide pt-top hidden" href="#" id="pc-top"></a>`;
+      strip.insertAdjacentHTML("beforebegin", `<div class="pc-strip pt-strip" id="pc-strip">${promo}${(data || []).map((b) => `<a class="pt pt-wide pt-${RS.esc(b.theme)}${b.image_url ? " pt-img" : ""}" ${linkOf(b)}
           ${b.image_url ? `style="--pc-img:url('${RS.esc(b.image_url)}')"` : ""}>
-          <span class="pc-glow"></span><span class="pc-shine"></span>
-          ${b.image_url ? "" : `<span class="pc-art">${RS.icon(b.icon || "ball")}</span>`}
-          <span class="pc-body"><b>${RS.esc(b.title)}</b>${b.subtitle ? `<small>${RS.esc(b.subtitle)}</small>` : ""}
-          ${b.cta ? `<span class="pc-cta">${RS.esc(b.cta)} <i>→</i></span>` : ""}</span></a>`).join("")}</div>`);
+          <span class="pt-ic">${RS.icon(b.icon || "ball")}</span>${b.image_url ? "" : `<span class="pt-art pt-art-ic">${RS.icon(b.icon || "ball")}</span>`}
+          <span class="pt-t">${b.subtitle ? `<small class="pt-kick">${RS.esc(b.subtitle)}</small>` : ""}<b>${RS.esc(b.title)}</b>
+          ${b.cta ? `<span class="pt-pill">${RS.esc(b.cta)}</span>` : ""}</span></a>`).join("")}</div>`);
       wheelSub(); loadTop();
     })();
     document.addEventListener("click", (e) => { if (e.target.closest("#pc-strip [data-promo-dep]")) { e.preventDefault(); document.dispatchEvent(new Event("rs:deposit")); } });
@@ -47,62 +46,102 @@
   }
 
   // ---------- Roleta diária e "Mais apostado do dia" (primeiros cartões da fileira de banners) ----------
-  const WC = ["#ff5a00", "#1d3fae", "#0f9d55", "#6a1fd6"];
+  const WG = [["#ff8a1f", "#e64400"], ["#3d7bff", "#1636a8"], ["#2fe08a", "#0b8a48"], ["#b45cff", "#5d17c9"], ["#ff4f9a", "#c4105a"]];
   const wLabel = (l) => { const m = /R\$\s*\d+/.exec(l), n = /^(\d+)\s+rodadas/i.exec(l);
     return m ? [m[0], "APOSTA GRÁTIS"] : n ? [n[1], "RODADAS GRÁTIS"] : ["✕", "TENTE AMANHÃ"]; };
-  function wheelSvg(prizes, labels = true) {
-    const N = prizes.length, seg = 360 / N, pt = (a, r) => `${(r * Math.sin((a * Math.PI) / 180)).toFixed(2)},${(-r * Math.cos((a * Math.PI) / 180)).toFixed(2)}`;
+  const wPt = (a, r) => `${(r * Math.sin((a * Math.PI) / 180)).toFixed(2)},${(-r * Math.cos((a * Math.PI) / 180)).toFixed(2)}`;
+  function wheelDisc(prizes, labels = true) {
+    const N = prizes.length, seg = 360 / N, top = Math.max(...prizes.map((l) => +(/R\$\s*(\d+)/.exec(l)?.[1] || 0)));
     let c = 0;
-    return `<svg viewBox="-100 -100 200 200" aria-hidden="true"><circle r="99" fill="#141a28"/>${prizes.map((l, i) => {
-      const none = wLabel(l)[0] === "✕", fill = none ? (i % 2 ? "#2c3447" : "#3a4458") : WC[c++ % WC.length], [big, small] = wLabel(l);
-      return `<path d="M0,0 L${pt(i * seg, 94)} A94,94 0 0 1 ${pt((i + 1) * seg, 94)} Z" fill="${fill}" stroke="#fff" stroke-width="1.5"/>
-        ${labels ? `<g transform="rotate(${(i + 0.5) * seg})"><text y="-66" text-anchor="middle" fill="#fff" font-weight="900" font-size="${big.length > 3 ? 12 : 15}">${RS.esc(big)}</text>
-        <text y="-54" text-anchor="middle" fill="#fff" font-size="5.6" font-weight="700">${small}</text></g>` : ""}`;
-    }).join("")}<circle r="15" fill="#fff"/><circle r="10" fill="#ff5a00"/></svg>`;
+    const defs = WG.map((g, i) => `<radialGradient id="wg${i}" cx="0" cy="0" r="96" gradientUnits="userSpaceOnUse"><stop offset=".25" stop-color="${g[0]}"/><stop offset="1" stop-color="${g[1]}"/></radialGradient>`).join("")
+      + `<radialGradient id="wgn" cx="0" cy="0" r="96" gradientUnits="userSpaceOnUse"><stop offset=".25" stop-color="#2a3352"/><stop offset="1" stop-color="#121833"/></radialGradient>
+         <radialGradient id="wgt" cx="0" cy="0" r="96" gradientUnits="userSpaceOnUse"><stop offset=".25" stop-color="#ffe27a"/><stop offset="1" stop-color="#d68a00"/></radialGradient>`;
+    return `<svg viewBox="-100 -100 200 200" aria-hidden="true"><defs>${defs}</defs>${prizes.map((l, i) => {
+      const [big, small] = wLabel(l), none = big === "✕", jack = !none && top >= 10 && big === `R$ ${top}`;
+      const fill = none ? "url(#wgn)" : jack ? "url(#wgt)" : `url(#wg${c++ % WG.length})`;
+      return `<path d="M0,0 L${wPt(i * seg, 92)} A92,92 0 0 1 ${wPt((i + 1) * seg, 92)} Z" fill="${fill}" stroke="#ffd34d" stroke-width="1.2"/>
+        ${labels ? `<g transform="rotate(${(i + 0.5) * seg})"><text y="-62" text-anchor="middle" fill="${jack ? "#3b1d00" : "#fff"}" font-weight="900" font-size="${none ? 16 : big.length > 3 ? 13 : 17}" style="paint-order:stroke" stroke="rgba(0,0,0,.25)" stroke-width="${jack ? 0 : 1.5}">${RS.esc(big)}</text>
+        <text y="-50" text-anchor="middle" fill="${jack ? "#3b1d00" : "#fff"}" font-size="4.5" font-weight="800">${small}</text>
+        ${jack ? `<text y="-80" text-anchor="middle" font-size="9">👑</text>` : ""}</g>` : ""}`;
+    }).join("")}<circle r="92" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="8"/></svg>`;
+  }
+  function wheelFrame(n = 16) {
+    return `<svg viewBox="-100 -100 200 200" aria-hidden="true"><defs><linearGradient id="wfr" x1="0" y1="-1" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff2a8"/><stop offset=".45" stop-color="#f5b301"/><stop offset="1" stop-color="#a86500"/></linearGradient></defs>
+      <circle r="96" fill="none" stroke="url(#wfr)" stroke-width="9"/><circle r="100" fill="none" stroke="#7a4a00" stroke-width="1.5"/><circle r="91.5" fill="none" stroke="#7a4a00" stroke-width="1"/>
+      ${Array.from({ length: n }, (_, i) => { const [x, y] = wPt((i * 360) / n, 96).split(","); return `<circle class="wb ${i % 2 ? "wb2" : ""}" cx="${x}" cy="${y}" r="3.1"/>`; }).join("")}</svg>`;
+  }
+  const wheelSvg = (prizes, labels = true) => `<span class="wh-mini">${wheelDisc(prizes, labels)}${wheelFrame(12)}</span>`;
+  function confetti(host) {
+    const box = document.createElement("div");
+    box.className = "wh-conf";
+    const cs = ["#ffd34d", "#ff5a00", "#2fe08a", "#3d7bff", "#ff4f9a", "#fff"];
+    box.innerHTML = Array.from({ length: 70 }, (_, i) => `<i style="left:${Math.random() * 100}%;background:${cs[i % cs.length]};animation-delay:${(Math.random() * 0.6).toFixed(2)}s;animation-duration:${(1.8 + Math.random() * 1.6).toFixed(2)}s;transform:rotate(${Math.random() * 360}deg)"></i>`).join("");
+    host.appendChild(box);
+    setTimeout(() => box.remove(), 4200);
   }
   async function openWheel() {
     const st = await RS.rpc("wheel_status").catch(() => null);
     if (!st?.on) { RS.toast("Roleta indisponível no momento.", "error"); return; }
     const seg = 360 / st.prizes.length, at = (i) => 360 - (i + 0.5) * seg;
-    const falta = Math.max(0, st.min - st.bet);
-    const msg = !st.logged ? "Entre na sua conta para girar." : st.spun ? `Você já girou hoje: <b>${RS.esc(st.label)}</b>. Volte amanhã!`
-      : falta > 0 ? `Aposte ${RS.money(st.min)} hoje para liberar o giro. Falta ${RS.money(falta)}.` : "Seu giro de hoje está liberado!";
-    const btn = !st.logged ? ["login", "Entrar para girar"] : st.spun ? ["bonus", "Ver meus bônus"] : falta > 0 ? ["bet", "Apostar agora"] : ["spin", "GIRAR"];
-    const m = RS.modal(`<div class="wh"><h3>Roleta diária</h3><p class="muted small">1 giro por dia para quem apostou ${RS.money(st.min)} ou mais no dia.</p>
-      <div class="wh-box"><i class="wh-pin"></i><div class="wh-disc" style="transform:rotate(${st.spun ? at(st.idx) : 0}deg)">${wheelSvg(st.prizes)}</div></div>
-      <p class="wh-msg">${msg}</p><button class="btn ${btn[0] === "spin" ? "btn-green" : "btn-primary"} w-full" data-wh="${btn[0]}">${btn[1]}</button>
-      <p class="muted small wh-terms">Prêmios: apostas grátis (só o lucro vai para o saldo, sem rollover, odd mínima 1,50) e rodadas grátis no cassino (ganho sem rollover, até R$ 50). Validade de 7 dias.</p></div>`);
+    const falta = Math.max(0, st.min - (st.bet || 0)), pct = Math.min(100, Math.round(((st.bet || 0) / st.min) * 100));
+    const state = !st.logged ? "login" : st.spun ? "spun" : falta > 0 ? "lock" : "spin";
+    const msg = { login: "Entre na sua conta para girar a roleta.", spun: `Você já girou hoje: <b>${RS.esc(st.label)}</b>. Volte amanhã!`,
+      lock: `Aposte <b>${RS.money(falta)}</b> hoje para liberar seu giro.`, spin: "Seu giro de hoje está liberado! Toque em <b>GIRAR</b>." }[state];
+    const btn = { login: "Entrar para girar", spun: "Ver meus bônus", lock: "Apostar agora", spin: "GIRAR AGORA" }[state];
+    const kinds = [...new Set(st.prizes.map((l) => wLabel(l)).filter((x) => x[0] !== "✕").map((x) => `${x[0]} ${x[1].toLowerCase()}`))];
+    const m = RS.modal(`<div class="wh wh-${state}"><div class="wh-stars"></div>
+      <div class="wh-kick">🎁 Prêmios todos os dias</div><h3>Roda da Sorte</h3>
+      ${st.logged && !st.spun ? `<div class="wh-prog"><div><span>Apostado hoje</span><b>${RS.money(Math.min(st.bet || 0, st.min))} / ${RS.money(st.min)}</b></div><i><s style="width:${pct}%"></s></i></div>` : ""}
+      <div class="wh-box"><i class="wh-pin"></i><div class="wh-disc" style="transform:rotate(${st.spun ? at(st.idx) : 0}deg)">${wheelDisc(st.prizes)}</div>
+        <div class="wh-frame">${wheelFrame(20)}</div><button class="wh-hub" data-wh="${state}" aria-label="${btn}">${state === "spin" ? "GIRAR" : state === "lock" ? "🔒" : state === "spun" ? "✓" : "▶"}</button></div>
+      <p class="wh-msg">${msg}</p>
+      <button class="btn wh-go w-full" data-wh="${state}">${btn}</button>
+      <div class="wh-legend">${kinds.map((k) => `<span>${RS.esc(k)}</span>`).join("")}</div>
+      <p class="small wh-terms">1 giro por dia para quem apostou ${RS.money(st.min)} no dia. Aposta grátis: só o lucro vai para o saldo, sem rollover, odd mínima 1,50. Rodadas grátis: ganho sem rollover, até R$ 50. Validade de 7 dias.</p></div>`);
+    m.classList.add("wh-modal");
     m.addEventListener("click", async (e) => {
       const b = e.target.closest("[data-wh]");
       if (!b) return;
       const a = b.dataset.wh;
       if (a === "login") { location.href = "login.html"; return; }
-      if (a === "bet" || a === "close") { m.remove(); return; }
-      if (a === "bonus") { m.remove(); document.dispatchEvent(new Event("rs:bonus")); return; }
-      b.disabled = true; b.textContent = "Girando…";
+      if (a === "lock") {
+        RS.toast(`Falta apostar ${RS.money(falta)} hoje para liberar o giro.`, "error");
+        if (b.classList.contains("wh-go")) { m.remove(); document.querySelector('[data-tabs] [data-tab="sports"]')?.click(); RS.$("#sports, .sports, main")?.scrollIntoView({ behavior: "smooth" }); }
+        return;
+      }
+      if (a === "close") { m.remove(); return; }
+      if (a === "spun" || a === "bonus") { m.remove(); document.dispatchEvent(new Event("rs:bonus")); return; }
+      if (m.dataset.busy) return;
+      m.dataset.busy = 1;
+      const go = RS.$(".wh-go", m), hub = RS.$(".wh-hub", m);
+      go.disabled = true; go.textContent = "Girando…"; m.classList.add("wh-spinning");
       try {
         const r = await RS.rpc("wheel_spin");
         const disc = RS.$(".wh-disc", m);
-        disc.style.transition = "transform 4.8s cubic-bezier(.12,.7,.12,1)";
-        disc.style.transform = `rotate(${360 * 7 + at(r.idx)}deg)`;
+        disc.style.transition = "transform 5.2s cubic-bezier(.1,.75,.1,1)";
+        disc.style.transform = `rotate(${360 * 8 + at(r.idx) + (Math.random() - 0.5) * seg * 0.6}deg)`;
         setTimeout(() => {
           const win = r.kind !== "none";
-          RS.$(".wh-msg", m).innerHTML = win ? `🎉 Você ganhou <b>${RS.esc(r.label)}</b>! Já está em Minha conta → Bônus.` : "Não foi dessa vez. Volte amanhã para girar de novo!";
-          b.disabled = false; b.dataset.wh = win ? "bonus" : "close"; b.textContent = win ? "Usar agora" : "Fechar";
-          m.classList.toggle("wh-win", win);
+          m.classList.remove("wh-spinning");
+          m.classList.add(win ? "wh-win" : "wh-lose");
+          RS.$(".wh-msg", m).innerHTML = win ? `<span class="wh-prize"><small>Você ganhou</small><b>${RS.esc(r.label)}</b><small>Já está em Minha conta → Bônus</small></span>` : "Não foi dessa vez. Volte amanhã para girar de novo!";
+          if (win) confetti(RS.$(".rs-modal-box", m));
+          go.disabled = false; go.dataset.wh = win ? "bonus" : "close"; go.textContent = win ? "Usar meu prêmio" : "Fechar";
+          hub.dataset.wh = go.dataset.wh; hub.textContent = win ? "🎉" : "✓";
           wheelSub();
-        }, 5000);
-      } catch (err) { RS.toast(err.message, "error"); b.disabled = false; b.textContent = "GIRAR"; }
+        }, 5400);
+      } catch (err) { RS.toast(err.message, "error"); go.disabled = false; go.textContent = "GIRAR AGORA"; m.classList.remove("wh-spinning"); delete m.dataset.busy; }
     });
   }
   window.RSwheel = openWheel;
   async function wheelSub() {
     const el = RS.$("#pc-wheel-sub"), st = await RS.rpc("wheel_status").catch(() => null);
-    const card = el?.closest(".pc");
+    const card = el?.closest(".pt");
     if (!st?.on) { card?.remove(); return; }
     RS.$(".pc-wheel-art", card).innerHTML = wheelSvg(st.prizes, false);
-    el.textContent = st.spun ? "Você já girou hoje. Volte amanhã!" : st.logged && st.bet >= st.min ? "Seu giro de hoje está liberado!" : `Aposte ${RS.money(st.min)} no dia e gire para ganhar apostas e rodadas grátis`;
-    RS.$(".pc-cta", card).innerHTML = `${st.spun ? "Ver roleta" : "Girar agora"} <i>→</i>`;
+    el.textContent = st.spun ? "Volte amanhã" : st.logged && st.bet >= st.min ? "Giro liberado!" : "Gire grátis todo dia";
+    card.classList.toggle("pt-ready", !st.spun && st.logged && st.bet >= st.min);
   }
   let topPick = null;
   async function loadTop() {
@@ -113,10 +152,10 @@
     const side = topPick.pick === "home" ? topPick.home : topPick.pick === "away" ? topPick.away : "Empate";
     const logo = (u) => (u ? `<img src="${RS.esc(u)}" alt="" onerror="this.remove()">` : "");
     const hora = new Date(topPick.starts_at).toLocaleString("pt-BR", { weekday: "short", hour: "2-digit", minute: "2-digit" });
-    el.innerHTML = `<span class="pc-glow"></span><span class="pc-shine"></span><span class="pc-top-logos">${logo(topPick.home_logo)}${logo(topPick.away_logo)}</span>
-      <span class="pc-body"><small class="pc-kick">🔥 Mais apostado do dia · ${RS.esc(topPick.league || "")} · ${hora}</small><b>${RS.esc(topPick.home)} x ${RS.esc(topPick.away)}</b>
-      <small><b class="pc-pct">${topPick.pct}%</b> apostaram em ${RS.esc(side)} · ${topPick.bets} bilhetes</small>
-      <span class="pc-cta">Apostar junto ${Number(topPick.odd).toFixed(2)} <i>→</i></span></span>`;
+    el.innerHTML = `<span class="pt-ic">${RS.icon("fire")}</span><small class="pt-corner">Mais apostado do dia</small>
+      <span class="pt-art pc-top-logos">${logo(topPick.home_logo)}${logo(topPick.away_logo)}</span>
+      <span class="pt-t"><small class="pt-kick">${RS.esc(topPick.league || "")} · ${hora}</small><b>${RS.esc(topPick.home)} x ${RS.esc(topPick.away)}</b>
+      <span class="pt-pill"><em>${topPick.pct}%</em> em ${RS.esc(side)} · ${Number(topPick.odd).toFixed(2)}</span></span>`;
     el.classList.remove("hidden");
   }
   document.addEventListener("click", (e) => {
