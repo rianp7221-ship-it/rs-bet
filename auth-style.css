@@ -997,3 +997,6 @@ body.on-casino .bottom-nav a.bn-cz.active { color: #ff7a1a; }
 .pt-green { --pt-bg: linear-gradient(150deg, #1fbf6d, #0b6b3a 60%, #062a17); --pt-g: rgba(198,255,107,.3); }
 .pt-purple { --pt-bg: linear-gradient(150deg, #9a45f5, #4d1497 60%, #1a0838); --pt-g: rgba(255,95,210,.3); }
 .pt-dark { --pt-bg: linear-gradient(160deg, #2c3447, #12151f); }
+
+/* card grande de jogos com foto de fundo */
+.feat-card.has-photo { background: linear-gradient(180deg, rgba(10,14,30,.05) 0%, rgba(10,14,30,.35) 40%, rgba(10,14,30,.9) 78%), var(--feat-img) center / cover no-repeat, #1d6a35; }

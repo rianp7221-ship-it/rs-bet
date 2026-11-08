@@ -319,6 +319,14 @@
     el.querySelector(".mv-body").scrollTop = keep;
   }
 
+  const FEAT_IMG = { futebol: 8, basquete: 3, tenis: 2, volei: 1 };
+  const hash = (t) => [...String(t)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+  // foto de fundo por esporte; no futebol a foto é fixa por liga, para os jogos da mesma liga ficarem iguais
+  function featImg(m, key) {
+    const n = FEAT_IMG[key] ? key : "futebol";
+    return `img/feat/${n}-${(hash(n === "futebol" ? m.league : m.id) % FEAT_IMG[n]) + 1}.webp`;
+  }
+
   function feat(m) {
     const sp = "sp-" + m.sport.normalize("NFD").replace(/[^\w]/g, "").toLowerCase();
     const top = live(m)
@@ -326,7 +334,7 @@
       : `${RS.icon("clock")} ${dayLabel(m.starts_at)} ${hhmm(m.starts_at)}`;
     const big = safeUrl(m.home_logo) && safeUrl(m.away_logo)
       ? `<div class="feat-crests"><img src="${RS.esc(m.home_logo)}" alt=""><img src="${RS.esc(m.away_logo)}" alt=""></div>` : "";
-    return `<div class="feat-card ${sp}${big ? " has-crests" : ""}"><div class="feat-top">${top}</div>${big}
+    return `<div class="feat-card ${sp}${big ? " has-crests" : ""} has-photo" style="--feat-img:url('${featImg(m, sp.slice(3))}')"><div class="feat-top">${top}</div>${big}
       <div class="feat-teams"><b>${crest(m, "home")}${RS.esc(m.home)}</b><b>${crest(m, "away")}${RS.esc(m.away)}</b></div>${odds(m)}</div>`;
   }
 
