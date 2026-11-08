@@ -991,6 +991,36 @@ body.on-casino .bottom-nav a.bn-cz.active { color: #ff7a1a; }
 .pt-top .pc-top-logos img { width: 44px; height: 44px; }
 .pt-art-ic { right: -10px; top: 18px; transform: rotate(-12deg); opacity: .9; }
 .pt-art-ic svg.i { width: 96px; height: 96px; color: rgba(255,255,255,.25); }
+.pt-casino { --pt-bg: radial-gradient(circle at 76% 34%, rgba(122,76,255,.55), transparent 48%), linear-gradient(150deg, #2b5ce6, #14246e 60%, #0a0f2a); }
+.pt-casino .pt-kick { display: none; }
+.ptc { inset: 0; pointer-events: none; }
+.ptc i { position: absolute; display: block; }
+.ptc-rays { right: -70px; top: -84px; width: 260px; height: 260px; border-radius: 50%; background: repeating-conic-gradient(rgba(255,255,255,.13) 0 7deg, transparent 7deg 18deg);
+  -webkit-mask: radial-gradient(circle, #000 18%, transparent 62%); mask: radial-gradient(circle, #000 18%, transparent 62%); animation: ptc-spin 30s linear infinite; }
+.ptc-glow { right: 20px; top: -10px; width: 120px; height: 110px; border-radius: 50%; background: radial-gradient(circle, rgba(255,196,60,.55), transparent 68%); animation: ptc-pulse 3s ease-in-out infinite; }
+.ptc-covers { position: absolute; right: 8px; top: 8px; display: flex; align-items: center; }
+.ptc-covers img { width: 58px; aspect-ratio: 1; border-radius: 12px; object-fit: cover; margin-left: -20px; border: 2px solid #ffd34d; background: #0f1522;
+  box-shadow: 0 8px 18px rgba(0,0,0,.55), 0 0 14px rgba(255,200,60,.35); transform: translateY(6px) rotate(-12deg); animation: ptc-l 3.4s ease-in-out infinite; }
+.ptc-covers img:nth-child(2) { width: 72px; z-index: 1; border-radius: 14px; transform: none; box-shadow: 0 10px 22px rgba(0,0,0,.6), 0 0 20px rgba(255,200,60,.6); animation-name: ptc-c; }
+.ptc-covers img:nth-child(3) { z-index: 0; transform: translateY(6px) rotate(12deg); animation-name: ptc-r; animation-delay: -1.7s; }
+.ptc-coin { width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff6c2, #ffcf2e 42%, #c98a00 78%); box-shadow: inset 0 0 0 2px rgba(150,95,0,.55), 0 3px 8px rgba(0,0,0,.45); animation: ptc-coin 2.8s ease-in-out infinite; }
+.ptc-coin.c1 { right: 154px; top: 22px; }
+.ptc-coin.c2 { right: 4px; top: 86px; width: 13px; height: 13px; animation-delay: -1s; }
+.ptc-coin.c3 { right: 140px; top: 70px; width: 11px; height: 11px; animation-delay: -2s; }
+.ptc-spark { width: 12px; height: 12px; background: #fff; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); filter: drop-shadow(0 0 4px #ffd34d); animation: ptc-tw 1.8s ease-in-out infinite; }
+.ptc-spark.s1 { right: 62px; top: 2px; }
+.ptc-spark.s2 { right: 128px; top: 8px; width: 9px; height: 9px; animation-delay: -.6s; }
+.ptc-spark.s3 { right: 18px; top: 78px; width: 10px; height: 10px; animation-delay: -1.2s; }
+.ptc-chip { justify-self: start; display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .02em;
+  color: #2a1a00; background: linear-gradient(180deg, #ffe680, #ffb81e); box-shadow: 0 3px 10px rgba(255,184,30,.35); }
+@keyframes ptc-spin { to { transform: rotate(360deg); } }
+@keyframes ptc-pulse { 50% { opacity: .55; transform: scale(.9); } }
+@keyframes ptc-l { 50% { transform: translateY(3px) rotate(-14deg); } }
+@keyframes ptc-c { 50% { transform: translateY(-3px) scale(1.04); } }
+@keyframes ptc-r { 50% { transform: translateY(3px) rotate(14deg); } }
+@keyframes ptc-coin { 50% { transform: translateY(-5px) rotate(25deg); } }
+@keyframes ptc-tw { 0%, 100% { opacity: .2; transform: scale(.5); } 50% { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .ptc i, .ptc-covers img { animation: none !important; } }
 .pt-img { background: linear-gradient(180deg, transparent 30%, rgba(0,0,0,.85)), var(--pc-img) center / cover no-repeat; }
 .pt-orange { --pt-bg: linear-gradient(150deg, #ff7a1a, #c43c00 60%, #2a1208); --pt-g: rgba(255,210,80,.35); }
 .pt-navy { --pt-bg: linear-gradient(150deg, #2b5ce6, #14246e 60%, #0a0f2a); --pt-g: rgba(0,212,255,.3); }
