@@ -16,6 +16,7 @@
         <input class="input" id="u-q" placeholder="E-mail, usuário, ID ou IP" style="min-width:220px">
         <select class="input" id="u-st"><option value="">Todos</option><option value="ativo">Ativos</option><option value="bloqueado">Bloqueados</option><option value="equipe">Equipe</option></select>
         <select class="input" id="u-risk"><option value="">Qualquer risco</option><option value="baixo">Risco baixo</option><option value="medio">Risco médio</option><option value="alto">Risco alto</option></select>
+        <select class="input" id="u-ord"><option value="">Mais recentes</option><option value="saldo">Maior saldo</option></select>
         <input class="input" id="u-min" type="number" placeholder="Saldo mín." style="width:110px">
         <input class="input" id="u-max" type="number" placeholder="Saldo máx." style="width:110px">
         <input class="input" id="u-country" placeholder="País (BR)" maxlength="2" style="width:90px">
@@ -28,7 +29,7 @@
       if (!more) shown = [];
       const r = await RS.rpc("admin_search_users", { p_q: val("#u-q") || null, p_status: val("#u-st") || null, p_risk: val("#u-risk") || null,
         p_min_balance: val("#u-min") ? Number(val("#u-min")) : null, p_max_balance: val("#u-max") ? Number(val("#u-max")) : null,
-        p_country: val("#u-country") || null, p_limit: PAGE, p_offset: shown.length }).catch((e) => { RS.toast(e.message, "error"); return { rows: [], total: 0 }; });
+        p_country: val("#u-country") || null, p_order: val("#u-ord") || null, p_limit: PAGE, p_offset: shown.length }).catch((e) => { RS.toast(e.message, "error"); return { rows: [], total: 0 }; });
       if (my !== seq) return;
       shown = shown.concat(r.rows);
       RS.$("#u-list").innerHTML = `<p class="muted small" style="margin-bottom:6px">${shown.length < r.total ? `${shown.length} de ` : ""}${r.total} usuário(s)</p>` + table(
@@ -50,7 +51,7 @@
     }
     let t;
     ["#u-q", "#u-min", "#u-max", "#u-country"].forEach((id) => (RS.$(id).oninput = () => { clearTimeout(t); t = setTimeout(() => load(), 350); }));
-    ["#u-st", "#u-risk"].forEach((id) => (RS.$(id).onchange = () => load()));
+    ["#u-st", "#u-risk", "#u-ord"].forEach((id) => (RS.$(id).onchange = () => load()));
     RS.$("#u-pending").onclick = async (e) => {
       const b = e.target.closest("[data-pa]");
       if (b && await act("admin_decide_action", { p_id: +b.dataset.pa, p_approve: !!b.dataset.ok, p_reason: null }, b.dataset.ok ? "Ajuste aprovado" : "Pedido recusado")) load();
