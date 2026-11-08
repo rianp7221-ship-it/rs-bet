@@ -34,15 +34,42 @@
       const promo = `<a class="pt pt-wheel" href="#" data-wheel><span class="pt-ic">${RS.icon("star")}</span><span class="pt-art pc-wheel-art"></span>
           <span class="pt-t"><b>Roda da Sorte</b><small id="pc-wheel-sub">Gire grátis todo dia</small></span></a>
         <a class="pt pt-wide pt-top hidden" href="#" id="pc-top"></a>`;
-      strip.insertAdjacentHTML("beforebegin", `<div class="pc-strip pt-strip" id="pc-strip">${promo}${(data || []).map((b) => `<a class="pt pt-wide pt-${RS.esc(b.theme)}${b.image_url ? " pt-img" : ""}" ${linkOf(b)}
+      const czArt = `<span class="pt-art ptc"><i class="ptc-rays"></i><i class="ptc-glow"></i><span class="ptc-covers"></span>
+          <i class="ptc-coin c1"></i><i class="ptc-coin c2"></i><i class="ptc-coin c3"></i><i class="ptc-spark s1"></i><i class="ptc-spark s2"></i><i class="ptc-spark s3"></i></span>`;
+      strip.insertAdjacentHTML("beforebegin", `<div class="pc-strip pt-strip" id="pc-strip">${promo}${(data || []).map((b) => `<a class="pt pt-wide pt-${RS.esc(b.theme)}${b.image_url ? " pt-img" : b.link === "#casino" ? " pt-casino" : ""}" ${linkOf(b)}
           ${b.image_url ? `style="--pc-img:url('${RS.esc(b.image_url)}')"` : ""}>
-          <span class="pt-ic">${RS.icon(b.icon || "ball")}</span>${b.image_url ? "" : `<span class="pt-art pt-art-ic">${RS.icon(b.icon || "ball")}</span>`}
-          <span class="pt-t">${b.subtitle ? `<small class="pt-kick">${RS.esc(b.subtitle)}</small>` : ""}<b>${RS.esc(b.title)}</b>
+          <span class="pt-ic">${RS.icon(b.icon || "ball")}</span>${b.image_url ? "" : b.link === "#casino" ? czArt
+            : `<span class="pt-art pt-art-ic">${RS.icon(b.icon || "ball")}</span>`}
+          <span class="pt-t">${b.subtitle ? `<small class="pt-kick">${RS.esc(b.subtitle)}</small>` : ""}${!b.image_url && b.link === "#casino" ? `<span class="ptc-chip hidden"></span>` : ""}<b>${RS.esc(b.title)}</b>
           ${b.cta ? `<span class="pt-pill">${RS.esc(b.cta)}</span>` : ""}</span></a>`).join("")}</div>`);
-      wheelSub(); loadTop();
+      wheelSub(); loadTop(); casinoArt();
     })();
     document.addEventListener("click", (e) => { if (e.target.closest("#pc-strip [data-promo-dep]")) { e.preventDefault(); document.dispatchEvent(new Event("rs:deposit")); } });
     strip.addEventListener("click", (e) => { if (e.target.closest("[data-promo-dep]")) { e.preventDefault(); document.dispatchEvent(new Event("rs:deposit")); } });
+  }
+
+  // banner do cassino: capas dos jogos mais famosos que estão ativos (estúdio ativo também)
+  const CZ_POP = ["Fortune Tiger", "Gates of Olympus", "Sweet Bonanza", "Fortune Rabbit", "Big Bass Splash", "Fortune Ox", "Sugar Rush", "Fortune Mouse"];
+  async function casinoArt() {
+    const cards = RS.$$("#pc-strip .pt-casino");
+    if (!cards.length) return;
+    const { data: provs } = await sb.from("casino_providers").select("id").eq("active", true);
+    const on = (provs || []).map((p) => p.id);
+    if (!on.length) return;
+    const [{ data: games }, { count }] = await Promise.all([
+      sb.from("casino_catalog").select("name,image").in("name", CZ_POP).in("provider", on).eq("active", true).not("pf_code", "is", null).not("image", "is", null),
+      sb.from("casino_catalog").select("id", { count: "exact", head: true }).in("provider", on).eq("active", true).not("pf_code", "is", null),
+    ]);
+    const seen = new Set();
+    const list = (games || []).sort((a, b) => CZ_POP.indexOf(a.name) - CZ_POP.indexOf(b.name))
+      .filter((g) => !seen.has(g.name) && seen.add(g.name)).slice(0, 3);
+    const html = list.map((g) => `<img src="${RS.esc(g.image)}" alt="${RS.esc(g.name)}" loading="lazy">`).join("");
+    const n = count >= 200 ? Math.floor(count / 100) * 100 : count;
+    cards.forEach((c) => {
+      c.querySelector(".ptc-covers").innerHTML = html;
+      const chip = c.querySelector(".ptc-chip");
+      if (n) { chip.textContent = `+${n.toLocaleString("pt-BR")} jogos`; chip.classList.remove("hidden"); }
+    });
   }
 
   // ---------- Roleta diária e "Mais apostado do dia" (primeiros cartões da fileira de banners) ----------
