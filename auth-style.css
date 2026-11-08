@@ -1049,3 +1049,10 @@ body.on-casino .bottom-nav a.bn-cz.active { color: #ff7a1a; }
 .pay-code svg.i { width: 16px; height: 16px; }
 .pay-wait { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 14px; color: var(--muted); font-size: 13px; }
 .pay-wait .pix-spin { width: 18px; height: 18px; border-width: 2px; }
+
+/* carrosséis da home vão até a borda da tela no mobile, mostrando o próximo card */
+@media (max-width: 1000px) {
+  #feat-cards, #pc-strip, #league-chips { margin-left: -12px; margin-right: -12px; padding-left: 12px; padding-right: 12px; scroll-padding-inline: 12px; }
+  #feat-cards { scrollbar-width: none; }
+  #feat-cards::-webkit-scrollbar { display: none; }
+}
