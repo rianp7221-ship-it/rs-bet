@@ -127,6 +127,21 @@
     "Liga MX México", "MLS EUA", "USL Championship EUA", "Saudi Pro League", "Süper Lig Turquia",
     "Super League Suíça", "Pro League Bélgica", "Premiership Escócia", "Allsvenskan Suécia", "Eliteserien Noruega",
     "Superliga Dinamarca", "HNL Croácia"];
+  // card grande: só jogos de campeonatos grandes, os mais importantes primeiro
+  const BIG = ["CONMEBOL Libertadores", "UEFA Champions League", "Brazil Série A", "Copa do Brasil", "Premier League", "EPL",
+    "La Liga", "La Liga - Spain", "Serie A - Italy", "Bundesliga", "Ligue 1", "CONMEBOL Sudamericana", "UEFA Europa League",
+    "Liga Profesional Argentina", "Primeira Liga Portugal", "UEFA Nations League", "Copa del Rey", "FA Cup Inglaterra",
+    "UEFA Conference League", "Saudi Pro League", "MLS EUA", "NBA"];
+  const BIG_RE = /world cup|copa do mundo|mundial de clubes|eliminat|qualif|copa am[eé]rica|euro 20\d\d|recopa|supercopa do brasil/i;
+  const bigRank = (l) => { const i = BIG.indexOf(l); return i >= 0 ? i : BIG_RE.test(l) ? 0 : -1; };
+  function featPick(list) {
+    const soon = Date.now() + 3 * 864e5;
+    const big = list.filter((m) => bigRank(m.league) >= 0)
+      .sort((a, b) => (new Date(a.starts_at) > soon) - (new Date(b.starts_at) > soon) || bigRank(a.league) - bigRank(b.league) || new Date(a.starts_at) - new Date(b.starts_at));
+    const per = {}, pick = big.filter((m) => (per[m.league] = (per[m.league] || 0) + 1) <= 2).slice(0, 6);
+    for (const m of big) if (pick.length < 6 && !pick.includes(m)) pick.push(m);
+    return pick.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+  }
   const rank = (l) => { const i = TOP.indexOf(l); return i < 0 ? TOP.length : i; };
   const byTop = (a, b) => rank(a[0]) - rank(b[0]) || b[1].n - a[1].n;
   // escudo do time (API-Football); sem escudo, camisa com a cor do nome
@@ -327,7 +342,7 @@
     return `img/feat/${n}-${(hash(n === "futebol" ? m.league : m.id) % FEAT_IMG[n]) + 1}.webp`;
   }
 
-  // foto do time que vai jogar (api/team-art.js): fanart do time ou, se não tiver, recorte de um jogador do elenco.
+  // foto do time que vai jogar (TheSportsDB, direto do navegador): fanart do time ou, se não tiver, recorte de um jogador do elenco.
   // Fica guardada no aparelho por 7 dias; enquanto não chega (ou se o time não tiver foto), fica a foto genérica.
   const ART_SPORT = { futebol: "Soccer", basquete: "Basketball" };
   const ART_KEY = "rs-team-art:v2", ART_TTL = 7 * 864e5;
@@ -335,8 +350,20 @@
   try { art = JSON.parse(localStorage.getItem(ART_KEY)) || {}; } catch { art = {}; }
   const artWait = new Set();
   let artChain = Promise.resolve(), featTop = null;
-  const lookupArt = (name, sport) => fetch(`/api/team-art?s=${sport}&t=${encodeURIComponent(name)}`)
-    .then((r) => (r.ok ? r.json() : Promise.reject(r.status))).then((d) => (Array.isArray(d.u) ? d.u : []));
+  const tsdb = (path) => fetch("https://www.thesportsdb.com/api/v1/json/123/" + path)
+    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)));
+  const findTeam = async (name, sport) =>
+    ((await tsdb("searchteams.php?t=" + encodeURIComponent(name))).teams || []).find((t) => t.strSport === sport);
+  async function lookupArt(name, sport) {
+    const plain = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/)
+      .filter((w) => !/^(\d+\.?|[A-Z]{2,3})$/.test(w)).join(" ");
+    const team = (await findTeam(name, sport)) || (plain && plain !== name ? await findTeam(plain, sport) : null);
+    if (!team) return [];
+    const fan = [1, 2, 3, 4].map((i) => team["strFanart" + i]).filter(Boolean).map((x) => x + "/medium");
+    if (fan.length) return fan;
+    return ((await tsdb("lookup_all_players.php?id=" + team.idTeam)).player || [])
+      .filter((p) => p.strCutout && !/manager|coach/i.test(p.strPosition || "")).map((p) => "p:" + p.strCutout + "/medium");
+  }
 
   function queueArt(k, name, sport) {
     if (artWait.has(k)) return;
@@ -422,7 +449,7 @@
     }
 
     const home = view === "all" && sport === "Popular" && !league && !query;
-    const top = matches.filter((m) => !live(m) && !suspended(m)).slice(0, 6);
+    const top = featPick(matches.filter((m) => !live(m) && !suspended(m)));
     RS.$("#feat-cards").classList.toggle("hidden", !home || !top.length);
     featTop = home ? top : null;
     RS.morph(RS.$("#feat-cards"), home ? top.map(feat).join("") : "");
