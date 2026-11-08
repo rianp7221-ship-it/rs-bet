@@ -2,6 +2,11 @@
 //  rs-base.js — utilidades compartilhadas
 // =====================================================
 const RS = {
+  // bilhete de cashout: badge verde se recebeu mais que apostou, vermelho se menos
+  betBadge(b, label = "Cashout") {
+    const c = Number(b.cashout_amount), s = Number(b.stake);
+    return `<span class="badge b-cashout${c > s ? " co-gain" : c < s ? " co-loss" : ""}">${label}</span>`;
+  },
   money(v) {
     return Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   },
