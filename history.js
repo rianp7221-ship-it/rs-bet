@@ -84,7 +84,7 @@
   const card = (b) => {
     const sels = b.bet_selections, [wl, wv] = winLine(b);
     return `<div class="bet-card${folded.has(b.id) ? " closed" : ""}" data-bet="${b.id}">
-      <div class="bc-head" data-fold="${b.id}"><b>${TYPE(sels.length)}</b><span>${RS.money(b.stake)}</span>${b.status !== "pending" ? betBadge(b) : ""}
+      <div class="bc-head" data-fold="${b.id}"><b>${TYPE(sels.length)}${b.freebet_id ? ` <span class="badge b-fb">Grátis</span>` : ""}</b><span>${RS.money(b.stake)}</span>${b.status !== "pending" ? betBadge(b) : ""}
         <span class="bc-odd">${Number(b.total_odd).toFixed(2)}</span><i class="bc-chev"></i></div>
       <div class="bc-body">
         ${sels.map((s) => `<div class="bc-sel" data-m="${s.match_id}">

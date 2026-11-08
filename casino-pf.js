@@ -75,6 +75,8 @@
 
   async function open(b) {
     const id = b.dataset.pf;
+    const fs = await RS.user() && (await sb.from("user_rewards").select("spins_left,amount,game_id").eq("kind", "freespins").eq("status", "em_uso").eq("game_id", id).gt("spins_left", 0).limit(1)).data?.[0];
+    if (fs) RS.toast(`🎁 ${fs.spins_left} rodadas grátis neste jogo: coloque a aposta em ${RS.money(fs.amount)}.`, "ok");
     if (!(await RS.user())) { location.href = "login.html"; return; }
     const ov = document.createElement("div");
     ov.className = "pf-ov";
@@ -191,6 +193,7 @@
     if (a.dataset.cz === "search") { reset(); go("all"); find(); return; }
     reset(); go(a.dataset.cz);
   });
+  window.RScasino = { open: (id) => open({ dataset: { pf: id }, closest: () => null }) };
   more.onclick = () => load(false);
   q.oninput = () => { clearTimeout(timer); timer = setTimeout(() => { load(true); show(); }, 300); };
   prov.onchange = () => load(true);
