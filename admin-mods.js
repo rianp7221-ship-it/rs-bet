@@ -3,6 +3,7 @@
 // =====================================================
 (() => {
   const esc = RS.esc, M = RS.money;
+  const betBadge = (b) => (b.status === "cashout" ? RS.betBadge(b) : A().badge(b.status));
   const A = () => window.RSadmin;
   const main = () => RS.$("#adm-main");
 
@@ -96,7 +97,7 @@
         const { data } = await sb.from("bets").select("*, bet_selections(pick, odd, status, matches(home, away))").eq("user_id", id).order("created_at", { ascending: false }).limit(1000);
         box.innerHTML = table(["#", "Data", "Seleções", "Aposta", "Odd", "Retorno", "Status"], (data || []).map((b) => [b.id, RS.date(b.created_at),
           b.bet_selections.map((s) => `${esc(s.matches?.home)} x ${esc(s.matches?.away)} · ${s.pick} @ ${s.odd} ${badge(s.status)}`).join("<br>"),
-          M(b.stake), b.total_odd, M(b.status === "cashout" ? b.cashout_amount : b.potential), badge(b.status)]), "Sem apostas.");
+          M(b.stake), b.total_odd, M(b.status === "cashout" ? b.cashout_amount : b.potential), betBadge(b)]), "Sem apostas.");
       }
       if (k === "casino") {
         const { data } = await sb.from("casino_games").select("id,game,stake,mines,multiplier,payout,status,created_at").eq("user_id", id).order("created_at", { ascending: false }).limit(100);
@@ -298,7 +299,7 @@
       const { data, count } = await sb.from("bets").select("*, profiles(email), bet_selections(count)", { count: "exact" }).order("created_at", { ascending: false }).limit(betN);
       RS.$("#sp-bets").innerHTML = (manage ? `<div class="filters"><button class="btn btn-outline danger sm" id="b-cancel">Cancelar selecionados (reembolsa)</button></div>` : "") + table(["", "#", "Usuário", "Jogos", "Aposta", "Odd", "Retorno", "Status", "Data", ""], (data || []).map((b) => [
         manage && b.status === "pending" ? `<input type="checkbox" data-bc="${b.id}">` : "", b.id, `<a href="#users" data-open-user="${b.user_id}" style="color:var(--primary)">${esc(b.profiles?.email || "")}</a>`, b.bet_selections[0]?.count,
-        M(b.stake), b.total_odd, M(b.potential), badge(b.status), RS.date(b.created_at), `<button class="btn sm" data-bv="${b.id}">Abrir</button>`]), "Nenhum bilhete.")
+        M(b.stake), b.total_odd, M(b.status === "cashout" ? b.cashout_amount : b.potential), betBadge(b), RS.date(b.created_at), `<button class="btn sm" data-bv="${b.id}">Abrir</button>`]), "Nenhum bilhete.")
         + ((data?.length || 0) < (count || 0) ? `<button class="btn btn-outline w-full" id="b-more" style="margin-top:10px">Carregar mais (${count - data.length})</button>` : "");
     }
     const MKN = { "1x2": "Resultado Final", dc: "Chance Dupla", ou15: "Gols 1,5", ou25: "Gols 2,5", ou35: "Gols 3,5", btts: "Ambas Marcam", dnb: "Empate Anula", ht1x2: "Resultado 1º Tempo", btts1: "Ambas Marcam 1º T", btts2: "Ambas Marcam 2º T", ou05: "Gols 0,5", ou45: "Gols 4,5", ou55: "Gols 5,5", c1x2: "Escanteios 1X2", s1x2: "Chutes 1X2", t1x2: "Chutes no Gol 1X2", eg: "Gols exatos", cs: "Placar exato", bb: "Criar Aposta" };
@@ -312,7 +313,7 @@
       const { data: b, error } = await sb.from("bets").select("*, profiles(email), bet_selections(*, matches(home, away, league, status, score_home, score_away, result, starts_at))").eq("id", id).single();
       if (error || !b) { RS.toast("Bilhete não encontrado", "error"); return; }
       const sels = b.bet_selections.sort((x, y) => x.id - y.id), edit = manage && b.status !== "cashout";
-      const m = RS.modal(`<h3>Bilhete #${b.id} ${badge(b.status)}</h3>
+      const m = RS.modal(`<h3>Bilhete #${b.id} ${betBadge(b)}</h3>
         <p class="muted">${esc(b.profiles?.email || "")} · ${RS.date(b.created_at)}${b.status === "cashout" ? ` · cash out de ${M(b.cashout_amount)}` : ""}</p>
         <p>Aposta <b>${M(b.stake)}</b> · Odd <b>${b.total_odd}</b> · Retorno <b>${M(b.potential)}</b></p>
         <div class="bv-list">${sels.map((s) => { const g = s.matches || {}; return `<div class="bv-sel" style="border:1px solid var(--line,#e3e6ee);border-radius:10px;padding:10px;margin:8px 0">

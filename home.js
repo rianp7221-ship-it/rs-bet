@@ -57,7 +57,7 @@
     const { data } = await q;
     mbList.innerHTML = data?.length ? data.map((b) => `<div class="mb-item">
         <div>Bilhete #${b.id}<small>${b.bet_selections.length} seleção(ões) · ${RS.money(b.stake)}</small></div>
-        <div style="text-align:right"><span class="badge b-${b.status}">${ST[b.status] || b.status}</span><small>${RS.money(b.status === "cashout" ? b.cashout_amount : b.potential)}</small></div>
+        <div style="text-align:right">${b.status === "cashout" ? RS.betBadge(b) : `<span class="badge b-${b.status}">${ST[b.status] || b.status}</span>`}<small>${RS.money(b.status === "cashout" ? b.cashout_amount : b.potential)}</small></div>
       </div>`).join("")
       : `<p class="muted center small">${mb === "open" ? "Não tem apostas em aberto no momento." : "Nenhuma aposta resolvida ainda."}</p>`;
   }
