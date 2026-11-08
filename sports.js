@@ -327,6 +327,47 @@
     return `img/feat/${n}-${(hash(n === "futebol" ? m.league : m.id) % FEAT_IMG[n]) + 1}.webp`;
   }
 
+  // foto do time que vai jogar (api/team-art.js): fanart do time ou, se não tiver, recorte de um jogador do elenco.
+  // Fica guardada no aparelho por 7 dias; enquanto não chega (ou se o time não tiver foto), fica a foto genérica.
+  const ART_SPORT = { futebol: "Soccer", basquete: "Basketball" };
+  const ART_KEY = "rs-team-art:v2", ART_TTL = 7 * 864e5;
+  let art = {};
+  try { art = JSON.parse(localStorage.getItem(ART_KEY)) || {}; } catch { art = {}; }
+  const artWait = new Set();
+  let artChain = Promise.resolve(), featTop = null;
+  const lookupArt = (name, sport) => fetch(`/api/team-art?s=${sport}&t=${encodeURIComponent(name)}`)
+    .then((r) => (r.ok ? r.json() : Promise.reject(r.status))).then((d) => (Array.isArray(d.u) ? d.u : []));
+
+  function queueArt(k, name, sport) {
+    if (artWait.has(k)) return;
+    artWait.add(k);
+    artChain = artChain.then(() => lookupArt(name, sport))
+      .then((u) => { art[k] = { u, t: Date.now() }; }, () => { art[k] = { u: [], t: Date.now() - ART_TTL + 6e5, err: 1 }; })
+      .then(() => {
+        artWait.delete(k);
+        try { localStorage.setItem(ART_KEY, JSON.stringify(art, (key, v) => (v && v.err ? undefined : v))); } catch {}
+        if (featTop && !artWait.size) RS.morph(RS.$("#feat-cards"), featTop.map(feat).join(""));
+      });
+  }
+
+  function teamArt(m, key) {
+    const sport = ART_SPORT[key];
+    if (!sport) return null;
+    for (const name of [m.home, m.away]) {
+      const k = key + ":" + name, e = art[k];
+      if (!e || Date.now() - e.t > ART_TTL) { queueArt(k, name, sport); return null; }
+      if (e.u.length) return e.u[hash(m.id) % e.u.length];
+    }
+    return null;
+  }
+
+  function featBg(m, key) {
+    const t = teamArt(m, key), base = `--feat-base:url('${featImg(m, key)}')`;
+    if (!t) return `--feat-img:url('${featImg(m, key)}');${base}`;
+    const player = t.startsWith("p:");
+    return `--feat-img:url('${RS.esc(player ? t.slice(2) : t)}');${base}${player ? ";--feat-pos:left -8px bottom;--feat-size:auto 94%" : ""}`;
+  }
+
   function feat(m) {
     const sp = "sp-" + m.sport.normalize("NFD").replace(/[^\w]/g, "").toLowerCase();
     const top = live(m)
@@ -334,7 +375,7 @@
       : `${RS.icon("clock")} ${dayLabel(m.starts_at)} ${hhmm(m.starts_at)}`;
     const big = safeUrl(m.home_logo) && safeUrl(m.away_logo)
       ? `<div class="feat-crests"><img src="${RS.esc(m.home_logo)}" alt=""><img src="${RS.esc(m.away_logo)}" alt=""></div>` : "";
-    return `<div class="feat-card ${sp}${big ? " has-crests" : ""} has-photo" style="--feat-img:url('${featImg(m, sp.slice(3))}')"><div class="feat-top">${top}</div>${big}
+    return `<div class="feat-card ${sp}${big ? " has-crests" : ""} has-photo" style="${featBg(m, sp.slice(3))}"><div class="feat-top">${top}</div>${big}
       <div class="feat-teams"><b>${crest(m, "home")}${RS.esc(m.home)}</b><b>${crest(m, "away")}${RS.esc(m.away)}</b></div>${odds(m)}</div>`;
   }
 
@@ -383,6 +424,7 @@
     const home = view === "all" && sport === "Popular" && !league && !query;
     const top = matches.filter((m) => !live(m) && !suspended(m)).slice(0, 6);
     RS.$("#feat-cards").classList.toggle("hidden", !home || !top.length);
+    featTop = home ? top : null;
     RS.morph(RS.$("#feat-cards"), home ? top.map(feat).join("") : "");
     RS.$("#casino-strip").classList.toggle("hidden", !home);
     document.body.classList.toggle("is-home", home);

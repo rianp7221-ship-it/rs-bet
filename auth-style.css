@@ -999,7 +999,7 @@ body.on-casino .bottom-nav a.bn-cz.active { color: #ff7a1a; }
 .pt-dark { --pt-bg: linear-gradient(160deg, #2c3447, #12151f); }
 
 /* card grande de jogos com foto de fundo */
-.feat-card.has-photo { background: linear-gradient(180deg, rgba(10,14,30,.05) 0%, rgba(10,14,30,.35) 40%, rgba(10,14,30,.9) 78%), var(--feat-img) center / cover no-repeat, #1d6a35; }
+.feat-card.has-photo { background: linear-gradient(180deg, rgba(10,14,30,.05) 0%, rgba(10,14,30,.35) 40%, rgba(10,14,30,.9) 78%), var(--feat-img) var(--feat-pos, center) / var(--feat-size, cover) no-repeat, var(--feat-base, none) center / cover no-repeat, #1d6a35; }
 
 /* depósito e saque no estilo Betano */
 .pay-modal { padding: 0; place-items: stretch; }
