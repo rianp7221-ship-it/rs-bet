@@ -523,32 +523,43 @@
     sb.rpc("money_limits").then(({ data }) => {
       if (!data) return;
       const mn = data[kind + "_min"], mx = data[kind + "_max"], inp = RS.$("#mm-amount", m);
-      el.textContent = long ? `Mínimo ${brl(mn)}${mx > 0 ? `, máximo ${brl(mx)}` : ""}.` : `Mín. ${brl(mn)}${mx > 0 ? ` · Máx. ${brl(mx)}` : ""}`;
+      el.textContent = long === "range" ? `${brl(mn)} - ${mx > 0 ? brl(mx) : "sem limite"}` : long ? `Mínimo ${brl(mn)}${mx > 0 ? `, máximo ${brl(mx)}` : ""}.` : `Mín. ${brl(mn)}${mx > 0 ? ` · Máx. ${brl(mx)}` : ""}`;
       inp.min = mn;
       if (mx > 0) inp.max = mx;
     });
   }
+  const PIX_LOGO = `<span class="pay-pix"><svg viewBox="0 0 40 40" aria-hidden="true"><g fill="#32bcad"><rect x="14" y="2" width="12" height="12" rx="3" transform="rotate(45 20 8)"/><rect x="14" y="26" width="12" height="12" rx="3" transform="rotate(45 20 32)"/><rect x="2" y="14" width="12" height="12" rx="3" transform="rotate(45 8 20)"/><rect x="26" y="14" width="12" height="12" rx="3" transform="rotate(45 32 20)"/></g></svg><b>pix</b></span>`;
+  const payHead = (t) => `<div class="pay-top"><b>${t}</b></div>
+    <div class="pay-bal">${RS.icon("refresh")}<b id="pay-balance">${RS.money(me?.balance || 0)}</b><small>Saldo</small></div>
+    <div class="pay-sub"><button class="pay-back" data-pay-close aria-label="Voltar">‹</button><b>Pix</b></div>`;
+  const payMethod = (time) => `<div class="pay-card pay-method">${PIX_LOGO}
+    <div class="pay-meta"><span>${RS.icon("clock")} ${time}</span><span>⇅ <b class="mm-lim">…</b></span></div></div>`;
+  const payAmount = (chips) => `<label class="pay-amt"><i>R$</i><input id="mm-amount" type="number" inputmode="decimal" step="0.01" placeholder="0"></label>
+    <div class="pay-chips">${chips.map((v) => `<button class="chip" data-v="${v}">R$${v}</button>`).join("")}</div>`;
+  function payWire(m, go) {
+    m.classList.add("pay-modal");
+    const inp = RS.$("#mm-amount", m), sync = () => { go.classList.toggle("off", !(Number(inp.value) > 0)); inp.style.width = Math.max(1, inp.value.length) + 0.6 + "ch"; };
+    RS.$$(".pay-chips .chip", m).forEach((c) => (c.onclick = () => { inp.value = c.dataset.v; sync(); }));
+    inp.oninput = sync; sync();
+    RS.$("[data-pay-close]", m).onclick = () => m.remove();
+  }
   function moneyModal(kind) {
     const dep = kind === "deposit";
     if (!dep) return withdrawModal();
-    const m = RS.modal(`
-      <h3>${dep ? "Depositar" : "Sacar"}</h3>
-      <p class="muted"><span class="mm-lim">${dep ? "Mínimo R$ 1,00." : "Mínimo R$ 20,00."}</span> ${dep ? "O saldo entra assim que o pagamento for confirmado." : "O valor é reservado até a aprovação."}</p>
-      <div class="chips">${[20, 50, 100, 500].map((v) => `<button class="chip" data-v="${v}">R$ ${v}</button>`).join("")}</div>
-      <input type="number" id="mm-amount" class="input" min="${dep ? 1 : 20}" step="0.01" placeholder="Valor">
-      ${dep ? "" : `<div class="ap-field"><label>Tipo da chave PIX</label><select class="input" id="mm-ktype">
-        <option value="cpf">CPF</option><option value="email">E-mail</option><option value="telefone">Celular</option>
-        <option value="aleatoria">Chave aleatória</option><option value="cnpj">CNPJ</option></select></div>
-      <input class="input" id="mm-key" maxlength="77" placeholder="Sua chave PIX (em seu nome)" autocomplete="off">`}
-      <button class="btn ${dep ? "btn-green" : "btn-primary"} w-full" id="mm-go">${dep ? "Gerar pagamento" : "Solicitar saque"}</button>`);
-    applyLimits(m, dep ? "dep" : "wd", RS.$(".mm-lim", m), true);
-    RS.$$(".chip", m).forEach((c) => (c.onclick = () => (RS.$("#mm-amount", m).value = c.dataset.v)));
+    const m = RS.modal(`${payHead("Depósito")}${payMethod("Imediato")}
+      <div class="pay-card">${payAmount([50, 200, 500])}
+        <div class="pay-row">${RS.icon("id")}<span><b>Pague de uma conta no seu CPF</b><small>Qualquer banco. O saldo entra assim que o Pix for confirmado.</small></span></div>
+        <button class="btn btn-green w-full pay-go" id="mm-go">Depósito</button></div>
+      <p class="pay-foot">${RS.icon("lock")} Pagamento seguro via Pix</p>`);
+    applyLimits(m, "dep", RS.$(".mm-lim", m), "range");
+    payWire(m, RS.$("#mm-go", m));
     if (!dep) sb.rpc("my_last_pix_key").then(({ data }) => {
       if (data?.key && !RS.$("#mm-key", m).value) { RS.$("#mm-key", m).value = data.key; RS.$("#mm-ktype", m).value = data.type; }
     });
     if (dep) warmPix();
     RS.$("#mm-go", m).onclick = async (e) => {
       const btn = e.currentTarget, v = Number(RS.$("#mm-amount", m).value);
+      if (!(v > 0)) return RS.toast("Digite o valor do depósito.", "error");
       btn.disabled = true;
       try {
         const id = await RS.rpc(dep ? "request_deposit" : "request_withdraw", dep ? { p_amount: v }
@@ -566,28 +577,24 @@
     const p = await RS.profile();
     if (!p) { location.href = "login.html"; return; }
     const cpfMask = (c) => c.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-    const m = RS.modal(`<div class="wd">
-      <div class="wd-info"><div>${RS.icon("refresh")}<b class="mm-lim">Mín. R$ 20,00</b></div><div>${RS.icon("clock")}<span>Tempo de processamento: normalmente em poucos minutos após a aprovação</span></div></div>
-      <h3>Pix</h3>
-      <p class="muted small">Faça seus saques de forma fácil e segura com o Pix. É importante usar uma conta bancária vinculada ao seu CPF.</p>
-      <label class="wd-l">CPF</label>
-      <input class="input" id="wd-cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" ${p.cpf ? `readonly value="${cpfMask(p.cpf)}"` : ""}>
-      <p class="small wd-warn"><b>Importante:</b> se o CPF do titular da conta bancária não for o mesmo cadastrado na Real Sports, o PIX não será processado.${p.cpf ? " Para corrigir o CPF, fale com o suporte." : " Depois de salvo, o CPF só pode ser corrigido pelo suporte."}</p>
-      <label class="wd-l">Montante</label>
-      <label class="stake wd-amt"><i>R$</i><input id="mm-amount" type="number" min="20" step="0.01" placeholder="0,00"></label>
-      <div class="chips">${[20, 50, 100, 500].map((v) => `<button class="chip" data-v="${v}">R$ ${v}</button>`).join("")}</div>
-      <label class="wd-l">Chave PIX</label>
-      <div class="wd-key"><select class="input" id="mm-ktype"><option value="cpf">CPF</option><option value="email">E-mail</option><option value="telefone">Celular</option>
-        <option value="aleatoria">Chave aleatória</option></select>
-        <input class="input" id="mm-key" maxlength="77" placeholder="Sua chave PIX" autocomplete="off"></div>
-      <button class="btn btn-dark w-full" id="mm-go">Saque</button></div>`);
+    const m = RS.modal(`${payHead("Saque")}${payMethod("Até 1 hora")}
+      <div class="pay-card">${payAmount([50, 100, 500])}
+        <label class="wd-l">CPF do titular</label>
+        <input class="input" id="wd-cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" ${p.cpf ? `readonly value="${cpfMask(p.cpf)}"` : ""}>
+        <label class="wd-l">Chave Pix</label>
+        <div class="wd-key"><select class="input" id="mm-ktype"><option value="cpf">CPF</option><option value="email">E-mail</option><option value="telefone">Celular</option>
+          <option value="aleatoria">Chave aleatória</option></select>
+          <input class="input" id="mm-key" maxlength="77" placeholder="Sua chave Pix" autocomplete="off"></div>
+        <p class="pay-note"><b>Importante:</b> a conta bancária precisa estar no CPF cadastrado na Real Sports, senão o Pix não é processado.${p.cpf ? " Para corrigir o CPF, fale com o suporte." : " Depois de salvo, o CPF só pode ser corrigido pelo suporte."}</p>
+        <button class="btn btn-dark w-full pay-go" id="mm-go">Saque</button></div>
+      <p class="pay-foot">${RS.icon("clock")} Normalmente cai em poucos minutos após a aprovação</p>`);
     const type = RS.$("#mm-ktype", m), key = RS.$("#mm-key", m), cpf = RS.$("#wd-cpf", m);
     const syncKey = () => { if (type.value === "cpf") { key.value = cpf.value; key.readOnly = true; } else key.readOnly = false; };
     type.onchange = () => { key.value = ""; syncKey(); };
     cpf.oninput = () => { cpf.value = cpfMask(cpf.value.replace(/\D/g, "").slice(0, 11)); syncKey(); };
     syncKey();
-    applyLimits(m, "wd", RS.$(".mm-lim", m), false);
-    RS.$$(".chip", m).forEach((c) => (c.onclick = () => (RS.$("#mm-amount", m).value = c.dataset.v)));
+    applyLimits(m, "wd", RS.$(".mm-lim", m), "range");
+    payWire(m, RS.$("#mm-go", m));
     sb.rpc("my_last_pix_key").then(({ data }) => {
       if (data?.key && data.type !== "cpf" && data.type !== "cnpj") { type.value = data.type; key.readOnly = false; key.value = data.key; }
     });
@@ -614,9 +621,10 @@
   }
 
   async function showPix(id, v) {
-    const w = RS.modal(`<h3>Pague com PIX</h3>
-      <p class="muted">Valor: <b>${RS.money(v)}</b>. O saldo entra sozinho assim que o pagamento for confirmado.</p>
-      <div class="pix-wait"><span class="pix-spin"></span>Gerando QR code…</div>`);
+    const w = RS.modal(`${payHead("Depósito")}<div class="pay-card"><div class="pay-val"><small>Valor do depósito</small><b>${RS.money(v)}</b></div>
+      <div class="pix-wait"><span class="pix-spin"></span>Gerando QR code…</div></div>`);
+    w.classList.add("pay-modal");
+    RS.$("[data-pay-close]", w).onclick = () => w.remove();
     const { data, error } = await sb.functions.invoke("pix-create", { body: { tx_id: id } });
     if (error || data?.error) {
       w.remove();
@@ -624,13 +632,14 @@
       return;
     }
     if (!document.body.contains(w)) return;
-    RS.$(".rs-modal-box", w).innerHTML = `<button class="rs-modal-x" aria-label="Fechar">×</button>
-      <h3>Pague com PIX</h3>
-      <p class="muted">Valor: <b>${RS.money(v)}</b>. O saldo entra sozinho assim que o pagamento for confirmado.</p>
-      ${data.qr_base64 ? `<img src="data:image/png;base64,${data.qr_base64}" alt="QR code PIX" style="width:220px;margin:12px auto;display:block;background:#fff;padding:8px;border-radius:8px">` : ""}
-      <textarea class="input" id="pix-code" readonly rows="3">${RS.esc(data.qr_code || "")}</textarea>
-      <button class="btn btn-primary w-full" id="pix-copy">Copiar código PIX</button>
-      <p class="muted small" id="pix-exp" style="margin-top:8px;text-align:center"></p>`;
+    RS.$(".rs-modal-box", w).innerHTML = `<button class="rs-modal-x" aria-label="Fechar">×</button>${payHead("Depósito")}
+      <div class="pay-card"><div class="pay-val"><small>Valor do depósito</small><b>${RS.money(v)}</b><em id="pix-exp"></em></div>
+        <ol class="pay-steps"><li>Abra o app do seu banco e escolha <b>Pix</b></li><li>Escaneie o QR code ou use o <b>Pix Copia e Cola</b></li><li>Confirme o pagamento. O saldo entra sozinho</li></ol>
+        ${data.qr_base64 ? `<img class="pay-qr" src="data:image/png;base64,${data.qr_base64}" alt="QR code PIX">` : ""}
+        <label class="wd-l">Pix Copia e Cola</label>
+        <div class="pay-code"><input class="input" id="pix-code" readonly value="${RS.esc(data.qr_code || "")}"><button class="btn btn-green" id="pix-copy">${RS.icon("copy")} Copiar</button></div>
+        <div class="pay-wait"><span class="pix-spin"></span>Aguardando pagamento…</div></div>`;
+    RS.$("[data-pay-close]", w).onclick = () => w.remove();
     RS.$("#pix-copy", w).onclick = async () => {
       try { await navigator.clipboard.writeText(data.qr_code); } catch { RS.$("#pix-code", w).select(); document.execCommand("copy"); }
       RS.toast("Código copiado!", "ok");
@@ -653,7 +662,7 @@
     const p = await RS.profile();
     if (!p) return;
     me = p;
-    for (const id of ["hdr-balance", "pop-balance", "la-bal"]) {
+    for (const id of ["hdr-balance", "pop-balance", "la-bal", "pay-balance"]) {
       const b = document.getElementById(id);
       if (b) { b.textContent = RS.money(p.balance); b.classList.add("flash"); setTimeout(() => b.classList.remove("flash"), 600); }
     }

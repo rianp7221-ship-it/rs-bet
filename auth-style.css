@@ -1000,3 +1000,52 @@ body.on-casino .bottom-nav a.bn-cz.active { color: #ff7a1a; }
 
 /* card grande de jogos com foto de fundo */
 .feat-card.has-photo { background: linear-gradient(180deg, rgba(10,14,30,.05) 0%, rgba(10,14,30,.35) 40%, rgba(10,14,30,.9) 78%), var(--feat-img) center / cover no-repeat, #1d6a35; }
+
+/* depósito e saque no estilo Betano */
+.pay-modal { padding: 0; place-items: stretch; }
+.pay-modal .rs-modal-box { max-width: 460px; width: 100%; height: 100%; max-height: none; margin: 0 auto; border-radius: 0; padding: 0 0 20px; background: #eef0f4; }
+@media (min-width: 700px) { .pay-modal { padding: 24px; place-items: center; } .pay-modal .rs-modal-box { height: auto; max-height: 92vh; border-radius: 16px; } }
+.pay-modal .rs-modal-x { top: 12px; right: 12px; z-index: 2; color: var(--text); }
+.pay-top { background: #fff; padding: 16px 52px 14px 16px; font-size: 17px; border-bottom: 1px solid var(--line); }
+.pay-bal { display: flex; align-items: center; gap: 8px; background: #fff; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.pay-bal svg.i { width: 18px; height: 18px; color: var(--muted); }
+.pay-bal b { font-size: 17px; font-weight: 900; }
+.pay-bal small { margin-left: auto; color: var(--muted); font-size: 12px; text-transform: uppercase; font-weight: 700; }
+.pay-sub { position: relative; display: flex; justify-content: center; align-items: center; padding: 14px 16px; font-size: 16px; }
+.pay-back { position: absolute; left: 10px; background: none; border: 0; font-size: 30px; line-height: 1; color: var(--text); cursor: pointer; padding: 0 8px; }
+.pay-card { background: #fff; border-radius: 12px; margin: 0 12px 12px; padding: 16px; box-shadow: 0 1px 3px rgba(20,30,60,.08); }
+.pay-method { padding: 14px 16px 12px; }
+.pay-pix { display: flex; justify-content: center; align-items: center; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.pay-pix svg { width: 34px; height: 34px; }
+.pay-pix b { font-size: 30px; font-weight: 500; color: #8a8f98; letter-spacing: -.02em; font-family: "Roboto", sans-serif; }
+.pay-meta { display: flex; justify-content: space-between; padding-top: 12px; font-size: 14px; font-weight: 700; }
+.pay-meta span { display: flex; align-items: center; gap: 6px; }
+.pay-meta svg.i { width: 18px; height: 18px; }
+.pay-amt { display: flex; justify-content: center; align-items: baseline; gap: 8px; padding: 18px 0 22px; cursor: text; }
+.pay-amt i { font-style: normal; font-size: 20px; color: var(--muted); }
+.pay-amt input { width: 1.6ch; max-width: 70%; border: 0; outline: 0; background: none; font: inherit; font-size: 40px; font-weight: 900; color: var(--text); text-align: left; padding: 0; -moz-appearance: textfield; }
+.pay-amt input::-webkit-outer-spin-button, .pay-amt input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.pay-chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-bottom: 16px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.pay-chips .chip { background: #2c3447; color: #fff; border: 0; border-radius: 8px; padding: 12px 0; font-weight: 900; font-size: 15px; }
+.pay-chips .chip:active { background: var(--primary); }
+.pay-row { display: flex; align-items: center; gap: 12px; padding: 14px 0; font-size: 14px; }
+.pay-row svg.i { width: 40px; height: 40px; padding: 9px; border-radius: 50%; background: #f1f2f5; flex: none; }
+.pay-row small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.pay-go { margin-top: 12px; padding: 15px; font-size: 15px; font-weight: 900; text-transform: uppercase; letter-spacing: .03em; border-radius: 8px; }
+.pay-go.off { background: #e6e8ed !important; color: #9aa1ad !important; border-color: #e6e8ed !important; }
+.pay-note { font-size: 12.5px; color: var(--muted); margin: 10px 0 0 !important; }
+.pay-foot { display: flex; justify-content: center; align-items: center; gap: 6px; font-size: 12.5px !important; color: var(--muted); margin: 4px 16px 0 !important; text-align: center; }
+.pay-foot svg.i { width: 15px; height: 15px; flex: none; }
+.pay-card .wd-l { margin: 12px 0 6px; font-size: 13px; }
+.pay-val { text-align: center; padding: 4px 0 12px; border-bottom: 1px solid var(--line); }
+.pay-val small { display: block; color: var(--muted); font-size: 12px; }
+.pay-val b { font-size: 30px; font-weight: 900; }
+.pay-val em { display: block; font-style: normal; font-size: 13px; color: var(--primary); font-weight: 700; margin-top: 2px; }
+.pay-steps { margin: 14px 0 6px; padding-left: 20px; font-size: 13.5px; display: grid; gap: 6px; }
+.pay-qr { display: block; width: 210px; margin: 12px auto; background: #fff; padding: 8px; border-radius: 10px; border: 1px solid var(--line); }
+.pay-code { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.pay-code .input { font-size: 12px; text-overflow: ellipsis; }
+.pay-code .btn { display: flex; align-items: center; gap: 6px; padding: 0 14px; }
+.pay-code svg.i { width: 16px; height: 16px; }
+.pay-wait { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 14px; color: var(--muted); font-size: 13px; }
+.pay-wait .pix-spin { width: 18px; height: 18px; border-width: 2px; }
