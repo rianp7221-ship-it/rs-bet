@@ -40,6 +40,7 @@ pre.json { background: var(--card-2); padding: 8px; border-radius: 6px; font-siz
 .art-row { text-align: left; background: var(--card-2); border: 2px solid transparent; border-radius: 10px; padding: 8px 10px; cursor: pointer; font: inherit; color: var(--text); }
 .art-row.active { border-color: var(--primary); background: #fff4ee; }
 .art-row small { display: block; color: var(--muted); font-size: 11px; margin-bottom: 3px; }
+.art-co { font-style: normal; font-size: 10px; font-weight: 700; color: var(--ok); background: #e2f6ea; border-radius: 6px; padding: 1px 5px; margin-left: 4px; text-transform: uppercase; }
 .art-row span { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; }
 .art-row img { width: 20px; height: 20px; object-fit: contain; }
 .art-canvas { background: var(--card-2); border-radius: 10px; padding: 10px; text-align: center; }

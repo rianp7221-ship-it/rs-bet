@@ -21,18 +21,26 @@
         <input class="input" id="u-country" placeholder="País (BR)" maxlength="2" style="width:90px">
       </div>
       <div id="u-pending"></div><div id="u-list"></div>`;
-    async function load() {
-      const val = (id) => RS.$(id).value.trim();
+    const PAGE = 200;
+    let shown = [], seq = 0;
+    async function load(more) {
+      const val = (id) => RS.$(id).value.trim(), my = ++seq;
+      if (!more) shown = [];
       const r = await RS.rpc("admin_search_users", { p_q: val("#u-q") || null, p_status: val("#u-st") || null, p_risk: val("#u-risk") || null,
         p_min_balance: val("#u-min") ? Number(val("#u-min")) : null, p_max_balance: val("#u-max") ? Number(val("#u-max")) : null,
-        p_country: val("#u-country") || null, p_limit: 100, p_offset: 0 }).catch((e) => { RS.toast(e.message, "error"); return { rows: [], total: 0 }; });
-      RS.$("#u-list").innerHTML = `<p class="muted small" style="margin-bottom:6px">${r.total} usuário(s)</p>` + table(
-        ["Usuário", "Saldo", "Depósitos", "Bilhetes", "Risco", "País", "Último acesso", ""], r.rows.map((u) => [
+        p_country: val("#u-country") || null, p_limit: PAGE, p_offset: shown.length }).catch((e) => { RS.toast(e.message, "error"); return { rows: [], total: 0 }; });
+      if (my !== seq) return;
+      shown = shown.concat(r.rows);
+      RS.$("#u-list").innerHTML = `<p class="muted small" style="margin-bottom:6px">${shown.length < r.total ? `${shown.length} de ` : ""}${r.total} usuário(s)</p>` + table(
+        ["Usuário", "Saldo", "Depósitos", "Bilhetes", "Risco", "País", "Último acesso", ""], shown.map((u) => [
           `<a href="#" data-open-user="${u.id}" style="color:var(--primary)"><b>${esc(u.username || "")}</b></a><br><small>${esc(u.email)}</small>
            ${u.staff_role ? `<span class="badge b-won">${u.staff_role}</span>` : ""}${u.blocked ? ' <span class="badge b-lost">bloqueado</span>' : ""}${u.excluded ? ' <span class="badge b-pending">em pausa</span>' : ""}`,
           M(u.balance), M(u.deposits), u.bets_count, `<span class="badge ${u.risk_level === "alto" ? "sev-critica" : u.risk_level === "medio" ? "sev-alta" : ""}">${RISK[u.risk_level]}</span>`,
           esc(u.country), u.last_login_at ? `${RS.date(u.last_login_at)}<br><small>${esc(u.last_ip || "")}</small>` : "-",
-          `<button class="btn sm" data-open-user="${u.id}">Abrir</button>`]), "Nenhum usuário encontrado.");
+          `<button class="btn sm" data-open-user="${u.id}">Abrir</button>`]), "Nenhum usuário encontrado.")
+        + (shown.length < r.total ? `<button class="btn btn-outline w-full" id="u-more" style="margin-top:10px">Carregar mais (${r.total - shown.length})</button>` : "");
+      RS.$("#u-more")?.addEventListener("click", (e) => { e.target.disabled = true; load(true); });
+      if (more) return;
       if (can("users.balance")) {
         const { data: pa } = await sb.from("pending_actions").select("*").eq("status", "pendente").order("created_at");
         RS.$("#u-pending").innerHTML = pa?.length ? `<div class="panel"><h2>Ajustes aguardando 2º aprovador</h2>${table(["Pedido", "Quem pediu", "Detalhes", ""], pa.map((a) => [
@@ -41,8 +49,8 @@
       }
     }
     let t;
-    ["#u-q", "#u-min", "#u-max", "#u-country"].forEach((id) => (RS.$(id).oninput = () => { clearTimeout(t); t = setTimeout(load, 350); }));
-    ["#u-st", "#u-risk"].forEach((id) => (RS.$(id).onchange = load));
+    ["#u-q", "#u-min", "#u-max", "#u-country"].forEach((id) => (RS.$(id).oninput = () => { clearTimeout(t); t = setTimeout(() => load(), 350); }));
+    ["#u-st", "#u-risk"].forEach((id) => (RS.$(id).onchange = () => load()));
     RS.$("#u-pending").onclick = async (e) => {
       const b = e.target.closest("[data-pa]");
       if (b && await act("admin_decide_action", { p_id: +b.dataset.pa, p_approve: !!b.dataset.ok, p_reason: null }, b.dataset.ok ? "Ajuste aprovado" : "Pedido recusado")) load();
@@ -84,7 +92,7 @@
       RS.$$("#pf-tabs .chip").forEach((x) => x.classList.toggle("active", x.dataset.t === k));
       const box = RS.$("#pf-body");
       if (k === "bets") {
-        const { data } = await sb.from("bets").select("*, bet_selections(pick, odd, status, matches(home, away))").eq("user_id", id).order("created_at", { ascending: false }).limit(100);
+        const { data } = await sb.from("bets").select("*, bet_selections(pick, odd, status, matches(home, away))").eq("user_id", id).order("created_at", { ascending: false }).limit(1000);
         box.innerHTML = table(["#", "Data", "Seleções", "Aposta", "Odd", "Retorno", "Status"], (data || []).map((b) => [b.id, RS.date(b.created_at),
           b.bet_selections.map((s) => `${esc(s.matches?.home)} x ${esc(s.matches?.away)} · ${s.pick} @ ${s.odd} ${badge(s.status)}`).join("<br>"),
           M(b.stake), b.total_odd, M(b.status === "cashout" ? b.cashout_amount : b.potential), badge(b.status)]), "Sem apostas.");
@@ -283,11 +291,14 @@
           <button class="btn sm danger" data-void="${m.id}">Anular mercado</button>
           <button class="btn sm danger" data-del="${m.id}">Excluir</button>`]), "Nenhum jogo.");
     }
-    async function bets() {
-      const { data } = await sb.from("bets").select("*, profiles(email), bet_selections(count)").order("created_at", { ascending: false }).limit(150);
+    let betN = 200;
+    async function bets(more) {
+      betN = more ? betN + 200 : 200;
+      const { data, count } = await sb.from("bets").select("*, profiles(email), bet_selections(count)", { count: "exact" }).order("created_at", { ascending: false }).limit(betN);
       RS.$("#sp-bets").innerHTML = (manage ? `<div class="filters"><button class="btn btn-outline danger sm" id="b-cancel">Cancelar selecionados (reembolsa)</button></div>` : "") + table(["", "#", "Usuário", "Jogos", "Aposta", "Odd", "Retorno", "Status", "Data", ""], (data || []).map((b) => [
         manage && b.status === "pending" ? `<input type="checkbox" data-bc="${b.id}">` : "", b.id, `<a href="#users" data-open-user="${b.user_id}" style="color:var(--primary)">${esc(b.profiles?.email || "")}</a>`, b.bet_selections[0]?.count,
-        M(b.stake), b.total_odd, M(b.potential), badge(b.status), RS.date(b.created_at), `<button class="btn sm" data-bv="${b.id}">Abrir</button>`]), "Nenhum bilhete.");
+        M(b.stake), b.total_odd, M(b.potential), badge(b.status), RS.date(b.created_at), `<button class="btn sm" data-bv="${b.id}">Abrir</button>`]), "Nenhum bilhete.")
+        + ((data?.length || 0) < (count || 0) ? `<button class="btn btn-outline w-full" id="b-more" style="margin-top:10px">Carregar mais (${count - data.length})</button>` : "");
     }
     const MKN = { "1x2": "Resultado Final", dc: "Chance Dupla", ou15: "Gols 1,5", ou25: "Gols 2,5", ou35: "Gols 3,5", btts: "Ambas Marcam", dnb: "Empate Anula", ht1x2: "Resultado 1º Tempo", btts1: "Ambas Marcam 1º T", btts2: "Ambas Marcam 2º T", ou05: "Gols 0,5", ou45: "Gols 4,5", ou55: "Gols 5,5", c1x2: "Escanteios 1X2", s1x2: "Chutes 1X2", t1x2: "Chutes no Gol 1X2", eg: "Gols exatos", cs: "Placar exato", bb: "Criar Aposta" };
     const mkLabel = (k) => MKN[k] || (/^co\d+$/.test(k) ? `Escanteios ${+k.slice(2) / 10}` : /^k\d+$/.test(k) ? `Cartões ${+k.slice(1) / 10}` : /^(hto|gh|ga|ch|ca|kh|ka|sh|sa)\d+$/.test(k) ? `${{ hto: "Gols 1º T", gh: "Gols casa", ga: "Gols fora", ch: "Escanteios casa", ca: "Escanteios fora", kh: "Cartões casa", ka: "Cartões fora", sh: "Chutes casa", sa: "Chutes fora" }[k.replace(/\d+$/, "")]} ${+k.replace(/^[a-z]+/, "") / 10}` : /^[st]\d+$/.test(k) ? `${k[0] === "s" ? "Chutes" : "Chutes no gol"} ${+k.slice(1) / 10}` : k);
@@ -400,6 +411,7 @@
     RS.$("#sp-bets").onclick = async (e) => {
       const bv = e.target.closest("[data-bv]");
       if (bv) return openBet(+bv.dataset.bv);
+      if (e.target.id === "b-more") { e.target.disabled = true; return bets(true); }
       if (e.target.id !== "b-cancel") return;
       const ids = RS.$$("[data-bc]:checked").map((x) => +x.dataset.bc);
       if (!ids.length) { RS.toast("Marque os bilhetes", "error"); return; }
