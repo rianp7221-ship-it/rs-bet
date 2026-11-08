@@ -329,19 +329,49 @@
         });
       }
       if (k === "bonus") {
-        const [{ data: bs }, ref] = await Promise.all([sb.from("user_bonuses").select("*").eq("user_id", p.id).order("created_at", { ascending: false }).limit(30),
-          RS.rpc("my_referrals").catch(() => null)]);
-        const ST = { aguardando_deposito: "Aguardando depósito", ativo: "Ativo", concluido: "Liberado", expirado: "Expirado", cancelado: "Cancelado" };
+        const now = new Date().toISOString();
+        const [{ data: bs }, { data: rw }, ref, wh] = await Promise.all([sb.from("user_bonuses").select("*").eq("user_id", p.id).order("created_at", { ascending: false }).limit(30),
+          sb.from("user_rewards").select("*").eq("user_id", p.id).order("created_at", { ascending: false }).limit(50),
+          RS.rpc("my_referrals").catch(() => null), RS.rpc("wheel_status").catch(() => null)]);
+        const ST = { aguardando_deposito: "Aguardando depósito", ativo: "Ativo", concluido: "Liberado", expirado: "Expirado", cancelado: "Cancelado", usado: "Usado", disponivel: "Disponível", em_uso: "Em uso" };
         const url = `${location.origin}/login.html?ref=${ref?.code || p.id.slice(0, 8)}`;
-        body.innerHTML = `<div class="ap-card"><h3>Cupom promocional</h3>
-            <form id="cp-f" style="display:flex;gap:8px"><input class="input" name="c" placeholder="Digite o código" required style="text-transform:uppercase"><button class="btn btn-dark">Aplicar</button></form></div>
-          <div class="ap-card ap-list"><h3>Meus bônus</h3>
-            <p class="muted small" style="margin-bottom:8px">O saque fica liberado depois de apostar o valor do rollover. Apostas esportivas só contam com odd mínima do bônus.</p>
-            ${bs?.length ? bs.map((b) => { const pct = b.wager_required > 0 ? Math.min(100, Math.round((b.wagered / b.wager_required) * 100)) : 100;
-              return `<div class="tx-row" style="flex-wrap:wrap"><div><b>${RS.money(b.amount)}</b><small>${ST[b.status] || b.status}${b.expires_at && b.status === "ativo" ? " · até " + RS.date(b.expires_at) : ""}${b.status === "ativo" ? ` · odd mín. ${(+b.min_odd).toFixed(2)}` : ""}</small></div>
-                ${["ativo", "aguardando_deposito"].includes(b.status) ? `<button class="btn sm btn-outline danger" data-bx="${b.id}">Cancelar</button>` : ""}
-                ${b.status === "ativo" ? `<div style="flex-basis:100%;margin-top:6px"><div style="height:6px;background:var(--line,#eee);border-radius:4px"><div style="width:${pct}%;height:6px;background:var(--primary);border-radius:4px"></div></div>
-                  <small class="muted">${RS.money(b.wagered)} de ${RS.money(b.wager_required)} apostados</small></div>` : ""}</div>`; }).join("") : `<p class="muted">Nenhum bônus ainda.</p>`}</div>
+        const live = (r) => ["disponivel", "em_uso"].includes(r.status) && r.expires_at > now;
+        const left = (d) => { const ms = new Date(d) - Date.now(), h = Math.floor(ms / 36e5);
+          return h >= 48 ? `${Math.floor(h / 24)} dias` : h >= 1 ? `${h} h` : `${Math.max(1, Math.floor(ms / 6e4))} min`; };
+        const card = (o) => `<div class="bz-card ${o.cls}"><div class="bz-ic">${RS.icon(o.ic)}</div><div class="bz-main">
+            <b>${o.title}</b><small>${o.sub}</small>${o.prog || ""}
+            <div class="bz-foot">${o.exp ? `<span class="bz-exp">${RS.icon("clock")} Expira em ${o.exp}</span>` : `<span class="bz-st">${o.st || ""}</span>`}${o.btns || ""}</div>
+            <details class="bz-terms"><summary>Termos e condições</summary><p>${o.terms}</p></details></div></div>`;
+        const rwCard = (r) => {
+          const on = live(r), src = r.source?.startsWith("roleta") ? "Roleta diária" : "Promoção";
+          if (r.kind === "freebet") return card({ ic: "gift", cls: "bz-fb", title: `Aposta grátis ${RS.money(r.amount)}`, sub: `${src} · odd mínima ${(+r.min_odd).toFixed(2)}`,
+            exp: on && left(r.expires_at), st: on ? "" : ST[r.status], btns: on ? `<button class="btn btn-green sm" data-fbuse="${r.id}">Usar agora</button>` : "",
+            terms: `Vale para um bilhete simples ou múltiplo com jogos que ainda não começaram e odd total mínima de ${(+r.min_odd).toFixed(2)}. O valor da aposta grátis não volta: se o bilhete ganhar, você recebe só o lucro, direto no saldo e sem rollover. Não tem cashout. Uso único, válida até ${RS.date(r.expires_at)}.` });
+          const started = r.status === "em_uso" && r.spins_left < r.spins;
+          return card({ ic: "chip", cls: "bz-fs", title: `${r.spins} rodadas grátis`, sub: r.status === "em_uso" ? `${r.spins_left} de ${r.spins} restantes · ${RS.esc(r.game_name || "")} · ganho ${RS.money(r.won)}`
+              : r.status === "usado" ? `Ganho: ${RS.money(r.won)}${r.game_name ? " · " + RS.esc(r.game_name) : ""}` : `${src} · rodadas de ${RS.money(r.amount)}`,
+            exp: on && left(r.expires_at), st: on ? "" : ST[r.status],
+            btns: on ? (started ? `<button class="btn btn-green sm" data-fsgo="${RS.esc(r.game_id)}">Continuar</button>` : `<button class="btn btn-green sm" data-fspick="${r.id}">Escolher jogo</button>`) : "",
+            terms: `Escolha 1 jogo da lista do dia e coloque a aposta em ${RS.money(r.amount)}. Cada rodada nesse valor não desconta do seu saldo. O que ganhar vai direto para o saldo, sem rollover, até ${RS.money(r.max_win)} no total. Válidas até ${RS.date(r.expires_at)}.` });
+        };
+        const bnCard = (b) => { const on = ["ativo", "aguardando_deposito"].includes(b.status), pct = b.wager_required > 0 ? Math.min(100, Math.round((b.wagered / b.wager_required) * 100)) : 100;
+          return card({ ic: "star", cls: "bz-bn", title: `Bônus ${RS.money(b.amount)}`, sub: b.status === "aguardando_deposito" ? "Faça um depósito para ativar" : `Rollover · odd mínima ${(+b.min_odd).toFixed(2)}`,
+            prog: b.status === "ativo" ? `<div class="bz-bar"><i style="width:${pct}%"></i></div><small class="muted">${RS.money(b.wagered)} de ${RS.money(b.wager_required)} apostados</small>` : "",
+            exp: on && b.expires_at && left(b.expires_at), st: on ? "" : ST[b.status], btns: on ? `<button class="btn sm btn-outline danger" data-bx="${b.id}">Cancelar</button>` : "",
+            terms: "O saque fica liberado depois de apostar o valor do rollover. Apostas esportivas só contam com a odd mínima do bônus; no cassino toda aposta conta. Cancelar retira o valor do bônus do saldo." }); };
+        const avail = [...(rw || []).filter(live).map(rwCard), ...(bs || []).filter((b) => b.status === "aguardando_deposito").map(bnCard)];
+        const active = (bs || []).filter((b) => b.status === "ativo").map(bnCard);
+        const hist = [...(rw || []).filter((r) => !live(r)), ...(bs || []).filter((b) => !["ativo", "aguardando_deposito"].includes(b.status))]
+          .sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).map((x) => (x.kind === "freebet" || x.kind === "freespins" ? rwCard(x) : bnCard(x)));
+        const list = (id, arr, empty, on) => `<div class="bz-list${on ? "" : " hidden"}" data-bzl="${id}">${arr.length ? arr.join("") : `<p class="muted center small bz-empty">${empty}</p>`}</div>`;
+        const whTxt = !wh?.on ? "" : wh.spun ? `Você já girou hoje: ${RS.esc(wh.label)}` : wh.bet >= wh.min ? "Seu giro de hoje está liberado!" : `Aposte ${RS.money(wh.min)} hoje e gire (falta ${RS.money(wh.min - wh.bet)})`;
+        body.innerHTML = `${wh?.on ? `<button class="bz-wheel" data-bzw><span class="bz-wi">🎡</span><span><b>Roleta diária</b><small>${whTxt}</small></span><i>${wh.spun ? "Ver" : "Girar"}</i></button>` : ""}
+          <div class="ap-card"><h3>Código promocional</h3>
+            <form id="cp-f" style="display:flex;gap:8px"><input class="input" name="c" placeholder="Digite o código" required style="text-transform:uppercase"><button class="btn btn-dark">Resgatar</button></form></div>
+          <div class="bz-tabs"><button data-bz="a" class="active">Disponíveis${avail.length ? ` <i>${avail.length}</i>` : ""}</button><button data-bz="b">Em andamento${active.length ? ` <i>${active.length}</i>` : ""}</button><button data-bz="h">Histórico</button></div>
+          ${list("a", avail, "Nenhum bônus para resgatar agora. Gire a roleta diária para ganhar apostas e rodadas grátis.", true)}
+          ${list("b", active, "Nenhum bônus com rollover em andamento.")}
+          ${list("h", hist, "Seu histórico de bônus aparece aqui.")}
           <div class="ap-card"><h3>Indique um amigo</h3>
             <p class="muted small" style="margin-bottom:8px">${ref?.reward ? `Ganhe ${RS.money(ref.reward)} de bônus quando seu amigo fizer o primeiro depósito.` : "Convide amigos para a Real Sports."}
               ${ref ? ` Convidados: <b>${ref.invited}</b> · com depósito: <b>${ref.qualified}</b> · ganho: <b>${RS.money(ref.earned)}</b>` : ""}</p>
@@ -351,8 +381,38 @@
           try { RS.toast(await RS.rpc("redeem_coupon", { p_code: e.target.c.value }), "ok"); RS.refreshBalance(); show("bonus"); } catch (err) { RS.toast(err.message, "error"); }
         };
         RS.$("#ref-cp", w).onclick = async () => { try { await navigator.clipboard.writeText(url); RS.toast("Link copiado!", "ok"); } catch { /* sem permissão */ } };
+        const close = () => RS.$("[data-x]", w)?.click();
+        const playGame = (id) => { close(); if (window.RScasino) window.RScasino.open(id); else location.href = "index.html#casino"; };
         body.onclick = async (e) => {
-          const b = e.target.closest("[data-bx]");
+          const t = e.target;
+          const tb = t.closest("[data-bz]");
+          if (tb) { RS.$$("[data-bz]", w).forEach((x) => x.classList.toggle("active", x === tb)); RS.$$("[data-bzl]", w).forEach((x) => x.classList.toggle("hidden", x.dataset.bzl !== tb.dataset.bz)); return; }
+          if (t.closest("[data-bzw]")) { close(); if (window.RSwheel) window.RSwheel(); else location.href = "index.html"; return; }
+          const fu = t.closest("[data-fbuse]");
+          if (fu) {
+            close();
+            if (!window.RSsports) { location.href = "index.html"; return; }
+            document.querySelector('[data-tabs] [data-tab="sports"]')?.click();
+            window.RSsports.useFreebet(+fu.dataset.fbuse);
+            RS.toast("Monte o bilhete e selecione a aposta grátis antes de apostar.", "ok");
+            return;
+          }
+          const go = t.closest("[data-fsgo]");
+          if (go) { playGame(go.dataset.fsgo); return; }
+          const pk = t.closest("[data-fspick]");
+          if (pk) {
+            const { data: gs } = await sb.rpc("freespin_games");
+            const m = RS.modal(`<h3>Escolha o jogo</h3><p class="muted small" style="margin-bottom:10px">A lista muda todo dia. Depois de começar, as rodadas ficam nesse jogo.</p>
+              <div class="fs-games">${(gs || []).map((g) => `<button data-fsg="${RS.esc(g.id)}"><img src="${RS.esc(g.image || "")}" alt="" loading="lazy"><span>${RS.esc(g.name)}</span></button>`).join("") || `<p class="muted">Nenhum jogo disponível hoje.</p>`}</div>`);
+            m.addEventListener("click", async (ev) => {
+              const g = ev.target.closest("[data-fsg]");
+              if (!g) return;
+              try { await RS.rpc("freespin_pick", { p_reward: +pk.dataset.fspick, p_game: g.dataset.fsg }); m.remove(); playGame(g.dataset.fsg); }
+              catch (err) { RS.toast(err.message, "error"); }
+            });
+            return;
+          }
+          const b = t.closest("[data-bx]");
           if (!b || !confirm("Cancelar o bônus? O valor do bônus é retirado do saldo e o saque fica liberado.")) return;
           try { await RS.rpc("cancel_my_bonus", { p_id: +b.dataset.bx }); RS.toast("Bônus cancelado.", "ok"); RS.refreshBalance(); show("bonus"); } catch (err) { RS.toast(err.message, "error"); }
         };
@@ -594,6 +654,7 @@
   });
   // banners e outros atalhos pedem o depósito por evento
   document.addEventListener("rs:deposit", () => (me ? panel("overview") : (location.href = "login.html?cadastro")));
+  document.addEventListener("rs:bonus", () => (me ? panel("bonus") : (location.href = "login.html")));
   sb.channel("my-notif").on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, (e) => {
     if (me && e.new.user_id === me.id) { RS.toast("🔔 " + e.new.title, "info"); bell(); }
   }).subscribe();
