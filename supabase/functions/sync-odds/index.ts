@@ -228,6 +228,11 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
     return json({ modo: mode, pulado: "cota diária da API reservada para o ao vivo", creditos_restantes: rem.value, errors });
   }
 
+  // além da lista fixa, todas as ligas que têm odds na fonte
+  if (mode === "full" && !only && feed.discover) {
+    try { sports = [...new Set([...sports, ...(await feed.discover())])]; } catch (e) { errors.push(`ligas extras: ${(e as Error).message}`); }
+  }
+
   // ligas sem jogo nas próximas 6 h só na rodada do começo de cada hora; as com jogo perto, em toda rodada (15 min)
   if (mode === "full" && !only && new Date().getUTCMinutes() >= 10) {
     const { data: soon } = await sb.from("matches").select("external_id").eq("status", "open").not("external_id", "is", null)
@@ -237,14 +242,14 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
   }
 
   // 1) jogos e odds; com muitas ligas, cada grupo roda numa execução separada da função
-  const GROUP = 6;
+  const GROUP = 8;
   const fanOut = mode === "full" && !only && sports.length > GROUP;
   if (fanOut) {
     const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/sync-odds`;
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     for (const h of ["x-cron-secret", "authorization", "apikey"]) { const v = req.headers.get(h); if (v) headers[h] = v; }
     const groups = Array.from({ length: Math.ceil(sports.length / GROUP) }, (_, i) => sports.slice(i * GROUP, (i + 1) * GROUP));
-    // 2 grupos por vez para não estourar o limite por minuto da API
+    // 4 grupos por vez; o get() espera quando o limite por minuto da API está perto
     const runGroup = async (leagues: string[]) => {
       try {
         const r = await fetch(url, { method: "POST", headers, body: JSON.stringify({ mode: "full", leagues }) });
@@ -257,7 +262,7 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
         errors.push(`ligas ${leagues.join(",")}: ${(e as Error).message}`);
       }
     };
-    for (let i = 0; i < groups.length; i += 2) await Promise.all(groups.slice(i, i + 2).map(runGroup));
+    for (let i = 0; i < groups.length; i += 4) await Promise.all(groups.slice(i, i + 4).map(runGroup));
   }
   const syncLeague = async (sport: string) => {
     try {

@@ -37,6 +37,7 @@ export interface OddsProvider {
   limit?(): number | null; // cota do plano (por dia ou por hora)
   info?(): string | null; // resumo da última busca (diagnóstico)
   cache?: { load(v: unknown): void; dump(): Record<string, unknown> | null }; // dados guardados entre execuções (settings.feed_cache)
+  discover?(): Promise<string[]>; // todas as ligas com odds na fonte (além da lista fixa)
 }
 
 const SPORT_PT: Record<string, string> = {
@@ -98,7 +99,7 @@ function theOddsApi(key: string): OddsProvider {
 // "sport" = id da liga (71 Brasileirão, 39 Premier, 2 Champions...). external_id = "af<liga>:<fixture>".
 type AfFixture = {
   fixture: { id: number; date: string; status: { short: string; elapsed: number | null; extra?: number | null } };
-  league: { id: number; name: string; country: string; logo?: string };
+  league: { id: number; name: string; country: string; logo?: string; flag?: string | null };
   teams: { home: { name: string; logo?: string }; away: { name: string; logo?: string } };
   goals: { home: number | null; away: number | null };
   score?: { fulltime?: { home: number | null; away: number | null }; halftime?: { home: number | null; away: number | null } };
@@ -147,6 +148,22 @@ const AF_LEAGUE: Record<number, string> = {
   344: "Primera División Bolívia", 255: "USL Championship EUA", 234: "Liga Nacional Honduras", 339: "Liga Nacional Guatemala", 241: "Copa Colômbia",
   267: "Copa Chile",
 };
+// principais ligas e copas da Europa, Américas, Ásia e Oceania (nomes em AF_LEAGUE); as outras com odds entram pelo discover()
+const AF_DEFAULT = "71,72,73,13,11,39,140,135,78,61,2,3,848,75,94,88,144,203,179,40,141,136,79,62,207,218,119,103,113,106,345,197,210,283,286,333," +
+      "128,253,262,239,265,268,281,242,98,292,307,188,169,305,45,48,143,137,81,66," +
+      "89,235,204,145,80,95,180,208,120,104,114,107,383,172,332,271,373,219,41,42,43,494,237,121,5,10,17,99,293,290,301,274,323,296,129,131,240,162,252,299,344,255,234,339,241,267";
+const AF_BASE = new Set(AF_DEFAULT.split(","));
+// liga fora da lista: nome + país em português, pra não confundir "Premier League" do Egito com a da Inglaterra
+const AF_UK: Record<string, string> = { "gb-eng": "Inglaterra", "gb-sct": "Escócia", "gb-wls": "País de Gales", "gb-nir": "Irlanda do Norte" };
+const ptRegion = new Intl.DisplayNames(["pt-BR"], { type: "region" });
+const afCountry = (l: AfFixture["league"]) => {
+  const c = l.flag?.match(/flags\/([a-z-]+)\.svg/)?.[1];
+  if (c && AF_UK[c]) return AF_UK[c];
+  try { if (c?.length === 2) return ptRegion.of(c.toUpperCase()) ?? l.country; } catch { /* código desconhecido */ }
+  return l.country;
+};
+const afName = (l: AfFixture["league"]) =>
+  AF_LEAGUE[l.id] ?? (AF_BASE.has(String(l.id)) || !l.country || l.country === "World" ? l.name : `${l.name} ${afCountry(l)}`);
 // mercados extras: nomes do pré-jogo (/odds) e do ao vivo (/odds/live)
 const AF_OU = ["Goals Over/Under", "Match Goals"];
 const AF_BTTS = ["Both Teams Score", "Both Teams to Score"];
@@ -182,7 +199,7 @@ function apiFootball(key: string): OddsProvider {
   // temporada atual de cada liga, guardada por 1 dia entre execuções (economiza 1 consulta por liga a cada rodada)
   const SEASON_TTL = 86400_000;
   const seasons = new Map<string, { y: number; at: number }>();
-  let seasonsChanged = false;
+  let seasonsChanged = false, found: { ids: string[]; at: number } | null = null;
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   // limite por minuto do plano (Ultra: 450): espera e tenta de novo em vez de perder a liga
   const get = async <T>(path: string, tries = 4): Promise<{ response: T[]; paging?: { current: number; total: number } }> => {
@@ -289,10 +306,25 @@ function apiFootball(key: string): OddsProvider {
   return {
     name: "apifootball",
     prefix: "af",
-    // principais ligas e copas da Europa, Américas, Ásia e Oceania (nomes em AF_LEAGUE)
-    defaultSports: "71,72,73,13,11,39,140,135,78,61,2,3,848,75,94,88,144,203,179,40,141,136,79,62,207,218,119,103,113,106,345,197,210,283,286,333," +
-      "128,253,262,239,265,268,281,242,98,292,307,188,169,305,45,48,143,137,81,66," +
-      "89,235,204,145,80,95,180,208,120,104,114,107,383,172,332,271,373,219,41,42,43,494,237,121,5,10,17,99,293,290,301,274,323,296,129,131,240,162,252,299,344,255,234,339,241,267",
+    defaultSports: AF_DEFAULT,
+    // /odds/mapping: todos os jogos com odds (liga + temporada); a lista de ligas fica guardada por 1 h
+    async discover() {
+      if (found && Date.now() - found.at < 3600_000) return found.ids;
+      const ids = new Set<string>();
+      for (let page = 1, total = 1; page <= total && page <= 40; page++) {
+        const r = await get<{ league: { id: number; season: number } }>(`/odds/mapping?page=${page}`);
+        total = r.paging?.total ?? 1;
+        for (const { league } of r.response) {
+          const k = String(league.id);
+          ids.add(k);
+          const c = seasons.get(k);
+          if (league.season && (!c || c.y !== league.season)) { seasons.set(k, { y: league.season, at: Date.now() }); seasonsChanged = true; }
+        }
+      }
+      found = { ids: [...ids], at: Date.now() };
+      seasonsChanged = true;
+      return found.ids;
+    },
     async odds(league) {
       const y = await season(league);
       const { response: fx } = await get<AfFixture>(`/fixtures?league=${league}&season=${y}&from=${day(0)}&to=${day(7)}&timezone=UTC`);
@@ -308,7 +340,7 @@ function apiFootball(key: string): OddsProvider {
         }
       }
       return open.map((f) => ({
-        id: String(f.fixture.id), league: AF_LEAGUE[f.league.id] ?? f.league.name, sport: "Futebol", home: f.teams.home.name, away: f.teams.away.name,
+        id: String(f.fixture.id), league: afName(f.league), sport: "Futebol", home: f.teams.home.name, away: f.teams.away.name,
         commence_time: f.fixture.date, odds: pick(ref.get(f.fixture.id) ?? []) ?? pick(prices.get(f.fixture.id) ?? []), markets: { ...extra(prices.get(f.fixture.id) ?? []), ...extra(ref.get(f.fixture.id) ?? []) },
         home_logo: f.teams.home.logo, away_logo: f.teams.away.logo, league_logo: f.league.logo,
       }));
@@ -379,10 +411,11 @@ function apiFootball(key: string): OddsProvider {
     limit: () => daily,
     cache: {
       load(v) {
-        const all = (v as { seasons?: Record<string, [number, number]> } | null)?.seasons ?? {};
-        for (const [k, [y, at]] of Object.entries(all)) if (!seasons.has(k) && y > 0) seasons.set(k, { y, at });
+        const c = v as { seasons?: Record<string, [number, number]>; leagues?: { ids: string[]; at: number } } | null;
+        for (const [k, [y, at]] of Object.entries(c?.seasons ?? {})) if (!seasons.has(k) && y > 0) seasons.set(k, { y, at });
+        if (c?.leagues?.ids?.length && !found) found = c.leagues;
       },
-      dump: () => seasonsChanged ? { seasons: Object.fromEntries([...seasons].map(([k, c]) => [k, [c.y, c.at]])) } : null,
+      dump: () => seasonsChanged ? { seasons: Object.fromEntries([...seasons].map(([k, c]) => [k, [c.y, c.at]])), ...(found ? { leagues: found } : {}) } : null,
     },
   };
 }

@@ -427,7 +427,7 @@
     const names = new Set(Object.keys(byLeague).map(lname));
     TOP.forEach((l) => { if (!names.has(lname(l))) byLeague[l] = { n: 0, sport: "Futebol" }; });
     const keep = (n) => { let k = 0; return Object.entries(byLeague).sort(byTop).filter(([l]) => TOP.includes(l) || k++ < n); };
-    RS.morph(RS.$("#comp-list"), keep(12).map(([l, v]) =>
+    RS.morph(RS.$("#comp-list"), keep(Infinity).map(([l, v]) =>
       `<button class="comp-item ${league === l ? "active" : ""}" data-league="${RS.esc(l)}"><span class="comp-ico">${lico(l)}</span>
         <span><b>${RS.esc(lname(l))}</b><small>${RS.esc(v.sport)}</small></span>${v.n ? `<em>${v.n}</em>` : ""}</button>`).join("")
       || `<p class="muted small" style="padding:0 6px">Sem competições no momento.</p>`);
