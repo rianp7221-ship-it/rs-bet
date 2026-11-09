@@ -93,6 +93,20 @@ Deno.serve(async (req) => {
   const auth = req.headers.get("Authorization") ?? "";
   const body = await req.json().catch(() => ({}));
   if (!body?.action) return await webhook(body);
+  if (body.action === "probe") {
+    // teste do admin: libera N rodadas grátis num jogo e devolve a URL pra conferir o valor da rodada
+    const secret = Deno.env.get("CRON_SECRET");
+    if (!secret || req.headers.get("x-cron-secret") !== secret) return json({ error: "Sem permissão" }, 401);
+    const { data: g } = await sb.from("casino_catalog").select("id,name,pf_code,pf_provider,pf_original").eq("id", String(body.game ?? "")).maybeSingle();
+    const { data: prof } = await sb.from("profiles").select("id,balance").eq("id", String(body.user ?? "")).maybeSingle();
+    if (!g || !prof) return json({ error: "jogo ou usuário não encontrado" }, 404);
+    const launch = () => pf("/game_launch", { agentToken: TOKEN, secretKey: SECRET, user_code: prof.id, game_code: g.pf_code, provider: g.pf_provider,
+      game_original: !!g.pf_original, user_balance: Number(prof.balance ?? 0), lang: "pt" });
+    let r = await launch();
+    let fb = null;
+    if (body.rounds) { fb = (await pf("/free_bonus", { agent_token: TOKEN, secret_key: SECRET, user_code: prof.id, game_code: g.pf_code, rounds: Number(body.rounds) })).data; r = await launch(); }
+    return json({ name: g.name, free_bonus: fb, url: r.data?.launch_url ?? null, launch: r.data?.launch_url ? undefined : r.data });
+  }
   if (body.action === "inspect") {
     const secret = Deno.env.get("CRON_SECRET");
     if (!secret || req.headers.get("x-cron-secret") !== secret) return json({ error: "Sem permissão" }, 401);
