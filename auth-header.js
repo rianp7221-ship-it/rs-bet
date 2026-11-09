@@ -353,10 +353,10 @@
             terms: `Vale para um bilhete simples ou múltiplo com jogos que ainda não começaram e odd total mínima de ${(+r.min_odd).toFixed(2)}. O valor da aposta grátis não volta: se o bilhete ganhar, você recebe só o lucro, direto no saldo e sem rollover. Não tem cashout. Uso único, válida até ${RS.date(r.expires_at)}.` });
           const started = r.status === "em_uso" && r.spins_left < r.spins;
           return card({ ic: "chip", cls: "bz-fs", title: `${r.spins} rodadas grátis`, sub: r.status === "em_uso" ? `${r.spins_left} de ${r.spins} restantes · ${RS.esc(r.game_name || "")} · ganho ${RS.money(r.won)}`
-              : r.status === "usado" ? `Ganho: ${RS.money(r.won)}${r.game_name ? " · " + RS.esc(r.game_name) : ""}` : `${src} · rodadas de ${RS.money(r.amount)}`,
+              : r.status === "usado" ? `Ganho: ${RS.money(r.won)}${r.game_name ? " · " + RS.esc(r.game_name) : ""}` : src,
             exp: on && left(r.expires_at), st: on ? "" : ST[r.status],
             btns: on ? (started ? `<button class="btn btn-green sm" data-fsgo="${RS.esc(r.game_id)}">Continuar</button>` : `<button class="btn btn-green sm" data-fspick="${r.id}">Escolher jogo</button>`) : "",
-            terms: `Escolha 1 jogo da lista do dia e coloque a aposta em ${RS.money(r.amount)}. Cada rodada nesse valor não desconta do seu saldo. O que ganhar vai direto para o saldo, sem rollover, até ${RS.money(r.max_win)} no total. Válidas até ${RS.date(r.expires_at)}.` });
+            terms: `Escolha 1 jogo da lista. As rodadas aparecem dentro do jogo com a aposta já definida e não descontam do seu saldo; quando acabarem, o jogo volta a usar o saldo. O que ganhar vai direto para o saldo, sem rollover, até ${RS.money(r.max_win)} no total. Válidas até ${RS.date(r.expires_at)}.` });
         };
         const bnCard = (b) => { const on = ["ativo", "aguardando_deposito"].includes(b.status), pct = b.wager_required > 0 ? Math.min(100, Math.round((b.wagered / b.wager_required) * 100)) : 100;
           return card({ ic: "star", cls: "bz-bn", title: `Bônus ${RS.money(b.amount)}`, sub: b.status === "aguardando_deposito" ? "Faça um depósito para ativar" : `Rollover · odd mínima ${(+b.min_odd).toFixed(2)}`,
@@ -406,7 +406,7 @@
           const pk = t.closest("[data-fspick]");
           if (pk) {
             const { data: gs } = await sb.rpc("freespin_games");
-            const m = RS.modal(`<h3>Escolha o jogo</h3><p class="muted small" style="margin-bottom:10px">A lista muda todo dia. Depois de começar, as rodadas ficam nesse jogo.</p>
+            const m = RS.modal(`<h3>Escolha o jogo</h3><p class="muted small" style="margin-bottom:10px">Depois de começar, as rodadas ficam nesse jogo.</p>
               <div class="fs-games">${(gs || []).map((g) => `<button data-fsg="${RS.esc(g.id)}"><img src="${RS.esc(g.image || "")}" alt="" loading="lazy"><span>${RS.esc(g.name)}</span></button>`).join("") || `<p class="muted">Nenhum jogo disponível hoje.</p>`}</div>`);
             m.addEventListener("click", async (ev) => {
               const g = ev.target.closest("[data-fsg]");
