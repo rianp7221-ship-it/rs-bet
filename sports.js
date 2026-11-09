@@ -134,13 +134,22 @@
     "UEFA Conference League", "Saudi Pro League", "MLS EUA", "NBA"];
   const BIG_RE = /world cup|copa do mundo|mundial de clubes|eliminat|qualif|copa am[eé]rica|euro 20\d\d|recopa|supercopa do brasil/i;
   const bigRank = (l) => { const i = BIG.indexOf(l); return i >= 0 ? i : BIG_RE.test(l) ? 0 : -1; };
+  // times famosos (nome sem acento, minúsculo): 3 = gigantes e seleções top, 2 = grandes
+  const FAME = [[3, /^(se )?(flamengo|palmeiras|corinthians|sao paulo|santos|gremio|internacional|cruzeiro( mg)?|atletico[- ]?mg|atletico mineiro|botafogo( fr)?|fluminense|vasco da gama|real madrid|barcelona|manchester (city|united)|liverpool|arsenal|chelsea|bayern (munchen|munich)|paris saint germain|paris st-?g|psg|juventus|inter( milan)?|ac milan|brazil|brasil|argentina|france|spain|england|germany|portugal|italy|netherlands)$/],
+    [2, /^(bahia|fortaleza( ec)?|athletico[- ]?pr|atletico paranaense|(red bull )?bragantino|sport recife|atletico madrid|tottenham( hotspur)?|newcastle|(borussia )?dortmund|napoli|(as )?roma|benfica|(fc )?porto|sporting (cp|lisbon)|boca juniors|river plate|ajax|psv|galatasaray|fenerbahce|al nassr|al hilal|inter miami|guadalajara chivas|club america|atletico nacional|penarol|belgium|croatia|uruguay|colombia|mexico|usa)$/]];
+  const fame = (n) => { const t = String(n).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    return (FAME.find(([, r]) => r.test(t)) || [0])[0]; };
+  // card grande: jogos dos próximos 4 dias com time famoso (se tiver pouco, 8 dias e campeonato grande); quanto mais perto, melhor
   function featPick(list) {
-    const soon = Date.now() + 3 * 864e5;
-    const big = list.filter((m) => bigRank(m.league) >= 0)
-      .sort((a, b) => (new Date(a.starts_at) > soon) - (new Date(b.starts_at) > soon) || bigRank(a.league) - bigRank(b.league) || new Date(a.starts_at) - new Date(b.starts_at));
-    const per = {}, pick = big.filter((m) => (per[m.league] = (per[m.league] || 0) + 1) <= 2).slice(0, 6);
-    for (const m of big) if (pick.length < 6 && !pick.includes(m)) pick.push(m);
-    return pick.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+    const now = Date.now();
+    const scored = (days, famous) => list.map((m) => { const f = fame(m.home) + fame(m.away);
+      return { m, f, s: f + (bigRank(m.league) >= 0 ? 1 : 0), d: (new Date(m.starts_at) - now) / 864e5 }; })
+      .filter((x) => (famous ? x.f > 0 : x.s > 0) && x.d < days).sort((a, b) => (b.s - 0.75 * b.d) - (a.s - 0.75 * a.d));
+    let c = scored(4, true);
+    if (c.length < 3) c = scored(8, false);
+    const per = {}, pick = c.filter((x) => (per[x.m.league] = (per[x.m.league] || 0) + 1) <= 3).slice(0, 6);
+    for (const x of c) if (pick.length < 6 && !pick.includes(x)) pick.push(x);
+    return pick.map((x) => x.m).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
   }
   const rank = (l) => { const i = TOP.indexOf(l); return i < 0 ? TOP.length : i; };
   const byTop = (a, b) => rank(a[0]) - rank(b[0]) || b[1].n - a[1].n;
@@ -342,50 +351,28 @@
     return `img/feat/${n}-${(hash(n === "futebol" ? m.league : m.id) % FEAT_IMG[n]) + 1}.webp`;
   }
 
-  // foto do time que vai jogar (TheSportsDB, direto do navegador): fanart do time ou, se não tiver, recorte de um jogador do elenco.
-  // Fica guardada no aparelho por 7 dias; enquanto não chega (ou se o time não tiver foto), fica a foto genérica.
-  const ART_SPORT = { futebol: "Soccer", basquete: "Basketball" };
-  const ART_KEY = "rs-team-art:v2", ART_TTL = 7 * 864e5;
-  let art = {};
-  try { art = JSON.parse(localStorage.getItem(ART_KEY)) || {}; } catch { art = {}; }
-  const artWait = new Set();
-  let artChain = Promise.resolve(), featTop = null;
-  const tsdb = (path) => fetch("https://www.thesportsdb.com/api/v1/json/123/" + path)
-    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)));
-  const findTeam = async (name, sport) =>
-    ((await tsdb("searchteams.php?t=" + encodeURIComponent(name))).teams || []).find((t) => t.strSport === sport);
-  async function lookupArt(name, sport) {
-    const plain = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/)
-      .filter((w) => !/^(\d+\.?|[A-Z]{2,3})$/.test(w)).join(" ");
-    const team = (await findTeam(name, sport)) || (plain && plain !== name ? await findTeam(plain, sport) : null);
-    if (!team) return [];
-    const fan = [1, 2, 3, 4].map((i) => team["strFanart" + i]).filter(Boolean).map((x) => x + "/medium");
-    if (fan.length) return fan;
-    return ((await tsdb("lookup_all_players.php?id=" + team.idTeam)).player || [])
-      .filter((p) => p.strCutout && !/manager|coach/i.test(p.strPosition || "")).map((p) => "p:" + p.strCutout + "/medium");
+  // foto do time que vai jogar (fanart do time ou recorte de jogador, do TheSportsDB): a função team-art busca e guarda em team_art.
+  // Enquanto não chega (ou se o time não tiver foto), fica a foto genérica.
+  const ART_SPORT = { futebol: 1, basquete: 1 };
+  const art = {}, artWant = new Set();
+  let artTimer = 0, featTop = null;
+  try { localStorage.removeItem("rs-team-art:v2"); } catch {}
+  function loadArt() {
+    const keys = [...artWant];
+    artWant.clear();
+    keys.forEach((k) => (art[k] = []));
+    sb.from("team_art").select("key,urls").in("key", keys).then(({ data }) => {
+      if (!data?.length) return;
+      for (const r of data) art[r.key] = r.urls || [];
+      if (featTop) RS.morph(RS.$("#feat-cards"), featTop.map(feat).join(""));
+    });
   }
-
-  function queueArt(k, name, sport) {
-    if (artWait.has(k)) return;
-    artWait.add(k);
-    artChain = artChain.then(() => lookupArt(name, sport))
-      .then((u) => { art[k] = { u, t: Date.now() }; }, () => { art[k] = { u: [], t: Date.now() - ART_TTL + 6e5, err: 1 }; })
-      .then(() => {
-        artWait.delete(k);
-        try { localStorage.setItem(ART_KEY, JSON.stringify(art, (key, v) => (v && v.err ? undefined : v))); } catch {}
-        if (featTop && !artWait.size) RS.morph(RS.$("#feat-cards"), featTop.map(feat).join(""));
-      });
-  }
-
   function teamArt(m, key) {
-    const sport = ART_SPORT[key];
-    if (!sport) return null;
-    for (const name of [m.home, m.away]) {
-      const k = key + ":" + name, e = art[k];
-      if (!e || Date.now() - e.t > ART_TTL) { queueArt(k, name, sport); return null; }
-      if (e.u.length) return e.u[hash(m.id) % e.u.length];
-    }
-    return null;
+    if (!ART_SPORT[key]) return null;
+    const ks = [m.home, m.away].map((n) => key + ":" + n), miss = ks.filter((k) => !(k in art));
+    if (miss.length) { miss.forEach((k) => artWant.add(k)); clearTimeout(artTimer); artTimer = setTimeout(loadArt); }
+    const u = ks.map((k) => art[k]).find((x) => x && x.length);
+    return u ? u[hash(m.id) % u.length] : null;
   }
 
   function featBg(m, key) {
