@@ -127,6 +127,16 @@
     "Liga MX México", "MLS EUA", "USL Championship EUA", "Saudi Pro League", "Süper Lig Turquia",
     "Super League Suíça", "Pro League Bélgica", "Premiership Escócia", "Allsvenskan Suécia", "Eliteserien Noruega",
     "Superliga Dinamarca", "HNL Croácia"];
+  // id da liga na API-Football: logo no bucket logos, pra liga principal aparecer mesmo sem jogo
+  const TOP_ID = {
+    "Brazil Série A": 71, "Brazil Série B": 72, "Copa do Brasil": 73, "CONMEBOL Libertadores": 13, "CONMEBOL Sudamericana": 11,
+    "UEFA Champions League": 2, "Premier League": 39, "La Liga": 140, "Serie A - Italy": 135, Bundesliga: 78, "Ligue 1": 61,
+    "UEFA Europa League": 3, "UEFA Conference League": 848, "Primeira Liga Portugal": 94, "Liga Profesional Argentina": 128,
+    "Copa del Rey": 143, "FA Cup Inglaterra": 45, "Championship Inglaterra": 40, "2. Bundesliga Alemanha": 79,
+    "3. Liga Alemanha": 80, "Eredivisie Holanda": 88, "Eerste Divisie Holanda": 89, "Liga MX México": 262, "MLS EUA": 253,
+    "USL Championship EUA": 255, "Saudi Pro League": 307, "Süper Lig Turquia": 203, "Super League Suíça": 207,
+    "Pro League Bélgica": 144, "Premiership Escócia": 179, "Allsvenskan Suécia": 113, "Eliteserien Noruega": 103,
+    "Superliga Dinamarca": 119, "HNL Croácia": 210 };
   // card grande: só jogos de campeonatos grandes, os mais importantes primeiro
   const BIG = ["CONMEBOL Libertadores", "UEFA Champions League", "Brazil Série A", "Copa do Brasil", "Premier League", "EPL",
     "La Liga", "La Liga - Spain", "Serie A - Italy", "Bundesliga", "Ligue 1", "CONMEBOL Sudamericana", "UEFA Europa League",
@@ -158,7 +168,8 @@
   const badLogo = (window.RSbadLogo ||= new Set());
   const crest = (m, side) => { const u = safeUrl(m[side + "_logo"]);
     return u && !badLogo.has(u) ? `<img class="crest" src="${RS.esc(u)}" alt="" loading="lazy" onerror="window.RSbadLogo.add(this.getAttribute('src'));this.replaceWith(document.createRange().createContextualFragment(window.RSshirt(this.dataset.n)))" data-n="${RS.esc(m[side])}">` : shirt(m[side]); };
-  const leagueLogo = (l) => { const m = matches.find((x) => x.league === l && x.league_logo); return m ? safeUrl(m.league_logo) : ""; };
+  const leagueLogo = (l) => { const m = matches.find((x) => x.league === l && x.league_logo);
+    return m ? safeUrl(m.league_logo) : TOP_ID[l] ? `https://pscpcxleyysspvwkevpe.supabase.co/storage/v1/object/public/logos/leagues/${TOP_ID[l]}.png` : ""; };
   const lico = (l) => { const u = leagueLogo(l); return u ? `<img class="lg-logo" src="${RS.esc(u)}" alt="" loading="lazy">` : flag(l); };
   window.RSshirt = (n) => shirt(n);
   function shirt(name) {
@@ -413,9 +424,12 @@
   function render() {
     const byLeague = {};
     matches.forEach((m) => { (byLeague[m.league] ||= { n: 0, sport: m.sport }).n++; });
-    RS.morph(RS.$("#comp-list"), Object.entries(byLeague).sort(byTop).filter(([l], i) => i < 12 || TOP.includes(l)).map(([l, v]) =>
+    const names = new Set(Object.keys(byLeague).map(lname));
+    TOP.forEach((l) => { if (!names.has(lname(l))) byLeague[l] = { n: 0, sport: "Futebol" }; });
+    const keep = (n) => { let k = 0; return Object.entries(byLeague).sort(byTop).filter(([l]) => TOP.includes(l) || k++ < n); };
+    RS.morph(RS.$("#comp-list"), keep(12).map(([l, v]) =>
       `<button class="comp-item ${league === l ? "active" : ""}" data-league="${RS.esc(l)}"><span class="comp-ico">${lico(l)}</span>
-        <span><b>${RS.esc(lname(l))}</b><small>${RS.esc(v.sport)}</small></span><em>${v.n}</em></button>`).join("")
+        <span><b>${RS.esc(lname(l))}</b><small>${RS.esc(v.sport)}</small></span>${v.n ? `<em>${v.n}</em>` : ""}</button>`).join("")
       || `<p class="muted small" style="padding:0 6px">Sem competições no momento.</p>`);
 
     const count = {};
@@ -442,7 +456,7 @@
     RS.morph(RS.$("#feat-cards"), home ? top.map(feat).join("") : "");
     RS.$("#casino-strip").classList.toggle("hidden", !home);
     document.body.classList.toggle("is-home", home);
-    const pop = Object.entries(byLeague).sort(byTop).filter(([l], i) => i < 10 || TOP.includes(l));
+    const pop = keep(10);
     RS.$("#league-sec").classList.toggle("hidden", !home || !pop.length);
     RS.morph(RS.$("#league-chips"), home ? pop.map(([l]) =>
       `<button class="league-chip" data-league="${RS.esc(l)}"><span class="comp-ico">${lico(l)}</span>${RS.esc(lname(l))}</button>`).join("") : "");
@@ -462,7 +476,7 @@
     const rows = visible();
     const reset = home ? "" : `<div class="filter-bar"><button class="btn btn-outline sm" data-view="all">Ver todos os jogos</button></div>`;
     RS.morph(list, reset + (rows.length ? (league ? rows.map(row).join("") : groups(rows))
-      : `<p class="empty">${view === "fav" ? "Toque na estrela de um jogo para salvá-lo nos favoritos." : view === "all" && !league && !query ? "Nenhum jogo hoje. Veja os próximos dias no Calendário." : "Nenhum jogo disponível no momento."}</p>`));
+      : `<p class="empty">${view === "fav" ? "Toque na estrela de um jogo para salvá-lo nos favoritos." : view === "all" && !league && !query ? "Nenhum jogo hoje. Veja os próximos dias no Calendário." : league ? "Sem jogos abertos nesta liga agora. A próxima rodada aparece aqui assim que as odds abrirem." : "Nenhum jogo disponível no momento."}</p>`));
     renderMv();
   }
 
