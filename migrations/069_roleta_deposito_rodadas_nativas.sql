@@ -101,21 +101,19 @@ begin
   end if;
   -- rodada grátis: liberada na PlayFiver (/free_bonus) → a rodada vem marcada (free_rounds) ou sem aposta;
   -- sem liberação nativa vale o jeito antigo (aposta até o valor da rodada). Não desconta do saldo e o ganho (até o teto) vai sem rollover
-  if v_bet > 0 or v_nat then
-    select u.* into r from public.user_rewards u join public.casino_catalog c on c.id = u.game_id
-     where u.user_id = v_user and u.kind = 'freespins' and u.status = 'em_uso' and u.spins_left > 0 and u.expires_at > now()
-       and c.pf_code = v_game
-       and (case when u.pf_granted_at is not null then v_nat or v_bet = 0 else v_bet > 0 and v_bet <= u.amount end)
-     order by u.id limit 1 for update of u;
-    if found then
-      v_free := r.id;
-      v_win := greatest(0, least(v_win, coalesce(r.max_win, 1e12) - r.won));
-      update public.user_rewards set spins_left = spins_left - 1, won = won + v_win,
-        status = case when spins_left - 1 <= 0 then 'usado' else status end, used_at = case when spins_left - 1 <= 0 then now() end
-       where id = r.id;
-      if v_win > 0 then perform public._move(v_user, v_win, 'casino_win', 'Rodada grátis: ' || coalesce(r.game_name, v_game)); end if;
-      v_bet := 0;
-    end if;
+  select u.* into r from public.user_rewards u join public.casino_catalog c on c.id = u.game_id
+   where u.user_id = v_user and u.kind = 'freespins' and u.status = 'em_uso' and u.spins_left > 0 and u.expires_at > now()
+     and c.pf_code = v_game
+     and (case when u.pf_granted_at is not null then v_nat or v_bet = 0 else v_bet > 0 and v_bet <= u.amount end)
+   order by u.id limit 1 for update of u;
+  if found then
+    v_free := r.id;
+    v_win := greatest(0, least(v_win, coalesce(r.max_win, 1e12) - r.won));
+    update public.user_rewards set spins_left = spins_left - 1, won = won + v_win,
+      status = case when spins_left - 1 <= 0 then 'usado' else status end, used_at = case when spins_left - 1 <= 0 then now() end
+     where id = r.id;
+    if v_win > 0 then perform public._move(v_user, v_win, 'casino_win', 'Rodada grátis: ' || coalesce(r.game_name, v_game)); end if;
+    v_bet := 0;
   end if;
   if v_free is null and v_nat then v_bet := 0; end if;
   if v_free is null then
