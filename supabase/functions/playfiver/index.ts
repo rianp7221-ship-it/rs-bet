@@ -1,5 +1,6 @@
 // playfiver — cassino PlayFiver em carteira única (os jogos usam o saldo do site).
 // Jogador logado: { action: "launch", game: "<casino_catalog.id>" } → { url }.
+// Cron (x-cron-secret): { action: "inspect" } lista os jogos com rodadas grátis nativas (rounds_free).
 // Admin (casino.manage): { action: "sync" } importa provedores e jogos; { action: "status" } mostra agente e saldos.
 // Sem Authorization: webhooks da PlayFiver (saldo e WinBet/Refund), cadastrados como
 // https://<ref>.supabase.co/functions/v1/playfiver (aceita também /webhook e /api/webhook).
@@ -55,7 +56,7 @@ async function sync() {
   const rows = games.filter((g) => pid.has(g.provider?.name) && g.game_code).map((g, i) => ({
     id: `pf:${pid.get(g.provider.name)}:${g.game_code}`.slice(0, 200), provider: pid.get(g.provider.name), name: g.name,
     category: cat(g.provider.name), pf_provider: g.provider.name, pf_code: String(g.game_code), pf_original: !!g.original,
-    image: g.image_url, sort: 1000 + i, max_stake: 100000, active: g.status !== false,
+    image: g.image_url, sort: 1000 + i, max_stake: 100000, active: g.status !== false, pf_free: g.rounds_free === true,
   }));
   const uniq = [...new Map(rows.map((r) => [r.id, r])).values()];
   const { data: ex } = await sb.from("casino_catalog").select("id").like("id", "pf:%").range(0, 49999);
@@ -89,6 +90,14 @@ Deno.serve(async (req) => {
   const auth = req.headers.get("Authorization") ?? "";
   const body = await req.json().catch(() => ({}));
   if (!body?.action) return await webhook(body);
+  if (body.action === "inspect") {
+    const secret = Deno.env.get("CRON_SECRET");
+    if (!secret || req.headers.get("x-cron-secret") !== secret) return json({ error: "Sem permissão" }, 401);
+    const gm = await pf("/games");
+    const games: any[] = gm.data?.data ?? [];
+    const free = games.filter((g) => g.rounds_free === true && g.game_code).map((g) => [g.provider?.name, String(g.game_code)]);
+    return json({ total: games.length, free });
+  }
 
   const userSb = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { Authorization: auth } } });
   const { data: { user } } = await userSb.auth.getUser();
