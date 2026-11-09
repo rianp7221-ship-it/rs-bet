@@ -77,6 +77,9 @@ async function grantFree(uid: string, g: any) {
     .gt("spins_left", 0).gt("expires_at", new Date().toISOString()).order("id").limit(1).maybeSingle();
   if (!rw) return { free: 0, granted: false };
   if (rw.pf_granted_at) return { free: rw.spins_left, granted: false };
+  // a PlayFiver não deixa escolher o valor da rodada (o jogo define); settings.freespin_native = false pausa a liberação nativa
+  const { data: nat } = await sb.from("settings").select("value").eq("key", "freespin_native").maybeSingle();
+  if (nat && [false, "false", '"false"'].includes(nat.value)) return { free: 0, granted: false, fallback: rw.spins_left };
   const r = await pf("/free_bonus", { agent_token: TOKEN, secret_key: SECRET, user_code: uid, game_code: g.pf_code, rounds: rw.spins_left });
   const ok = r.status < 300 && r.data?.status === true;
   const msg = (typeof r.data?.msg === "string" ? r.data.msg : "") || String(r.status);
