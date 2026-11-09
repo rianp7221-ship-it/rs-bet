@@ -234,7 +234,10 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
   }
 
   // ligas sem jogo nas próximas 6 h só na rodada do começo de cada hora; as com jogo perto, em toda rodada (15 min)
-  if (mode === "full" && !only && new Date().getUTCMinutes() >= 10) {
+  // sábado e domingo (horário de Brasília): varredura completa só nas horas pares, pra sobrar cota pro ao vivo
+  const br = new Date(Date.now() - 3 * 3600_000);
+  const weekendOddHour = [0, 6].includes(br.getUTCDay()) && br.getUTCHours() % 2 === 1;
+  if (mode === "full" && !only && (new Date().getUTCMinutes() >= 10 || weekendOddHour)) {
     const { data: soon } = await sb.from("matches").select("external_id").eq("status", "open").not("external_id", "is", null)
       .gte("starts_at", new Date().toISOString()).lt("starts_at", new Date(Date.now() + NEAR_MS).toISOString());
     const near = new Set((soon ?? []).map((m) => sportOf(m.external_id)));
