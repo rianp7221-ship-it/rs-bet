@@ -368,7 +368,7 @@
         const hist = [...(rw || []).filter((r) => !live(r)), ...(bs || []).filter((b) => !["ativo", "aguardando_deposito"].includes(b.status))]
           .sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).map((x) => (x.kind === "freebet" || x.kind === "freespins" ? rwCard(x) : bnCard(x)));
         const list = (id, arr, empty, on) => `<div class="bz-list${on ? "" : " hidden"}" data-bzl="${id}">${arr.length ? arr.join("") : `<p class="muted center small bz-empty">${empty}</p>`}</div>`;
-        const whTxt = !wh?.on ? "" : wh.spun ? `Você já girou hoje: ${RS.esc(wh.label)}` : wh.bet >= wh.min ? "Seu giro de hoje está liberado!" : `Aposte ${RS.money(wh.min)} hoje e gire (falta ${RS.money(wh.min - wh.bet)})`;
+        const whTxt = !wh?.on ? "" : wh.spun ? `Você já girou hoje: ${RS.esc(wh.label)}` : wh.dep ? "Seu giro de hoje está liberado!" : "Faça seu primeiro depósito e gire grátis todo dia";
         body.innerHTML = `${wh?.on ? `<button class="bz-wheel" data-bzw><span class="bz-wi">🎡</span><span><b>Roda da Sorte</b><small>${whTxt}</small></span><i>${wh.spun ? "Ver" : "Girar"}</i></button>` : ""}
           <div class="ap-card"><h3>Código promocional</h3>
             <form id="cp-f" style="display:flex;gap:8px"><input class="input" name="c" placeholder="Digite o código" required style="text-transform:uppercase"><button class="btn btn-dark">Resgatar</button></form></div>

@@ -69,6 +69,21 @@ async function sync() {
   return json({ providers: provs.length, games: uniq.length, new: uniq.filter((r) => !have.has(r.id)).length });
 }
 
+// rodadas grátis da roleta: libera o pacote no próprio jogo (aposta travada pelo jogo); depois que acaba o jogo volta pro saldo
+async function grantFree(uid: string, g: any) {
+  const { data: rw } = await sb.from("user_rewards").select("id,spins_left,pf_granted_at")
+    .eq("user_id", uid).eq("kind", "freespins").eq("status", "em_uso").eq("game_id", g.id)
+    .gt("spins_left", 0).gt("expires_at", new Date().toISOString()).order("id").limit(1).maybeSingle();
+  if (!rw) return { free: 0, granted: false };
+  if (rw.pf_granted_at) return { free: rw.spins_left, granted: false };
+  const r = await pf("/free_bonus", { agent_token: TOKEN, secret_key: SECRET, user_code: uid, game_code: g.pf_code, rounds: rw.spins_left });
+  const ok = r.status < 300 && r.data?.status === true;
+  const msg = (typeof r.data?.msg === "string" ? r.data.msg : "") || String(r.status);
+  await sb.from("user_rewards").update(ok ? { pf_granted_at: new Date().toISOString(), pf_grant_msg: msg } : { pf_grant_msg: msg }).eq("id", rw.id).is("pf_granted_at", null);
+  if (!ok) console.error("free_bonus", r.status, JSON.stringify(r.data).slice(0, 300));
+  return ok ? { free: rw.spins_left, granted: true } : { free: 0, granted: false, fallback: rw.spins_left };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const auth = req.headers.get("Authorization") ?? "";
@@ -102,13 +117,16 @@ Deno.serve(async (req) => {
   if (!g?.pf_code || !g.active || !p?.active || !["true", '"true"', true].includes(s?.value ?? "true"))
     return json({ error: "Este jogo está temporariamente indisponível" }, 409);
 
-  const r = await pf("/game_launch", {
+  const launch = () => pf("/game_launch", {
     agentToken: TOKEN, secretKey: SECRET, user_code: user.id, game_code: g.pf_code, provider: g.pf_provider,
     game_original: !!g.pf_original, user_balance: Number(prof?.balance ?? 0), lang: "pt",
   });
+  let r = await launch();
+  const fr = r.data?.launch_url ? await grantFree(user.id, g) : { free: 0, granted: false };
+  if (fr.granted) r = await launch();
   if (!r.data?.launch_url) {
     console.error("game_launch", r.status, JSON.stringify(r.data).slice(0, 300));
     return json({ error: "Não foi possível abrir o jogo agora. Tente novamente.", detail: typeof r.data?.msg === "string" ? r.data.msg : r.status }, 502);
   }
-  return json({ url: r.data.launch_url, name: g.name });
+  return json({ url: r.data.launch_url, name: g.name, free: fr.free, free_fallback: (fr as any).fallback ?? 0 });
 });

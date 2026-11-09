@@ -111,21 +111,19 @@
     const st = await RS.rpc("wheel_status").catch(() => null);
     if (!st?.on) { RS.toast("Roleta indisponível no momento.", "error"); return; }
     const seg = 360 / st.prizes.length, at = (i) => 360 - (i + 0.5) * seg;
-    const falta = Math.max(0, st.min - (st.bet || 0)), pct = Math.min(100, Math.round(((st.bet || 0) / st.min) * 100));
-    const state = !st.logged ? "login" : st.spun ? "spun" : falta > 0 ? "lock" : "spin";
+    const state = !st.logged ? "login" : st.spun ? "spun" : !st.dep ? "lock" : "spin";
     const msg = { login: "Entre na sua conta para girar a roleta.", spun: `Você já girou hoje: <b>${RS.esc(st.label)}</b>. Volte amanhã!`,
-      lock: `Aposte <b>${RS.money(falta)}</b> hoje para liberar seu giro.`, spin: "Seu giro de hoje está liberado! Toque em <b>GIRAR</b>." }[state];
-    const btn = { login: "Entrar para girar", spun: "Ver meus bônus", lock: "Apostar agora", spin: "GIRAR AGORA" }[state];
+      lock: "Faça seu <b>primeiro depósito</b> para liberar a roleta. Depois é 1 giro grátis todo dia, sem precisar apostar.", spin: "Seu giro de hoje está liberado! Toque em <b>GIRAR</b>." }[state];
+    const btn = { login: "Entrar para girar", spun: "Ver meus bônus", lock: "Depositar agora", spin: "GIRAR AGORA" }[state];
     const kinds = [...new Set(st.prizes.map((l) => wLabel(l)).filter((x) => x[0] !== "✕").map((x) => `${x[0]} ${x[1].toLowerCase()}`))];
     const m = RS.modal(`<div class="wh wh-${state}"><div class="wh-stars"></div>
       <div class="wh-kick">🎁 Prêmios todos os dias</div><h3>Roda da Sorte</h3>
-      ${st.logged && !st.spun ? `<div class="wh-prog"><div><span>Apostado hoje</span><b>${RS.money(Math.min(st.bet || 0, st.min))} / ${RS.money(st.min)}</b></div><i><s style="width:${pct}%"></s></i></div>` : ""}
       <div class="wh-box"><i class="wh-pin"></i><div class="wh-disc" style="transform:rotate(${st.spun ? at(st.idx) : 0}deg)">${wheelDisc(st.prizes)}</div>
         <div class="wh-frame">${wheelFrame(20)}</div><button class="wh-hub" data-wh="${state}" aria-label="${btn}">${state === "spin" ? "GIRAR" : state === "lock" ? "🔒" : state === "spun" ? "✓" : "▶"}</button></div>
       <p class="wh-msg">${msg}</p>
       <button class="btn wh-go w-full" data-wh="${state}">${btn}</button>
       <div class="wh-legend">${kinds.map((k) => `<span>${RS.esc(k)}</span>`).join("")}</div>
-      <p class="small wh-terms">1 giro por dia para quem apostou ${RS.money(st.min)} no dia. Aposta grátis: só o lucro vai para o saldo, sem rollover, odd mínima 1,50. Rodadas grátis: ganho sem rollover, até R$ 50. Validade de 7 dias.</p></div>`);
+      <p class="small wh-terms">1 giro grátis por dia para quem já fez pelo menos 1 depósito, sem precisar apostar. Aposta grátis: só o lucro vai para o saldo, sem rollover, odd mínima 1,50. Rodadas grátis: ganho sem rollover, até R$ 50. Validade de 7 dias.</p></div>`);
     m.classList.add("wh-modal");
     m.addEventListener("click", async (e) => {
       const b = e.target.closest("[data-wh]");
@@ -133,8 +131,8 @@
       const a = b.dataset.wh;
       if (a === "login") { location.href = "login.html"; return; }
       if (a === "lock") {
-        RS.toast(`Falta apostar ${RS.money(falta)} hoje para liberar o giro.`, "error");
-        if (b.classList.contains("wh-go")) { m.remove(); document.querySelector('[data-tabs] [data-tab="sports"]')?.click(); RS.$("#sports, .sports, main")?.scrollIntoView({ behavior: "smooth" }); }
+        if (b.classList.contains("wh-go")) { m.remove(); document.dispatchEvent(new Event("rs:deposit")); }
+        else RS.toast("Faça seu primeiro depósito para liberar a roleta.", "error");
         return;
       }
       if (a === "close") { m.remove(); return; }
@@ -167,8 +165,8 @@
     const card = el?.closest(".pt");
     if (!st?.on) { card?.remove(); return; }
     RS.$(".pc-wheel-art", card).innerHTML = wheelSvg(st.prizes, false);
-    el.textContent = st.spun ? "Volte amanhã" : st.logged && st.bet >= st.min ? "Giro liberado!" : "Gire grátis todo dia";
-    card.classList.toggle("pt-ready", !st.spun && st.logged && st.bet >= st.min);
+    el.textContent = st.spun ? "Volte amanhã" : st.logged && st.dep ? "Giro liberado!" : "Gire grátis todo dia";
+    card.classList.toggle("pt-ready", !st.spun && st.logged && st.dep);
   }
   let topPick = null;
   async function loadTop() {
