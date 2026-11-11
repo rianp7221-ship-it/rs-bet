@@ -4,6 +4,7 @@
 // placar errado ou um jogo trocado na fonte externa não travar o mercado para sempre.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { cors, json } from "../_shared/auth.ts";
+import { hits, tokens } from "../_shared/names.ts";
 
 const ESPN: Record<string, string> = {
   "Brazil Série A": "bra.1", "Brazil Série B": "bra.2", "Copa do Brasil": "bra.copa_do_brazil",
@@ -29,11 +30,6 @@ const ESPN: Record<string, string> = {
   "Liga Nacional Guatemala": "gua.1", "Copa Colômbia": "col.copa",
 };
 const LOCK_MS = 30_000, MAX_MS = 180_000;
-const STOP = new Set(["fc", "cf", "sc", "ac", "cd", "ad", "sk", "fk", "if", "bk", "afc", "ud", "rc", "club", "clube", "de", "the",
-  "city", "united", "town", "real", "sporting", "athletic", "atletico", "esporte", "futebol", "calcio", "sport"]);
-const tokens = (s: string) => new Set(s.replace(/ø/g, "o").replace(/ı/g, "i").normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
-  .toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3 && !STOP.has(t)));
-const hits = (a: Set<string>, b: Set<string>) => [...a].filter((t) => b.has(t)).length;
 
 type Live = { id: number; league: string; home: string; away: string; starts_at: string; score_home: number | null; score_away: number | null; suspended_until: string | null };
 type G365 = { id: number; startTime: string; statusGroup: number; homeCompetitor: { name: string; score?: number }; awayCompetitor: { name: string; score?: number } };
