@@ -751,6 +751,17 @@ html:not(.g-leao) [data-game="leao"] { display: none !important; }
 .trk-tip b { display: block; padding: 4px 10px; color: #fff; font-size: 13px; text-shadow: 0 1px 2px rgba(0,0,0,.4); }
 .trk-tip span { display: block; padding: 4px 10px; font-weight: 600; }
 .trk-wait { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: rgba(255,255,255,.85); font-weight: 600; }
+.trk-court { aspect-ratio: 30.4 / 17.4; background: #c4622d; }
+.trk-pos { position: absolute; top: 50%; transform: translateY(-50%); width: 46%; text-align: center; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.6); pointer-events: none; }
+.trk-pos.l { left: 4%; } .trk-pos.r { right: 4%; }
+.trk-pos b { display: block; font-size: 16px; } .trk-pos span { font-size: 13px; }
+.trk-res { margin-top: 12px; background: #1a222d; border-radius: 12px; overflow-x: auto; }
+.trk-res table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.trk-res th, .trk-res td { padding: 9px 8px; text-align: center; border-bottom: 1px solid #222b38; }
+.trk-res th { color: #9aa6b8; font-weight: 500; }
+.trk-res td:first-child { text-align: left; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trk-res .tot { background: #3a4554; color: #fff; font-weight: 700; }
+.trk-court + .trk-res + .trk-panel { margin-top: 14px; }
 .trk-tabs { margin: 14px 0 10px; background: #1d2632; }
 .trk-tabs button { color: #9aa6b8; }
 .trk-tabs button.active { background: #2b3644; color: #fff; }

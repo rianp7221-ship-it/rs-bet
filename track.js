@@ -6,6 +6,7 @@
   const esc = (s) => RS.esc(String(s ?? ""));
   // estatísticas mostradas (ids do 365Scores), na ordem
   const STATS = [10, 11, 24, 3, 4, 8, 9, 2];
+  const STATS_BK = [5, 9, 13, 17, 18, 19, 21, 20, 22];
   const PT = { Goal: "Gol", Substitution: "Substituição", "Yellow Card": "Cartão amarelo", "Red Card": "Cartão vermelho", "Missed Penalty": "Pênalti perdido", "Penalty Miss": "Pênalti perdido", "Own Goal": "Gol contra" };
   let cur = null;
 
@@ -83,12 +84,63 @@
     </div>`;
   };
 
+  // quadra FIBA em metros (28 x 15), mandante ataca para a direita; arremessos do chartEvents (side/line em % rumo à cesta)
+  const courtHalf = `<rect x="0" y="5.05" width="5.8" height="4.9" fill="#b8492d"/>
+    <path d="M0 .9H2.99A6.75 6.75 0 0 1 2.99 14.1H0M5.8 5.7A1.8 1.8 0 0 1 5.8 9.3"/><rect x="0" y="5.05" width="5.8" height="4.9"/>
+    <line x1="1.2" y1="6.6" x2="1.2" y2="8.4" stroke-width=".12"/><circle cx="1.575" cy="7.5" r=".23" stroke="#ff7a00" stroke-width=".09"/>`;
+  function shots(g) {
+    const names = new Map((g.members || []).map((m) => [m.id, m.shortName || m.name]));
+    return (g.chartEvents?.events || []).slice().sort((a, b) => Number(a.key) - Number(b.key)).map((e) => {
+      const flip = e.side < 50;
+      let x = (flip ? 100 - e.side : e.side) / 100 * 28, y = (flip ? 100 - e.line : e.line) / 100 * 15;
+      const three = Math.hypot(x - 26.425, y - 7.5) > 6.6;
+      if (e.competitorNum === 2) { x = 28 - x; y = 15 - y; }
+      return { x, y, made: e.type === 0, three, team: e.competitorNum, who: names.get(e.playerId) || "" };
+    });
+  }
+  const ink = (c) => {
+    const n = parseInt(String(c || "").replace("#", ""), 16);
+    return /^#[0-9a-f]{6}$/i.test(c || "") && ((n >> 16) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114) > 170 ? "#111;text-shadow:none" : "#fff";
+  };
+  const court = (g) => {
+    const sh = shots(g), last = sh.at(-1);
+    const poss = last?.made ? 3 - last.team : 0, pc = poss === 1 ? g.homeCompetitor : poss === 2 ? g.awayCompetitor : null;
+    const lt = last && last.team === 1 ? g.homeCompetitor : last ? g.awayCompetitor : null;
+    const px = (x) => (x + 1.2) / 30.4 * 100, py = (y) => (y + 1.2) / 17.4 * 100;
+    return `<div class="trk-pitch trk-court">
+      <svg viewBox="-1.2 -1.2 30.4 17.4" preserveAspectRatio="none" aria-hidden="true">
+        <rect x="-1.2" y="-1.2" width="30.4" height="17.4" fill="#c4622d"/>
+        ${Array.from({ length: 20 }, (_, i) => `<rect x="0" y="${i * 0.75}" width="28" height=".75" fill="${["#d9b98b", "#d2b07f", "#dcbf93", "#d5b585"][i % 4]}"/>`).join("")}
+        ${poss ? `<rect x="${poss === 1 ? 14 : 0}" y="0" width="14" height="15" fill="rgba(60,40,20,.22)"/>` : ""}
+        <g fill="none" stroke="rgba(255,255,255,.9)" stroke-width=".07">
+          <rect x="0" y="0" width="28" height="15"/><line x1="14" y1="0" x2="14" y2="15"/><circle cx="14" cy="7.5" r="1.8"/>
+          <g>${courtHalf}</g><g transform="translate(28 0) scale(-1 1)">${courtHalf}</g>
+        </g>
+        ${sh.slice(-12).map((s) => `<circle cx="${s.x.toFixed(2)}" cy="${s.y.toFixed(2)}" r=".32" fill="${s.made ? esc((s.team === 1 ? g.homeCompetitor : g.awayCompetitor).color || "#ff4d00") : "none"}" stroke="#fff" stroke-width=".07" opacity="${s === last ? 1 : 0.55}"/>`).join("")}
+      </svg>
+      <span class="trk-side l">${esc(g.homeCompetitor.name)}</span><span class="trk-side r">${esc(g.awayCompetitor.name)}</span>
+      ${pc ? `<div class="trk-pos ${poss === 1 ? "r" : "l"}"><b>${esc(pc.name)}</b><span>Posse de bola</span></div>` : ""}
+      ${last ? `<i class="trk-ball" style="left:${px(last.x)}%;top:${py(last.y)}%"></i>
+      <div class="trk-tip${py(last.y) < 40 ? " down" : ""}" style="left:${Math.min(Math.max(px(last.x), 27), 73)}%;top:${py(last.y)}%">
+        <b style="background:${esc(lt.color || "#ff4d00")};color:${ink(lt.color)}">${esc(lt.name)}</b><span>${last.made ? `Cesta de ${last.three ? 3 : 2}` : "Arremesso errado"}${last.who ? ` · ${esc(last.who)}` : ""}</span></div>`
+        : `<p class="trk-wait">Aguardando arremessos…</p>`}
+    </div>`;
+  };
+  function periodsHtml(g) {
+    const st = (g.stages || []).filter((s) => s.shortName);
+    if (!st.length) return "";
+    const v = (n) => (n == null || n < 0 ? "-" : n);
+    const row = (c, k) => `<tr><td>${esc(c.name)}</td>${st.map((s) => `<td${s.isCurrent ? ' class="tot"' : ""}>${v(s[k])}</td>`).join("")}</tr>`;
+    return `<div class="trk-res"><table><thead><tr><th></th>${st.map((s) => `<th${s.isCurrent ? ' class="tot"' : ""}>${esc(s.shortName)}</th>`).join("")}</tr></thead>
+      <tbody>${row(g.homeCompetitor, "homeCompetitorScore")}${row(g.awayCompetitor, "awayCompetitorScore")}</tbody></table></div>`;
+  }
+
   function statsHtml(st, g) {
     const rows = st?.statistics || [];
     if (!rows.length) return `<p class="muted trk-empty">Estatísticas ainda não disponíveis.</p>`;
     const by = new Map();
     for (const r of rows) by.set(r.id, { ...(by.get(r.id) || { name: r.name }), [r.competitorId === g.homeCompetitor.id ? "h" : "a"]: r.value });
-    const ids = STATS.filter((id) => by.has(id));
+    const ids = (g.sportId === 2 ? STATS_BK : STATS).filter((id) => by.has(id));
     const yc = rows.find((r) => /amarel/i.test(r.name));
     if (yc && !ids.includes(yc.id)) ids.splice(ids.length - 1, 0, yc.id);
     return ids.map((id) => {
@@ -114,11 +166,14 @@
   function clockOf(c) {
     const g = c.game, pt = g.preciseGameTime;
     if (g.statusGroup !== 3) return esc(g.statusText || "");
+    const bk = g.sportId === 2;
+    if (bk && /intervalo/i.test(g.statusText || "")) return esc(g.statusText);
+    let t = g.gameTimeDisplay || "";
     if (pt?.autoProgress) {
-      const s = pt.minutes * 60 + (pt.seconds || 0) + Math.floor((Date.now() - c.at) / 1000);
-      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+      const s = Math.max(0, pt.minutes * 60 + (pt.seconds || 0) + (pt.clockDirection === -1 ? -1 : 1) * Math.floor((Date.now() - c.at) / 1000));
+      t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
     }
-    return esc(g.gameTimeDisplay || g.shortStatusText || "");
+    return esc(bk ? [g.statusText, t].filter(Boolean).join(" ") : t || g.shortStatusText || "");
   }
 
   function render() {
@@ -129,10 +184,10 @@
     const g = c.game;
     RS.morph(body, `
       <div class="trk-score"><span>${esc(g.homeCompetitor.name)}</span><b>${g.homeCompetitor.score ?? 0} - ${g.awayCompetitor.score ?? 0}</b><span>${esc(g.awayCompetitor.name)}</span></div>
-      <div class="trk-head"><b>Campinho</b><span data-trk-clock>${clockOf(c)}</span></div>
-      ${pitch(c.play, g)}
+      <div class="trk-head"><b>${g.sportId === 2 ? "Quadra" : "Campinho"}</b><span data-trk-clock>${clockOf(c)}</span></div>
+      ${g.sportId === 2 ? court(g) + periodsHtml(g) + `<div class="trk-panel">${statsHtml(c.stats, g)}</div>` : `${pitch(c.play, g)}
       <div class="seg trk-tabs"><button data-trk-tab="stats" class="${c.tab === "stats" ? "active" : ""}">Estatísticas</button><button data-trk-tab="events" class="${c.tab === "events" ? "active" : ""}">Lances</button></div>
-      <div class="trk-panel">${c.tab === "stats" ? statsHtml(c.stats, g) : eventsHtml(g)}</div>
+      <div class="trk-panel">${c.tab === "stats" ? statsHtml(c.stats, g) : eventsHtml(g)}</div>`}
       <p class="trk-src">Dados: 365Scores</p>`);
   }
 
