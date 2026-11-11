@@ -50,6 +50,7 @@
   const seen = new Map();
   function clock(m) {
     if (m.period === "HT") return "Intervalo";
+    if (/^(Q\d|Intervalo|Prorroga|Primeiro|Segundo|OT)/i.test(m.period || "")) return m.period;
     const age = (Date.now() - Date.parse(m.clock_at || "")) / 1000;
     if (age >= 0 && age < 60) {
       const t = m.clock_secs + Math.floor(age);
