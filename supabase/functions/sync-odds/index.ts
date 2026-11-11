@@ -5,7 +5,7 @@
 import { adminClient, cors, json } from "../_shared/auth.ts";
 import { getProvider, type Markets } from "../_shared/providers.ts";
 import { adjustMarkets, adjustOdds, capMarkets, capOdds, overCap, type Adjust } from "../_shared/adjust.ts";
-import { stats365 } from "../_shared/stats365.ts";
+import { coverage365, type MatchRef, stats365 } from "../_shared/stats365.ts";
 
 type Odds = { home: number | null; draw?: number | null; away: number | null };
 // margem da casa: tira a margem do mercado (probabilidade justa) e aplica a margem configurada
@@ -52,6 +52,31 @@ async function waitStats(sb: any, m: Started): Promise<boolean> {
 }
 // liquida o jogo encerrado; false = ainda esperando as estatísticas
 // deno-lint-ignore no-explicit-any
+// liga só oferece escanteios/cartões/chutes se alguma fonte tem o dado dela (365Scores nos últimos jogos do campeonato,
+// ou 90% dos jogos liquidados aqui nos últimos 30 dias); a trigger a0_stat_markets tira os mercados das ligas sem (tabela league_stats)
+const COVER_TTL_MS = 12 * 3600_000, COVER_MAX = 8;
+async function refreshCoverage(sb: Admin, cand: Map<string, MatchRef[]>): Promise<void> {
+  if (!cand.size) return;
+  const names = [...cand.keys()];
+  const { data: known } = await sb.from("league_stats").select("league, checked_at").in("league", names);
+  const fresh = new Set((known ?? []).filter((k: { checked_at: string }) => Date.now() - Date.parse(k.checked_at) < COVER_TTL_MS).map((k: { league: string }) => k.league));
+  const todo = names.filter((n) => !fresh.has(n)).slice(0, COVER_MAX);
+  if (!todo.length) return;
+  type H = { league: string; home: string; away: string; starts_at: string; corners_home: number | null; cards_home: number | null; shots_home: number | null; sot_home: number | null };
+  const { data: hist } = await sb.from("matches").select("league, home, away, starts_at, corners_home, cards_home, shots_home, sot_home")
+    .eq("status", "settled").in("league", todo).gte("starts_at", new Date(Date.now() - 30 * 86400_000).toISOString()).order("starts_at");
+  const at = new Date().toISOString();
+  const rows = await Promise.all(todo.map(async (league) => {
+    const h = ((hist ?? []) as H[]).filter((x) => x.league === league);
+    // o 365Scores lista os jogos já encerrados de forma mais completa que os próximos: tenta primeiro os liquidados
+    let c = null;
+    for (const m of [...h.slice(-3), ...cand.get(league)!]) if ((c = await coverage365(m).catch(() => null))) break;
+    const ok = (k: keyof H) => h.length >= 5 && h.filter((x) => x[k] != null).length >= 0.9 * h.length;
+    return { league, corners: !!c?.corners || ok("corners_home"), cards: !!c?.cards || ok("cards_home"),
+      shots: !!c?.shots || (ok("shots_home") && ok("sot_home")), checked_at: at };
+  }));
+  await sb.from("league_stats").upsert(rows);
+}
 async function settleFinished(sb: any, feed: { corners?: (id: string) => Promise<FeedStats | null> }, m: Started, fixture: string, result: string): Promise<{ error?: string; waiting?: boolean }> {
   if (m.suspend_reason === STATS_WAIT && Date.parse(m.suspended_until ?? "") > Date.now()) return { waiting: true };
   if (!(await saveStats(sb, feed, m, fixture)) && (await waitStats(sb, m))) return { waiting: true };
@@ -299,6 +324,7 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
     };
     for (let i = 0; i < groups.length; i += 4) await Promise.all(groups.slice(i, i + 4).map(runGroup));
   }
+  const statCand = new Map<string, MatchRef[]>();
   const syncLeague = async (sport: string) => {
     try {
       const events = await feed.odds(sport);
@@ -310,6 +336,10 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
       const priced = new Set<string>();
       for (const ev of events) {
         if (!ev.odds) continue;
+        if (ev.markets && Object.keys(ev.markets).some((k) => STAT_RE.test(k))) {
+          const c = statCand.get(ev.league) ?? [];
+          if (c.length < 3) statCand.set(ev.league, [...c, { home: ev.home, away: ev.away, starts_at: ev.commence_time }]);
+        }
         const isLive = new Date(ev.commence_time).getTime() <= now;
         const odds = isLive ? capOdds(applyMargin(ev.odds, margin("odds_margin_live")), liveCap)
           : capOdds(adjustOdds(applyMargin(ev.odds, margin("odds_margin_pre")), adjust), preCap);
@@ -350,6 +380,7 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
     }
   };
   if (!fanOut) for (const sport of sports) await syncLeague(sport);
+  await refreshCoverage(sb, statCand).catch((e) => errors.push(`cobertura de estatísticas: ${(e as Error).message}`));
 
   // 2) placar e resultados
   for (const [sport, list] of startedBySport) {
