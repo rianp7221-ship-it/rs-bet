@@ -36,7 +36,13 @@
   const pxRows = (p) => (m) => pxKeys(m, p).map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]);
   const kKeys = (m) => Object.keys(m?.markets || {}).filter((k) => /^k\d+$/.test(k)).sort((a, b) => a.slice(1) - b.slice(1));
   const kLine = (k) => (Number(k.slice(1)) / 10).toLocaleString("pt-BR");
-  const mkDef = (k) => MK[k] || (/^co\d+$/.test(k) ? [`Escanteios ${coLine(k)}`, { over: `Mais de ${coLine(k)}`, under: `Menos de ${coLine(k)}` }]
+  // basquete: total de pontos (ou + linha x10 com 4+ dígitos) e handicap da casa (hcm35 = -3,5, hcp35 = +3,5)
+  const hcLine = (k, s = 1) => { const v = (k[2] === "m" ? -1 : 1) * s * Number(k.slice(3)) / 10; return (v > 0 ? "+" : "") + v.toLocaleString("pt-BR"); };
+  const ptKeys = (m) => Object.keys(m?.markets || {}).filter((k) => /^ou\d{4,}$/.test(k)).sort((a, b) => a.slice(2) - b.slice(2));
+  const hcKeys = (m) => Object.keys(m?.markets || {}).filter((k) => /^hc[mp]\d+$/.test(k)).sort((a, b) => (a[2] === "m" ? -1 : 1) * a.slice(3) - (b[2] === "m" ? -1 : 1) * b.slice(3));
+  const mkDef = (k) => MK[k] || (/^ou\d{4,}$/.test(k) ? [`Total de Pontos ${pxLine(k)}`, { over: `Mais de ${pxLine(k)}`, under: `Menos de ${pxLine(k)}` }]
+    : /^hc[mp]\d+$/.test(k) ? [`Handicap ${hcLine(k)}`, { home: `Casa ${hcLine(k)}`, away: `Fora ${hcLine(k, -1)}` }]
+    : /^co\d+$/.test(k) ? [`Escanteios ${coLine(k)}`, { over: `Mais de ${coLine(k)}`, under: `Menos de ${coLine(k)}` }]
     : /^k\d+$/.test(k) ? [`Cartões ${kLine(k)}`, { over: `Mais de ${kLine(k)}`, under: `Menos de ${kLine(k)}` }]
     : PX[k.replace(/\d+$/, "")] && /\d$/.test(k) ? [`${PX[k.replace(/\d+$/, "")]} ${pxLine(k)}`, { over: `Mais de ${pxLine(k)}`, under: `Menos de ${pxLine(k)}` }]
     : /^[st]\d+$/.test(k) ? [`${k[0] === "s" ? "Chutes" : "Chutes no Gol"} ${kLine(k)}`, { over: `Mais de ${kLine(k)}`, under: `Menos de ${kLine(k)}` }] : [k, {}]);
@@ -270,7 +276,7 @@
   const score = (m) => (m.score_home != null ? `<b class="score">${m.score_home} - ${m.score_away}</b>` : "");
 
   const row = (m) => `<div class="row">
-      <div class="row-time">${live(m) ? `<i class="live">${m.period === "HT" ? "Intervalo" : m.minute ? m.minute + "'" : "AO VIVO"}</i>${score(m)}` : `${ddmm(m.starts_at)} <br>${hhmm(m.starts_at)}`}</div>
+      <div class="row-time">${live(m) ? `<i class="live">${m.sport === "Basquete" ? RS.esc(m.period || "AO VIVO") : m.period === "HT" ? "Intervalo" : m.minute ? m.minute + "'" : "AO VIVO"}</i>${score(m)}` : `${ddmm(m.starts_at)} <br>${hhmm(m.starts_at)}`}</div>
       <div class="row-teams"><span>${crest(m, "home")}${RS.esc(m.home)}</span><span>${crest(m, "away")}${RS.esc(m.away)}</span>
         <small>${lico(m.league)} ${RS.esc(lname(m.league))}</small></div>
       <div class="row-odds">${odds(m)}</div>
@@ -279,7 +285,7 @@
     </div>`;
 
   // tela do jogo: mercados em blocos que abrem e fecham, separados por abas
-  const MV_TABS = { all: "Todos", main: "Principais", goals: "Gols", corners: "Escanteios", cards: "Cartões", shots: "Chutes" };
+  const MV_TABS = { all: "Todos", main: "Principais", points: "Pontos", goals: "Gols", corners: "Escanteios", cards: "Cartões", shots: "Chutes" };
   // placar exato em 3 colunas: vitória da casa, empate, vitória do visitante
   const CS_COLS = [(h, a) => h > a, (h, a) => h === a, (h, a) => h < a];
   const csRows = (m) => {
@@ -288,7 +294,10 @@
     return Array.from({ length: Math.max(...cols.map((c) => c.length)) }, (_, i) => cols.map((c) => c[i] ? ["cs", c[i], MK.cs[1][c[i]]] : [null]));
   };
   const MV_GROUPS = [
-    { key: "r", tab: "main", name: "Resultado Final", rows: (m) => [[["1x2", "home", m.home], ["1x2", "draw", "Empate"], ["1x2", "away", m.away]]] },
+    { key: "r", tab: "main", name: "Resultado Final", rows: (m) => m.sport === "Basquete" ? [] : [[["1x2", "home", m.home], ["1x2", "draw", "Empate"], ["1x2", "away", m.away]]] },
+    { key: "w", tab: "main", name: "Vencedor (inclui prorrogação)", rows: (m) => m.sport === "Basquete" ? [[["1x2", "home", m.home], ["1x2", "away", m.away]]] : [] },
+    { key: "hc", tab: "main", name: "Handicap de Pontos", rows: (m) => hcKeys(m).map((k) => [[k, "home", `${m.home} ${hcLine(k)}`], [k, "away", `${m.away} ${hcLine(k, -1)}`]]) },
+    { key: "pts", tab: "points", name: "Total de Pontos Mais/Menos", rows: (m) => ptKeys(m).map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
     { key: "ht", tab: "main", name: "Resultado 1º Tempo", rows: (m) => [[["ht1x2", "home", m.home], ["ht1x2", "draw", "Empate"], ["ht1x2", "away", m.away]]] },
     { key: "ou", tab: "goals", name: "Total de Gols Mais/Menos", rows: () => ["ou05", "ou15", "ou25", "ou35", "ou45", "ou55"].map((k) => Object.entries(MK[k][1]).map(([p, l]) => [k, p, l])) },
     { key: "eg", tab: "goals", name: "Gols Exatos", rows: () => [[0, 1, 2], [3, 4, 5], [6]].map((r) => r.map((n) => ["eg", "g" + n, `${n} ${n === 1 ? "gol" : "gols"}`])) },
@@ -336,7 +345,7 @@
     const groups = avail.filter((g) => mvTab === "all" || g.tab === mvTab);
     const allClosed = groups.length && groups.every((g) => mvClosed.has(g.key));
     const top = live(m)
-      ? `<i class="live">${m.period === "HT" ? "Intervalo" : (m.minute ? m.minute + "' " : "") + "AO VIVO"}</i>`
+      ? `<i class="live">${m.sport === "Basquete" ? RS.esc((m.period ? m.period + " " : "") + "AO VIVO") : m.period === "HT" ? "Intervalo" : (m.minute ? m.minute + "' " : "") + "AO VIVO"}</i>`
       : new Date(m.starts_at).toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" }) + " " + hhmm(m.starts_at);
     const sc = m.score_home != null ? `<b class="mv-score">${m.score_home} - ${m.score_away}</b>` : `<i class="mv-vs">x</i>`;
     const keep = el.querySelector(".mv-body")?.scrollTop || 0;
@@ -396,7 +405,7 @@
   function feat(m) {
     const sp = "sp-" + m.sport.normalize("NFD").replace(/[^\w]/g, "").toLowerCase();
     const top = live(m)
-      ? `<i class="live">${m.period === "HT" ? "Intervalo" : m.minute ? m.minute + "' AO VIVO" : "AO VIVO"}</i>${m.score_home != null ? ` ${m.score_home} - ${m.score_away}` : ""}`
+      ? `<i class="live">${m.sport === "Basquete" ? RS.esc((m.period ? m.period + " " : "") + "AO VIVO") : m.period === "HT" ? "Intervalo" : m.minute ? m.minute + "' AO VIVO" : "AO VIVO"}</i>${m.score_home != null ? ` ${m.score_home} - ${m.score_away}` : ""}`
       : `${RS.icon("clock")} ${dayLabel(m.starts_at)} ${hhmm(m.starts_at)}`;
     const big = safeUrl(m.home_logo) && safeUrl(m.away_logo)
       ? `<div class="feat-crests"><img src="${RS.esc(m.home_logo)}" alt=""><img src="${RS.esc(m.away_logo)}" alt=""></div>` : "";
@@ -435,7 +444,7 @@
     const count = {};
     matches.filter((m) => (view === "live" ? live(m) : view !== "all" || league || query || mainDay(m))).forEach((m) => (count[m.sport] = (count[m.sport] || 0) + 1));
     if (sport !== "Popular" && !count[sport]) sport = "Popular";
-    const sports = ["Popular", ...Object.keys(count).sort((a, b) => count[b] - count[a])];
+    const sports = ["Popular", ...Object.keys(count).sort((a, b) => (b === "Futebol") - (a === "Futebol") || count[b] - count[a])];
     RS.$("#sport-pills").innerHTML = sports.map((s) => `<button class="${s === sport ? "active" : ""}" data-sport="${RS.esc(s)}">
       ${s === "Popular" ? RS.icon("grid") : icon(s)} ${RS.esc(s)}${s !== "Popular" ? ` <em>${count[s]}</em>` : ""}</button>`).join("");
 
@@ -568,8 +577,9 @@
       ${fb ? `<small>Odd mínima ${Number(fb.min_odd).toFixed(2)}${total < fb.min_odd ? ` · <b class="fb-warn">bilhete com ${total.toFixed(2)}</b>` : ""} · se ganhar, recebe só o lucro, sem rollover</small>` : ""}</div>` : "";
     slipEl.innerHTML = items.map(([id, s]) => {
       const m = matches.find((x) => x.id === id);
-      const name = (mk, p) => (mk === "1x2" || mk === "dnb" || /^([cst]|ht)1x2$/.test(mk) ? (p === "home" ? m.home : p === "away" ? m.away : "Empate") : mkDef(mk)[1][p]);
-      const mkName = (mk) => (mk === "1x2" ? "Resultado Final" : mkDef(mk)[0]);
+      const name = (mk, p) => (mk === "1x2" || mk === "dnb" || /^([cst]|ht)1x2$/.test(mk) ? (p === "home" ? m.home : p === "away" ? m.away : "Empate")
+        : /^hc[mp]\d+$/.test(mk) ? `${p === "home" ? m.home : m.away} ${hcLine(mk, p === "home" ? 1 : -1)}` : mkDef(mk)[1][p]);
+      const mkName = (mk) => (mk === "1x2" ? (m.sport === "Basquete" ? "Vencedor" : "Resultado Final") : /^hc[mp]\d+$/.test(mk) ? "Handicap de Pontos" : mkDef(mk)[0]);
       const up = s.odd > s.base;
       return `<div class="slip-item">
         <div class="si-main">${s.market === "bb"

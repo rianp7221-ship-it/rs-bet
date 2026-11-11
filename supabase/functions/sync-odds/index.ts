@@ -1,11 +1,11 @@
 // sync-odds — jogos, odds, placares e resultados da API configurada (_shared/providers.ts)
 // Secrets: ODDS_PROVIDER (theoddsapi | apifootball | betsapi), ODDS_API_KEY / API_FOOTBALL_KEY / BETSAPI_TOKEN, ODDS_SPORTS (opcional), CRON_SECRET (cron).
 // Body: { mode: "full" } (padrão: todos os esportes), { mode: "live" } (só esportes com jogo em andamento)
-// ou { mode: "basket" } (basquete: The Odds API + API-Basketball, ver runBasket; secrets ODDS_API_KEY, API_FOOTBALL_KEY, ODDS_BASKET opcional).
+// ou { mode: "basket" } / { mode: "basket_live" } (basquete pela 365Scores com odds da Bet365, ver runBasket e runBasketLive).
 // No full com muitas ligas, a função chama a si mesma com { mode: "full", leagues: [...] } em grupos (limite de CPU por execução).
 import { adminClient, cors, json } from "../_shared/auth.ts";
-import { getProvider, theOddsApi, type Markets } from "../_shared/providers.ts";
-import { AB_DONE, AB_VOID, apiBasketball, BK_DEFAULT, BK_LEAGUE, BK_PREFIX, toaEvents } from "../_shared/basket.ts";
+import { getProvider, type Markets } from "../_shared/providers.ts";
+import { BK_EXT, bkDone, bkLeague, bkLeagueLogo, bkLines, bkList, bkScore, bkTeamLogo, bkVoid, type List365 } from "../_shared/basket.ts";
 import { adjustMarkets, adjustOdds, capMarkets, capOdds, overCap, type Adjust } from "../_shared/adjust.ts";
 import { stats365 } from "../_shared/stats365.ts";
 
@@ -136,6 +136,7 @@ Deno.serve(async (req) => {
   const body: { mode?: string; leagues?: unknown[] } | null = await req.json().catch(() => ({}));
   // full do cron roda em segundo plano: a chamada do pg_net fecha na hora e não segura o ao vivo e o goal-guard (~2 min a cada 15)
   if (body?.mode === "basket") return runBasket(sb);
+  if (body?.mode === "basket_live") return runBasketLive(sb);
   if (body?.mode !== "live" && !Array.isArray(body?.leagues) && req.headers.get("x-cron-secret")) {
     EdgeRuntime.waitUntil(run(req, sb, body).catch((e) => console.error("sync-odds full", e)));
     return json({ modo: "full", segundo_plano: true }, 202);
@@ -402,128 +403,114 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
 }
 
 // ---------- basquete (cron sync-odds-basket a cada 15 min) ----------
-// Odds de pré-jogo da The Odds API (plano grátis): cada busca gasta 1 crédito por liga, então busca a cada BK_ODDS_MS
-// (BK_SOON_MS quando tem jogo nas próximas 3 h ou jogo novo na lista, que é grátis). Sem odds ao vivo: o jogo trava quando começa.
-// Placar e resultado pela API-Basketball (grátis, 1 consulta por dia de jogo em andamento); se ela não achar o jogo, The Odds API /scores.
-const BK_ODDS_MS = 6 * 3600_000, BK_SOON_MS = 2 * 3600_000, BK_SCORES_MS = 2 * 3600_000;
-const BK_AHEAD_MS = 48 * 3600_000, BK_LOGO_DAYS = 3;
-type BkState = { odds_at?: Record<string, string>; scores_at?: Record<string, string>; toa_left?: number | null; ab_left?: number | null };
+// Basquete pela 365Scores (odds da Bet365, ver _shared/basket.ts). Pré-jogo a cada 5 min: lista dos próximos 2 dias e
+// linhas de cada jogo (jogo a mais de 6 h só a cada 30 min). Ao vivo a cada 10 s: placar, quarto, odds e resultado.
+const BK_AHEAD_MS = 48 * 3600_000, BK_FAR_MS = 6 * 3600_000, BK_FAR_EVERY = 30 * 60_000, BK_NEAR_EVERY = 4 * 60_000;
+
+async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>) {
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (i < items.length) await fn(items[i++]); }));
+}
+
+async function bkCfg(sb: Admin) {
+  const { data: cfg } = await sb.from("settings").select("key, value")
+    .in("key", ["odds_margin_pre", "odds_margin_live", "odds_adjust", "odd_max", "live_odd_max", "odds_extra_pct", "odds_jump_pct"]);
+  const num = (k: string) => Number(cfg?.find((c) => c.key === k)?.value ?? 0) || 0;
+  const preCap = num("odd_max");
+  const liveCap = [preCap, num("live_odd_max")].filter((x) => x > 1).reduce((x, y) => Math.min(x, y), Infinity);
+  return { num, preCap, liveCap, adjust: cfg?.find((c) => c.key === "odds_adjust")?.value as Adjust | undefined };
+}
 
 async function runBasket(sb: Admin): Promise<Response> {
-  const toaKey = Deno.env.get("ODDS_API_KEY"), abKey = Deno.env.get("API_FOOTBALL_KEY");
-  if (!toaKey) return json({ modo: "basket", error: "Configure o secret ODDS_API_KEY (The Odds API)" });
-  const toa = theOddsApi(toaKey);
-  const ab = abKey ? apiBasketball(abKey) : null;
-  const leagues = (Deno.env.get("ODDS_BASKET") || BK_DEFAULT).split(",").map((s) => s.trim()).filter(Boolean);
-  const { data: cfg } = await sb.from("settings").select("key, value")
-    .in("key", ["odds_margin_pre", "odds_adjust", "odd_max", "basket_feed"]);
-  const num = (k: string) => Number(cfg?.find((c) => c.key === k)?.value ?? 0) || 0;
-  const adjust = cfg?.find((c) => c.key === "odds_adjust")?.value as Adjust | undefined;
-  const st: BkState = { ...((cfg?.find((c) => c.key === "basket_feed")?.value ?? {}) as BkState) };
-  st.odds_at ??= {}; st.scores_at ??= {};
+  const { num, preCap, adjust } = await bkCfg(sb);
   const errors: string[] = [];
-  let updated = 0, settled = 0, oddsCalls = 0;
+  let updated = 0, voided = 0, calls = 0;
   const now = Date.now();
-  const since = (at?: string) => now - (Date.parse(at ?? "") || 0);
-  const toaLeft = () => { const v = Number(toa.remaining()); return Number.isFinite(v) && toa.remaining() != null ? v : st.toa_left ?? null; };
-
-  const { data: rows } = await sb.from("matches").select("id, external_id, home, away, starts_at, status, home_logo, score_home, score_away, suspended_until, suspend_reason")
-    .like("external_id", `${BK_PREFIX}%`).in("status", ["open", "live"]);
-  const mine = (rows ?? []) as (Started & { status: string })[];
-  const sportOf = (ext: string) => ext.split(":")[0].slice(BK_PREFIX.length);
-
-  // 1) odds de pré-jogo
-  for (const lg of leagues) {
-    try {
-      const listed = (await toaEvents(toaKey, lg)).filter((e) => Date.parse(e.commence_time) > now && Date.parse(e.commence_time) < now + BK_AHEAD_MS);
-      if (!listed.length) continue;
-      const have = new Set(mine.map((m) => m.external_id));
-      const fresh = listed.some((e) => !have.has(`${BK_PREFIX}${lg}:${e.id}`));
-      const soon = listed.some((e) => Date.parse(e.commence_time) < now + 3 * 3600_000);
-      const age = since(st.odds_at[lg]);
-      if (!(age > BK_ODDS_MS || ((soon || fresh) && age > BK_SOON_MS))) continue;
-      const left = toaLeft();
-      if (left != null && left < 15) { errors.push(`${lg}: créditos da The Odds API no fim (${left})`); continue; }
-      const events = await toa.odds(lg);
-      oddsCalls++;
-      st.odds_at[lg] = new Date().toISOString();
-      const ext = (id: string) => `${BK_PREFIX}${lg}:${id}`;
-      const { data: existing } = await sb.from("matches").select("id, external_id, status, home_logo").in("external_id", events.map((e) => ext(e.id)));
-      const byExt = new Map((existing ?? []).map((m) => [m.external_id, m]));
-      for (const ev of events) {
-        if (!ev.odds || Date.parse(ev.commence_time) <= now) continue;
-        const cur = byExt.get(ext(ev.id));
-        if (cur && cur.status !== "open") continue;
-        // sem empate no basquete (a The Odds API já inclui a prorrogação no vencedor)
-        const odds = capOdds(adjustOdds(applyMargin({ ...ev.odds, draw: null }, num("odds_margin_pre")), adjust), num("odd_max"));
-        const row: Record<string, unknown> = {
-          external_id: ext(ev.id), sport: "Basquete", league: BK_LEAGUE[lg] ?? ev.league, home: ev.home, away: ev.away,
-          starts_at: ev.commence_time, odd_home: odds.home, odd_draw: null, odd_away: odds.away, status: "open", synced_at: new Date().toISOString(),
-        };
-        // escudos da API-Basketball, só nos próximos dias (1 consulta por dia de jogo)
-        if (ab && !cur?.home_logo && Date.parse(ev.commence_time) < now + BK_LOGO_DAYS * 86400_000) {
-          const g = await ab.find({ home: ev.home, away: ev.away, starts_at: ev.commence_time }).catch(() => null);
-          if (g) Object.assign(row, { home_logo: await mirrorLogo(sb, g.teams.home.logo), away_logo: await mirrorLogo(sb, g.teams.away.logo), league_logo: await mirrorLogo(sb, g.league.logo) });
-        }
-        const { error } = cur ? await sb.from("matches").update(row).eq("id", cur.id) : await sb.from("matches").insert(row);
-        if (error) errors.push(`${ev.home} x ${ev.away}: ${error.message}`); else updated++;
-      }
-    } catch (e) {
-      errors.push(`${lg}: ${(e as Error).message}`);
-    }
+  let list: List365;
+  try { list = await bkList(new Date(now - 86400_000), new Date(now + BK_AHEAD_MS)); } catch (e) { return json({ modo: "basket", errors: [(e as Error).message] }); }
+  const { data: rows } = await sb.from("matches").select("id, external_id, status, odds_at").like("external_id", `${BK_EXT}%`).in("status", ["open", "live"]);
+  const byExt = new Map((rows ?? []).map((m) => [m.external_id as string, m]));
+  for (const g of list.games) {
+    const cur = byExt.get(BK_EXT + g.id);
+    if (!cur || !bkVoid(g)) continue;
+    const e = await voidMatch(sb, cur.id);
+    if (e) errors.push(`${g.homeCompetitor.name} x ${g.awayCompetitor.name}: ${e}`); else voided++;
   }
-
-  // 2) jogos que já começaram: placar e resultado
-  const started = mine.filter((m) => Date.parse(m.starts_at) <= now);
-  const lost: typeof started = [];
-  for (const m of started) {
+  const due = list.games.filter((g) => {
+    const start = Date.parse(g.startTime);
+    if (g.statusGroup !== 2 || g.odds?.bookmakerId == null || start <= now || start > now + BK_AHEAD_MS) return false;
+    const cur = byExt.get(BK_EXT + g.id);
+    if (!cur) return true;
+    return cur.status === "open" && now - (Date.parse(cur.odds_at ?? "") || 0) > (start - now > BK_FAR_MS ? BK_FAR_EVERY : BK_NEAR_EVERY);
+  });
+  await pool(due, 6, async (g) => {
     try {
-      const g = ab && (ab.remaining() ?? st.ab_left ?? 100) > 5 ? await ab.find(m) : null;
-      if (!g) { lost.push(m); if (m.status === "open") await sb.from("matches").update({ status: "live" }).eq("id", m.id); continue; }
-      const h = g.scores.home.total, a = g.scores.away.total, s = g.status.short;
-      if (AB_VOID.includes(s)) {
-        const e2 = await voidMatch(sb, m.id);
-        if (e2) errors.push(`${m.home} x ${m.away}: ${e2}`); else settled++;
-        continue;
+      calls++;
+      const { odds, markets } = await bkLines(g.id);
+      if (!odds) return;
+      const o = capOdds(adjustOdds(applyMargin(odds, num("odds_margin_pre")), adjust), preCap);
+      const at = new Date().toISOString(), cur = byExt.get(BK_EXT + g.id);
+      const row = {
+        external_id: BK_EXT + g.id, ext365_id: g.id, sport: "Basquete", league: bkLeague(g, list), home: g.homeCompetitor.name, away: g.awayCompetitor.name,
+        starts_at: new Date(g.startTime).toISOString(), odd_home: o.home, odd_draw: null, odd_away: o.away, status: "open",
+        markets: capMarkets(adjustMarkets(marginMarkets(markets, num("odds_margin_pre")), adjust, num("odds_extra_pct")), preCap),
+        home_logo: bkTeamLogo(g.homeCompetitor), away_logo: bkTeamLogo(g.awayCompetitor), league_logo: bkLeagueLogo(g.competitionId),
+        synced_at: at, odds_at: at,
+      };
+      const { error } = cur ? await sb.from("matches").update(row).eq("id", cur.id) : await sb.from("matches").insert(row);
+      if (error) errors.push(`${row.home} x ${row.away}: ${error.message}`); else updated++;
+    } catch (e) {
+      errors.push(`${g.homeCompetitor.name} x ${g.awayCompetitor.name}: ${(e as Error).message}`);
+    }
+  });
+  return json({ modo: "basket", jogos_na_lista: list.games.length, consultas_de_odds: calls, jogos_atualizados: updated, jogos_anulados: voided, errors });
+}
+
+async function runBasketLive(sb: Admin): Promise<Response> {
+  const { num, liveCap } = await bkCfg(sb);
+  const errors: string[] = [];
+  let updated = 0, settled = 0;
+  const { data: rows } = await sb.from("matches").select("id, external_id, home, away, score_home, score_away, suspended_until, suspend_reason, odd_home, odd_draw, odd_away, cashout_odds, odds_seen_at, starts_at")
+    .like("external_id", `${BK_EXT}%`).in("status", ["open", "live"]).lte("starts_at", new Date().toISOString());
+  await pool((rows ?? []) as Started[], 8, async (m) => {
+    try {
+      const { game: g, odds, markets } = await bkLines(Number(m.external_id.slice(BK_EXT.length)));
+      if (!g) return; // sem atualização: _suspension trava depois de live_stale_secs
+      if (bkVoid(g)) {
+        const e = await voidMatch(sb, m.id);
+        if (e) errors.push(`${m.home} x ${m.away}: ${e}`); else settled++;
+        return;
       }
-      const done = AB_DONE.includes(s) && h != null && a != null && h !== a;
-      const patch: Record<string, unknown> = { period: s, synced_at: new Date().toISOString(), ...(done ? {} : { status: "live" }) };
-      if (h != null && a != null) { patch.score_home = h; patch.score_away = a; }
-      if (!m.home_logo && g.teams.home.logo) Object.assign(patch, { home_logo: await mirrorLogo(sb, g.teams.home.logo), away_logo: await mirrorLogo(sb, g.teams.away.logo), league_logo: await mirrorLogo(sb, g.league.logo) });
-      await sb.from("matches").update(patch).eq("id", m.id);
-      if (done) {
-        const { error } = await sb.rpc("settle_match", { p_match: m.id, p_result: h! > a! ? "home" : "away" });
+      const at = new Date().toISOString(), h = bkScore(g.homeCompetitor), a = bkScore(g.awayCompetitor);
+      const patch: Record<string, unknown> = { synced_at: at };
+      if (h != null && a != null && g.statusGroup !== 2) { patch.score_home = h; patch.score_away = a; }
+      if (g.statusGroup === 3) { patch.status = "live"; patch.period = [g.statusText, g.gameTimeDisplay].filter(Boolean).join(" "); }
+      if (bkDone(g)) {
+        patch.period = g.statusText;
+        await sb.from("matches").update(patch).eq("id", m.id);
+        if (h == null || a == null || h === a) { errors.push(`${m.home} x ${m.away}: placar final indefinido`); return; }
+        const { error } = await sb.rpc("settle_match", { p_match: m.id, p_result: h > a ? "home" : "away" });
         if (error) errors.push(`${m.home} x ${m.away}: ${error.message}`); else settled++;
+        return;
       }
+      const lockedUntil = Date.parse(m.suspended_until ?? "") || 0;
+      if (odds) {
+        const raw = applyMargin(odds, num("odds_margin_live")), rawMk = marginMarkets(markets, num("odds_margin_live"));
+        const o = capOdds(raw, liveCap);
+        const seen = Date.parse(m.odds_seen_at ?? "") || 0;
+        const jumped = Date.now() - seen < 20_000 && oddsJump(m, o, num("odds_jump_pct"));
+        const co = overCap(raw, rawMk, liveCap);
+        Object.assign(patch, { odd_home: o.home, odd_draw: null, odd_away: o.away, markets: capMarkets(rawMk, liveCap), odds_at: at, odds_seen_at: at, cashout_odds: Object.keys(co).length ? co : null });
+        if (jumped && lockedUntil < Date.now() + JUMP_LOCK_MS) Object.assign(patch, { suspended_until: new Date(Date.now() + JUMP_LOCK_MS).toISOString(), suspend_reason: "Odds em movimento brusco" });
+        else if (lockedUntil > Date.now() && SOURCE_LOCKS.includes(m.suspend_reason ?? "")) patch.suspended_until = at;
+      } else if (lockedUntil < Date.now() + 30_000) {
+        Object.assign(patch, { suspended_until: new Date(Date.now() + 30_000).toISOString(), suspend_reason: "Mercado suspenso nas casas" });
+      }
+      const { error } = await sb.from("matches").update(patch).eq("id", m.id);
+      if (error) errors.push(`${m.home} x ${m.away}: ${error.message}`); else updated++;
     } catch (e) {
       errors.push(`${m.home} x ${m.away}: ${(e as Error).message}`);
-      lost.push(m);
     }
-  }
-  // não achou na API-Basketball: resultado pelo /scores da The Odds API (2 créditos), só para jogo que já deveria ter acabado
-  const late = new Set(lost.filter((m) => now - Date.parse(m.starts_at) > 3.5 * 3600_000).map((m) => sportOf(m.external_id)));
-  for (const lg of late) {
-    if (since(st.scores_at![lg]) < BK_SCORES_MS) continue;
-    const left = toaLeft();
-    if (left != null && left < 15) continue;
-    try {
-      st.scores_at![lg] = new Date().toISOString();
-      const byId = new Map((await toa.scores(lg)).map((s) => [`${BK_PREFIX}${lg}:${s.id}`, s]));
-      for (const m of lost) {
-        const s = byId.get(m.external_id);
-        if (!s?.completed || s.home === s.away) continue;
-        await sb.from("matches").update({ score_home: s.home, score_away: s.away }).eq("id", m.id);
-        const { error } = await sb.rpc("settle_match", { p_match: m.id, p_result: s.home > s.away ? "home" : "away" });
-        if (error) errors.push(`${m.home} x ${m.away}: ${error.message}`); else settled++;
-      }
-    } catch (e) {
-      errors.push(`resultados ${lg}: ${(e as Error).message}`);
-    }
-  }
-
-  st.toa_left = toaLeft();
-  st.ab_left = ab?.remaining() ?? st.ab_left ?? null;
-  await sb.from("settings").upsert({ key: "basket_feed", value: st, label: "Basquete: última busca de odds por liga e cota das APIs (The Odds API / API-Basketball) — não editar", updated_at: new Date().toISOString() });
-  return json({ modo: "basket", buscas_de_odds: oddsCalls, consultas_api_basketball: ab?.fetched() ?? 0, jogos_atualizados: updated, jogos_liquidados: settled,
-    creditos_the_odds_api: st.toa_left, consultas_api_basketball_restantes: st.ab_left, errors });
+  });
+  return json({ modo: "basket_live", jogos_atualizados: updated, jogos_liquidados: settled, errors });
 }
