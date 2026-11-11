@@ -515,7 +515,7 @@ async function runBasketLive(sb: Admin): Promise<Response> {
       const at = new Date().toISOString(), h = bkScore(g.homeCompetitor), a = bkScore(g.awayCompetitor);
       const patch: Record<string, unknown> = { synced_at: at };
       if (h != null && a != null && g.statusGroup !== 2) { patch.score_home = h; patch.score_away = a; }
-      if (g.statusGroup === 3) { patch.status = "live"; patch.period = [g.statusText, g.gameTimeDisplay].filter(Boolean).join(" "); }
+      if (g.statusGroup === 3) { patch.status = "live"; patch.period = [g.statusText, /intervalo/i.test(g.statusText) ? null : g.gameTimeDisplay].filter(Boolean).join(" "); }
       if (bkDone(g)) {
         patch.period = g.statusText;
         await sb.from("matches").update(patch).eq("id", m.id);
