@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
   if (!secret || req.headers.get("x-cron-secret") !== secret) return json({ error: "Sem permissão" }, 401);
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-  const { data } = await sb.from("matches").select("id, league, home, away, starts_at, score_home, score_away, suspended_until").eq("status", "live");
+  const { data } = await sb.from("matches").select("id, league, home, away, starts_at, score_home, score_away, suspended_until").eq("status", "live").eq("sport", "Futebol");
   const live = (data ?? []) as Live[];
   if (!live.length) return json({ live: 0 });
   const slugs = [...new Set(live.map((m) => ESPN[m.league]).filter(Boolean))];

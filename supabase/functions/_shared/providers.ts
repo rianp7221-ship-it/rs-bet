@@ -53,7 +53,7 @@ type ToaEvent = {
   bookmakers?: { markets: { key: string; outcomes: { name: string; price: number }[] }[] }[];
 };
 
-function theOddsApi(key: string): OddsProvider {
+export function theOddsApi(key: string): OddsProvider {
   const API = "https://api.the-odds-api.com/v4/sports";
   let left: string | null = null;
   const get = async (url: string): Promise<ToaEvent[]> => {
