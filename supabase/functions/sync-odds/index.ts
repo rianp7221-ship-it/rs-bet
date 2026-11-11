@@ -5,6 +5,7 @@
 import { adminClient, cors, json } from "../_shared/auth.ts";
 import { getProvider, type Markets } from "../_shared/providers.ts";
 import { adjustMarkets, adjustOdds, capMarkets, capOdds, overCap, type Adjust } from "../_shared/adjust.ts";
+import { stats365 } from "../_shared/stats365.ts";
 
 type Odds = { home: number | null; draw?: number | null; away: number | null };
 // margem da casa: tira a margem do mercado (probabilidade justa) e aplica a margem configurada
@@ -17,13 +18,45 @@ function applyMargin(o: Odds, marginPct: number): Odds {
 }
 
 // mesma margem nos mercados extras; na Chance Dupla cada resultado cobre 2 de 3, então a soma justa das probabilidades é 2
-// grava escanteios, cartões e chutes finais antes de liquidar (c1x2/coNN/kNN/s1x2/sNNN/t1x2/tNNN); sem o dado as seleções são anuladas
+// grava escanteios, cartões e chutes finais antes de liquidar (c1x2/coNN/kNN/s1x2/sNNN/t1x2/tNNN); sem o dado as seleções são anuladas.
+// A API principal não tem estatísticas de muitas ligas: aí vale o 365Scores. Devolve false se faltou algum grupo de estatística.
+type FeedStats = { home: number; away: number; cards: { home: number; away: number }; shots: { home: number; away: number }; sot: { home: number; away: number } };
 // deno-lint-ignore no-explicit-any
-async function saveCorners(sb: any, feed: { corners?: (id: string) => Promise<{ home: number; away: number; cards: { home: number; away: number }; shots: { home: number; away: number }; sot: { home: number; away: number } } | null> }, matchId: number, fixture: string) {
-  if (!feed.corners) return;
-  const c = await feed.corners(fixture).catch(() => null);
-  if (c) await sb.from("matches").update({ corners_home: c.home, corners_away: c.away, cards_home: c.cards.home, cards_away: c.cards.away,
-    shots_home: c.shots.home, shots_away: c.shots.away, sot_home: c.sot.home, sot_away: c.sot.away }).eq("id", matchId);
+async function saveStats(sb: any, feed: { corners?: (id: string) => Promise<FeedStats | null> }, m: Started, fixture: string): Promise<boolean> {
+  const c = feed.corners ? await feed.corners(fixture).catch(() => null) : null;
+  if (c) {
+    await sb.from("matches").update({ corners_home: c.home, corners_away: c.away, cards_home: c.cards.home, cards_away: c.cards.away,
+      shots_home: c.shots.home, shots_away: c.shots.away, sot_home: c.sot.home, sot_away: c.sot.away }).eq("id", m.id);
+    return true;
+  }
+  const r = await stats365(m).catch(() => null);
+  if (!r) return false;
+  const { corners, cards, shots, sot } = r.stats;
+  await sb.from("matches").update({ ext365_id: r.id, corners_home: corners?.home ?? null, corners_away: corners?.away ?? null,
+    cards_home: cards?.home ?? null, cards_away: cards?.away ?? null, shots_home: shots?.home ?? null, shots_away: shots?.away ?? null,
+    sot_home: sot?.home ?? null, sot_away: sot?.away ?? null }).eq("id", m.id);
+  return !!(corners && cards && shots && sot);
+}
+// mercados liquidados por escanteios, cartões ou chutes (também como perna do Criar Aposta)
+const STAT_RE = /^(c1x2|co\d+|k\d+|s(\d+|1x2)|t(\d+|1x2)|(ch|ca|kh|ka|sh|sa)\d+)$/;
+// sem estatística e com aposta pendente que depende dela: espera até STATS_WAIT_MS do início do jogo, tentando a cada STATS_RETRY_MS
+const STATS_WAIT_MS = 4 * 3600_000, STATS_RETRY_MS = 10 * 60_000, STATS_WAIT = "Aguardando estatísticas";
+// deno-lint-ignore no-explicit-any
+async function waitStats(sb: any, m: Started): Promise<boolean> {
+  if (Date.now() - Date.parse(m.starts_at) > STATS_WAIT_MS) return false;
+  const { data } = await sb.from("bet_selections").select("market, pick").eq("match_id", m.id).eq("status", "pending");
+  const need = ((data ?? []) as { market: string; pick: string }[]).some((s) =>
+    s.market === "bb" ? s.pick.split("|").some((l) => STAT_RE.test(l.split(":")[0])) : STAT_RE.test(s.market));
+  if (need) await sb.from("matches").update({ suspended_until: new Date(Date.now() + STATS_RETRY_MS).toISOString(), suspend_reason: STATS_WAIT }).eq("id", m.id);
+  return need;
+}
+// liquida o jogo encerrado; false = ainda esperando as estatísticas
+// deno-lint-ignore no-explicit-any
+async function settleFinished(sb: any, feed: { corners?: (id: string) => Promise<FeedStats | null> }, m: Started, fixture: string, result: string): Promise<{ error?: string; waiting?: boolean }> {
+  if (m.suspend_reason === STATS_WAIT && Date.parse(m.suspended_until ?? "") > Date.now()) return { waiting: true };
+  if (!(await saveStats(sb, feed, m, fixture)) && (await waitStats(sb, m))) return { waiting: true };
+  const { error } = await sb.rpc("settle_match", { p_match: m.id, p_result: result });
+  return { error: error?.message };
 }
 
 function marginMarkets(mk: Markets | null | undefined, marginPct: number): Markets | null {
@@ -60,7 +93,7 @@ async function mirrorLogo(sb: any, url?: string | null): Promise<string | null> 
 
 type Started = { id: number; external_id: string; home: string; away: string; score_home: number | null; score_away: number | null; suspended_until: string | null;
   odd_home: number | null; odd_draw: number | null; odd_away: number | null; home_logo?: string | null; cashout_odds?: Record<string, number> | null;
-  suspend_reason?: string | null; odds_at?: string | null; odds_seen_at?: string | null; period?: string | null };
+  suspend_reason?: string | null; odds_at?: string | null; odds_seen_at?: string | null; period?: string | null; starts_at: string; ext365_id?: number | null };
 // odd que salta de uma leitura para a outra costuma ser lance (gol, pênalti, expulsão) antes de o placar chegar.
 // Mede em pontos de probabilidade (1/odd): zebra subindo 8 → 9,5 no fim do jogo (12,5% → 10,5%) não trava; gol (2,0 → 1,4 = 50% → 71%) trava.
 const JUMP_LOCK_MS = 45_000;
@@ -110,7 +143,7 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
   if (feed.prefix && !only) await sb.rpc("sync_orphan_matches", { p_prefix: feed.prefix });
 
   // jogos já iniciados e ainda não liquidados (ao vivo)
-  const { data: started } = await sb.from("matches").select("id, external_id, home, away, score_home, score_away, suspended_until, odd_home, odd_draw, odd_away, home_logo, cashout_odds, suspend_reason, odds_at, odds_seen_at, period")
+  const { data: started } = await sb.from("matches").select("id, external_id, home, away, score_home, score_away, suspended_until, odd_home, odd_draw, odd_away, home_logo, cashout_odds, suspend_reason, odds_at, odds_seen_at, period, starts_at, ext365_id")
     .in("status", ["open", "live"]).lt("starts_at", new Date().toISOString()).not("external_id", "is", null);
   const startedBySport = new Map<string, Started[]>();
   const sportOf = (ext: string) => {
@@ -135,7 +168,7 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
   const liveCap = [preCap, margin("live_odd_max")].filter((x) => x > 1).reduce((x, y) => Math.min(x, y), Infinity);
   const adjust = cfg?.find((c) => c.key === "odds_adjust")?.value as Adjust | undefined;
   const errors: string[] = [];
-  let updated = 0, settled = 0;
+  let updated = 0, settled = 0, waiting = 0;
   const saveRemaining = async () => {
     const left = feed.remaining();
     const at = new Date().toISOString();
@@ -212,16 +245,15 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
           if (e2) errors.push(`${m.home} x ${m.away}: ${e2.message}`); else settled++;
         } else if (u.completed && u.home != null && u.away != null) {
           const result = u.home > u.away ? "home" : u.home < u.away ? "away" : "draw";
-          await saveCorners(sb, feed, m.id, u.id);
-          const { error: e2 } = await sb.rpc("settle_match", { p_match: m.id, p_result: result });
-          if (e2) errors.push(`${m.home} x ${m.away}: ${e2.message}`); else settled++;
+          const r = await settleFinished(sb, feed, m, u.id, result);
+          if (r.error) errors.push(`${m.home} x ${m.away}: ${r.error}`); else if (r.waiting) waiting++; else settled++;
         }
       }
     } catch (e) {
       errors.push(`ao vivo: ${(e as Error).message}`);
     }
     await saveRemaining();
-    return json({ modo: mode, jogos_atualizados: updated, jogos_liquidados: settled, creditos_restantes: feed.remaining(), errors });
+    return json({ modo: mode, jogos_atualizados: updated, jogos_liquidados: settled, aguardando_estatisticas: waiting, creditos_restantes: feed.remaining(), errors });
   }
 
   if (rem && Number(rem.value) < fullReserve(lim) && freshRemaining(rem.updated_at)) {
@@ -333,10 +365,8 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
         await sb.from("matches").update({ score_home: s.home, score_away: s.away, ...(s.ht ? { ht_home: s.ht.home, ht_away: s.ht.away } : {}), ...goal, ...(s.completed ? {} : { status: "live" }) }).eq("id", m.id);
         if (!s.completed) continue;
         const result = s.home > s.away ? "home" : s.home < s.away ? "away" : "draw";
-        await saveCorners(sb, feed, m.id, s.id);
-        const { error } = await sb.rpc("settle_match", { p_match: m.id, p_result: result });
-        if (error) errors.push(`${m.home} x ${m.away}: ${error.message}`);
-        else settled++;
+        const r = await settleFinished(sb, feed, m, s.id, result);
+        if (r.error) errors.push(`${m.home} x ${m.away}: ${r.error}`); else if (r.waiting) waiting++; else settled++;
       }
     } catch (e) {
       errors.push(`resultados ${sport}: ${(e as Error).message}`);
@@ -352,5 +382,5 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
     await sb.from("settings").upsert({ key: "feed_cache", value: { ...old, ...merged }, label: "Cache interno da API de odds (temporada das ligas) — não editar", updated_at: new Date().toISOString() });
   }
   await saveRemaining();
-  return json({ modo: mode, ligas: sports.length, jogos_atualizados: updated, jogos_liquidados: settled, creditos_restantes: feed.remaining(), fonte: feed.info?.() ?? null, errors });
+  return json({ modo: mode, ligas: sports.length, jogos_atualizados: updated, jogos_liquidados: settled, aguardando_estatisticas: waiting, creditos_restantes: feed.remaining(), fonte: feed.info?.() ?? null, errors });
 }
