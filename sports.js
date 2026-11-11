@@ -113,7 +113,7 @@
     [/copa del rey/i, "🇪🇸"], [/pokal/i, "🇩🇪"], [/coppa/i, "🇮🇹"], [/coupe/i, "🇫🇷"], [/inglesa|inglaterra/i, "🏴󠁧󠁢󠁥󠁮󠁧󠁿"],
     [/brazil|brasil|brasileir/i, "🇧🇷"], [/epl|premier|england|fa cup|championship/i, "🏴󠁧󠁢󠁥󠁮󠁧󠁿"], [/spain|la ?liga/i, "🇪🇸"],
     [/italy/i, "🇮🇹"], [/germany|bundesliga/i, "🇩🇪"], [/france|ligue 1/i, "🇫🇷"], [/portugal/i, "🇵🇹"], [/argentin/i, "🇦🇷"],
-    [/nba|nfl|mlb|nhl|ncaa|usa|mls/i, "🇺🇸"], [/uefa|champions|europa|conference/i, "🇪🇺"], [/libertadores|sudamericana|conmebol/i, "🌎"]];
+    [/nba|nfl|mlb|nhl|ncaa|usa|mls/i, "🇺🇸"], [/uefa|champions|europa|conference|euroleague/i, "🇪🇺"], [/libertadores|sudamericana|conmebol/i, "🌎"]];
   const flag = (l) => (FLAGS.find(([r]) => r.test(l)) || [null, "🌍"])[1];
   const LEAGUE_PT = { "Brazil Série A": "Brasileirão Série A", "Brazil Série B": "Brasileirão Série B", EPL: "Premier League",
     "UEFA Champions League": "Liga dos Campeões da UEFA", "UEFA Europa League": "Liga Europa da UEFA", "La Liga - Spain": "La Liga", "Serie A - Italy": "Serie A Itália",
@@ -126,8 +126,8 @@
     "Championship Inglaterra", "2. Bundesliga Alemanha", "3. Liga Alemanha", "Eredivisie Holanda", "Eerste Divisie Holanda",
     "Liga MX México", "MLS EUA", "USL Championship EUA", "Saudi Pro League", "Süper Lig Turquia",
     "Super League Suíça", "Pro League Bélgica", "Premiership Escócia", "Allsvenskan Suécia", "Eliteserien Noruega",
-    "Superliga Dinamarca", "HNL Croácia"];
-  // id da liga na API-Football: logo no bucket logos, pra liga principal aparecer mesmo sem jogo
+    "Superliga Dinamarca", "HNL Croácia", "NBA", "EuroLeague"];
+  // id da liga na API-Football (basquete: caminho da API-Basketball): logo no bucket logos, pra liga principal aparecer mesmo sem jogo
   const TOP_ID = {
     "Brazil Série A": 71, "Brazil Série B": 72, "Copa do Brasil": 73, "CONMEBOL Libertadores": 13, "CONMEBOL Sudamericana": 11,
     "UEFA Champions League": 2, "Premier League": 39, "La Liga": 140, "Serie A - Italy": 135, Bundesliga: 78, "Ligue 1": 61,
@@ -136,12 +136,12 @@
     "3. Liga Alemanha": 80, "Eredivisie Holanda": 88, "Eerste Divisie Holanda": 89, "Liga MX México": 262, "MLS EUA": 253,
     "USL Championship EUA": 255, "Saudi Pro League": 307, "Süper Lig Turquia": 203, "Super League Suíça": 207,
     "Pro League Bélgica": 144, "Premiership Escócia": 179, "Allsvenskan Suécia": 113, "Eliteserien Noruega": 103,
-    "Superliga Dinamarca": 119, "HNL Croácia": 210 };
+    "Superliga Dinamarca": 119, "HNL Croácia": 210, NBA: "basketball/leagues/12", EuroLeague: "basketball/leagues/120" };
   // card grande: só jogos de campeonatos grandes, os mais importantes primeiro
   const BIG = ["CONMEBOL Libertadores", "UEFA Champions League", "Brazil Série A", "Copa do Brasil", "Premier League", "EPL",
     "La Liga", "La Liga - Spain", "Serie A - Italy", "Bundesliga", "Ligue 1", "CONMEBOL Sudamericana", "UEFA Europa League",
     "Liga Profesional Argentina", "Primeira Liga Portugal", "UEFA Nations League", "Copa del Rey", "FA Cup Inglaterra",
-    "UEFA Conference League", "Saudi Pro League", "MLS EUA", "NBA"];
+    "UEFA Conference League", "Saudi Pro League", "MLS EUA", "NBA", "EuroLeague"];
   const BIG_RE = /world cup|copa do mundo|mundial de clubes|eliminat|qualif|copa am[eé]rica|euro 20\d\d|recopa|supercopa do brasil/i;
   const bigRank = (l) => { const i = BIG.indexOf(l); return i >= 0 ? i : BIG_RE.test(l) ? 0 : -1; };
   // times famosos (nome sem acento, minúsculo): 3 = gigantes e seleções top, 2 = grandes
@@ -169,7 +169,7 @@
   const crest = (m, side) => { const u = safeUrl(m[side + "_logo"]);
     return u && !badLogo.has(u) ? `<img class="crest" src="${RS.esc(u)}" alt="" loading="lazy" onerror="window.RSbadLogo.add(this.getAttribute('src'));this.replaceWith(document.createRange().createContextualFragment(window.RSshirt(this.dataset.n)))" data-n="${RS.esc(m[side])}">` : shirt(m[side]); };
   const leagueLogo = (l) => { const m = matches.find((x) => x.league === l && x.league_logo);
-    return m ? safeUrl(m.league_logo) : TOP_ID[l] ? `https://pscpcxleyysspvwkevpe.supabase.co/storage/v1/object/public/logos/leagues/${TOP_ID[l]}.png` : ""; };
+    return m ? safeUrl(m.league_logo) : TOP_ID[l] ? `https://pscpcxleyysspvwkevpe.supabase.co/storage/v1/object/public/logos/${/\//.test(TOP_ID[l]) ? TOP_ID[l] : "leagues/" + TOP_ID[l]}.png` : ""; };
   const lico = (l) => { const u = leagueLogo(l); return u ? `<img class="lg-logo" src="${RS.esc(u)}" alt="" loading="lazy">` : flag(l); };
   window.RSshirt = (n) => shirt(n);
   function shirt(name) {
