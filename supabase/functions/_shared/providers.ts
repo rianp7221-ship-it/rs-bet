@@ -9,14 +9,14 @@ export type FeedEvent = {
   commence_time: string; odds: MatchOdds | null; markets?: Markets | null;
   home_logo?: string; away_logo?: string; league_logo?: string;
 };
-export type FeedScore = { id: string; home: number; away: number; completed: boolean; ht?: { home: number; away: number } | null };
+export type FeedScore = { id: string; home: number; away: number; completed: boolean; ht?: { home: number; away: number } | null; voided?: boolean };
 
 // ao vivo em 1 chamada para todos os jogos (APIs com feed ao vivo)
 export type LiveUpdate = {
   id: string; home: number | null; away: number | null; completed: boolean;
   ht?: { home: number; away: number } | null; // placar do 1º tempo
   cancelled: boolean; // adiado ou cancelado: trava o mercado
-  voided: boolean; // cancelado de vez: anula as seleções
+  voided: boolean; // adiado, cancelado ou abandonado: anula as seleções (odd 1)
   period?: string | null; // status curto da fonte (1H, HT, 2H, ET, BT, P)
   odds: MatchOdds | null; markets?: Markets | null;
   home_logo?: string; away_logo?: string; league_logo?: string;
@@ -113,8 +113,9 @@ type AfLiveOdds = { fixture: { id: number }; status?: { stopped?: boolean; block
 type AfValue = AfBet["values"][number] & { handicap?: string | null };
 
 const AF_DONE = ["FT", "AET", "PEN"];
-const AF_VOID = ["CANC", "ABD", "AWD", "WO"];
-const AF_CANCEL = ["PST", ...AF_VOID];
+// adiado também anula: a seleção vira odd 1 e o resto do bilhete segue
+const AF_VOID = ["PST", "CANC", "ABD", "AWD", "WO"];
+const AF_CANCEL = AF_VOID;
 // o mercado 1X2 vale só pelos 90 min: na prorrogação/pênaltis usa o placar do tempo normal
 const afGoals = (f: AfFixture) =>
   ["AET", "PEN"].includes(f.fixture.status.short) && f.score?.fulltime?.home != null && f.score.fulltime.away != null
@@ -348,9 +349,10 @@ function apiFootball(key: string): OddsProvider {
     async scores(league) {
       const y = await season(league);
       const { response } = await get<AfFixture>(`/fixtures?league=${league}&season=${y}&from=${day(-3)}&to=${day(0)}&timezone=UTC`);
-      return response.map((f) => ({ f, g: afGoals(f) })).filter(({ g }) => g.home != null && g.away != null).map(({ f, g }) => ({
-        id: String(f.fixture.id), home: g.home!, away: g.away!, completed: AF_DONE.includes(f.fixture.status.short), ht: afHt(f),
-      }));
+      return response.map((f) => ({ f, g: afGoals(f), v: AF_VOID.includes(f.fixture.status.short) }))
+        .filter(({ g, v }) => v || (g.home != null && g.away != null)).map(({ f, g, v }) => ({
+          id: String(f.fixture.id), home: g.home ?? 0, away: g.away ?? 0, completed: AF_DONE.includes(f.fixture.status.short), ht: afHt(f), voided: v,
+        }));
     },
     async live(ids, idle) {
       const out: LiveUpdate[] = [];
@@ -434,8 +436,9 @@ type BfEvent = {
 type BfResult = { time_status: string; ss: string | null; scores?: Record<string, { home: string; away: string }> };
 
 // time_status: 0 não começou, 1 ao vivo, 3 encerrado, 4 adiado, 5 cancelado, 6 W.O., 7 interrompido, 8 abandonado, 99 removido
-const BF_VOID = ["5", "6", "8", "99"];
-const BF_CANCEL = ["4", ...BF_VOID];
+// adiado também anula: a seleção vira odd 1 e o resto do bilhete segue
+const BF_VOID = ["4", "5", "6", "8", "99"];
+const BF_CANCEL = BF_VOID;
 const BF_PAUSE: Record<string, string> = { "7": "Jogo interrompido" };
 // lance que mexe no jogo nos últimos 2 min
 const BF_HOT: [RegExp, string][] = [[/red/i, "Expulsão"], [/penalt/i, "Pênalti"], [/var/i, "Revisão do VAR"], [/^goal$/i, "Gol"]];
@@ -579,8 +582,8 @@ function betsApi(token: string): OddsProvider {
     async scores(_league, ids = []) {
       const res = await batch<BfResult>("/result", ids);
       return ids.flatMap((id, i) => {
-        const g = goals(res[i]);
-        return g ? [{ id, ...g, completed: res[i]!.time_status === "3" }] : [];
+        const g = goals(res[i]), v = BF_VOID.includes(res[i]?.time_status ?? "");
+        return g || v ? [{ id, home: g?.home ?? 0, away: g?.away ?? 0, completed: res[i]!.time_status === "3", voided: v }] : [];
       });
     },
     async live(ids) {

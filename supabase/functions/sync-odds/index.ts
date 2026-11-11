@@ -50,6 +50,13 @@ async function waitStats(sb: any, m: Started): Promise<boolean> {
   if (need) await sb.from("matches").update({ suspended_until: new Date(Date.now() + STATS_RETRY_MS).toISOString(), suspend_reason: STATS_WAIT }).eq("id", m.id);
   return need;
 }
+// jogo adiado ou cancelado na fonte: seleções viram odd 1 (devolvidas) e o resto do bilhete segue
+// deno-lint-ignore no-explicit-any
+async function voidMatch(sb: any, id: number): Promise<string | null> {
+  const { error } = await sb.rpc("admin_void_match", { p_match: id, p_reason: "Jogo adiado ou cancelado (fonte de dados)" });
+  return error?.message ?? null;
+}
+
 // liquida o jogo encerrado; false = ainda esperando as estatísticas
 // deno-lint-ignore no-explicit-any
 async function settleFinished(sb: any, feed: { corners?: (id: string) => Promise<FeedStats | null> }, m: Started, fixture: string, result: string): Promise<{ error?: string; waiting?: boolean }> {
@@ -228,7 +235,7 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
         if (u.odds || u.markets !== undefined) patch.cashout_odds = Object.keys(co).length ? co : null;
         if (scoreChanged(m, u.home, u.away) && !u.completed) {
           patch.suspended_until = new Date(Date.now() + GOAL_LOCK_MS).toISOString(); patch.suspend_reason = "Gol";
-        } else if (u.cancelled) { patch.suspended_until = new Date(Date.now() + 600_000).toISOString(); patch.suspend_reason = "Jogo adiado ou cancelado"; }
+        } else if (u.cancelled || u.voided) { patch.suspended_until = new Date(Date.now() + 600_000).toISOString(); patch.suspend_reason = "Jogo adiado ou cancelado"; }
         else if (jumped && !u.completed && lockedUntil < Date.now() + JUMP_LOCK_MS) {
           patch.suspended_until = new Date(Date.now() + JUMP_LOCK_MS).toISOString(); patch.suspend_reason = "Odds em movimento brusco";
         }
@@ -240,9 +247,10 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
         const { error } = await sb.from("matches").update(patch).eq("id", m.id);
         if (error) { errors.push(`${m.home} x ${m.away}: ${error.message}`); continue; }
         updated++;
-        if (u.voided) {
-          const { error: e2 } = await sb.rpc("admin_void_match", { p_match: m.id, p_reason: "Jogo cancelado ou abandonado (fonte de dados)" });
-          if (e2) errors.push(`${m.home} x ${m.away}: ${e2.message}`); else settled++;
+        if (u.voided || u.cancelled) {
+          // a suspensão de 10 min acima fica só como reserva se a anulação falhar
+          const e2 = await voidMatch(sb, m.id);
+          if (e2) errors.push(`${m.home} x ${m.away}: ${e2}`); else settled++;
         } else if (u.completed && u.home != null && u.away != null) {
           const result = u.home > u.away ? "home" : u.home < u.away ? "away" : "draw";
           const r = await settleFinished(sb, feed, m, u.id, result);
@@ -360,6 +368,11 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
       for (const m of list) {
         const s = byExt.get(m.external_id);
         if (!s) continue;
+        if (s.voided) {
+          const e2 = await voidMatch(sb, m.id);
+          if (e2) errors.push(`${m.home} x ${m.away}: ${e2}`); else settled++;
+          continue;
+        }
         const goal = !s.completed && scoreChanged(m, s.home, s.away)
           ? { suspended_until: new Date(Date.now() + GOAL_LOCK_MS).toISOString(), suspend_reason: "Gol" } : {};
         await sb.from("matches").update({ score_home: s.home, score_away: s.away, ...(s.ht ? { ht_home: s.ht.home, ht_away: s.ht.away } : {}), ...goal, ...(s.completed ? {} : { status: "live" }) }).eq("id", m.id);
