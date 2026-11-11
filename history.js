@@ -63,6 +63,7 @@
   function selState(s) {
     const m = s.matches;
     if (isLive(s)) return `<span class="bc-clock">⚡<b data-clock="${s.match_id}">${clock({ ...m, id: s.match_id })}</b></span>${scoreCol(m)}${m.ext365_id ? `<button class="bc-track" data-track="${s.match_id}" aria-label="Acompanhar jogo">${RS.icon("chart")}</button>` : ""}`;
+    if (s.status === "canceled") return `<span class="badge b-void">Devolvida</span>`;
     if (s.status !== "pending" || m.status !== "open") return scoreCol(m) || badge(s.status);
     return `<span class="bc-when">${when(m.starts_at)}</span>`;
   }
@@ -81,14 +82,22 @@
     if (b.status === "lost") return ["Ganhos", 0];
     return ["Ganhos Potenciais", b.potential];
   }
+  // seleção devolvida (jogo adiado/cancelado) vale odd 1; igual ao _resolve_bet
+  const selOdd = (s) => (s.status === "canceled" ? 1 : Number(s.odd));
+  const betOdd = (b) => {
+    const sels = b.bet_selections;
+    if (!sels.some((s) => s.status === "canceled")) return Number(b.total_odd);
+    const all = sels.reduce((x, s) => x * Number(s.odd), 1), left = sels.reduce((x, s) => x * selOdd(s), 1);
+    return all > Number(b.total_odd) + 0.01 ? Math.min(left, Number(b.total_odd)) : left;
+  };
   const card = (b) => {
     const sels = b.bet_selections, [wl, wv] = winLine(b);
     return `<div class="bet-card${folded.has(b.id) ? " closed" : ""}" data-bet="${b.id}">
       <div class="bc-head" data-fold="${b.id}"><b>${TYPE(sels.length)}${b.freebet_id ? ` <span class="badge b-fb">Grátis</span>` : ""}</b><span>${RS.money(b.stake)}</span>${b.status !== "pending" ? betBadge(b) : ""}
-        <span class="bc-odd">${Number(b.total_odd).toFixed(2)}</span><i class="bc-chev"></i></div>
+        <span class="bc-odd">${betOdd(b).toFixed(2)}</span><i class="bc-chev"></i></div>
       <div class="bc-body">
         ${sels.map((s) => `<div class="bc-sel" data-m="${s.match_id}">
-          <div class="bc-l1">${RS.icon("ball")}<b${s.market === "bb" ? ' class="bc-bb"' : ""}>${RS.esc(selName(s))}</b>${mark(s)}<span>${Number(s.odd).toFixed(2)}</span></div>
+          <div class="bc-l1">${RS.icon("ball")}<b${s.market === "bb" ? ' class="bc-bb"' : ""}>${RS.esc(selName(s))}</b>${mark(s)}<span>${selOdd(s).toFixed(2)}</span></div>
           ${s.market === "bb" ? "" : `<div class="bc-mk">${mname(s.market || "1x2")}</div>`}
           <div class="bc-l3"><span class="bc-teams">${logo(s.matches.home_logo)}${RS.esc(s.matches.home)}<br>${logo(s.matches.away_logo)}${RS.esc(s.matches.away)}</span><span class="bc-st" data-st="${s.match_id}">${selState(s)}</span></div>
           ${s.market === "bb" ? `<ul class="bc-legs">${legList(s)}</ul>` : ""}</div>`).join("")}
