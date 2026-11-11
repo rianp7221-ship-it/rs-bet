@@ -444,7 +444,7 @@
     const count = {};
     matches.filter((m) => (view === "live" ? live(m) : view !== "all" || league || query || mainDay(m))).forEach((m) => (count[m.sport] = (count[m.sport] || 0) + 1));
     if (sport !== "Popular" && !count[sport]) sport = "Popular";
-    const sports = ["Popular", ...Object.keys(count).sort((a, b) => count[b] - count[a])];
+    const sports = ["Popular", ...Object.keys(count).sort((a, b) => (b === "Futebol") - (a === "Futebol") || count[b] - count[a])];
     RS.$("#sport-pills").innerHTML = sports.map((s) => `<button class="${s === sport ? "active" : ""}" data-sport="${RS.esc(s)}">
       ${s === "Popular" ? RS.icon("grid") : icon(s)} ${RS.esc(s)}${s !== "Popular" ? ` <em>${count[s]}</em>` : ""}</button>`).join("");
 
