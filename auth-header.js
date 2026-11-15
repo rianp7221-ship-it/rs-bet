@@ -388,7 +388,7 @@
           ${list("b", active, "Nenhum bônus com rollover em andamento.")}
           ${list("h", hist, "Seu histórico de bônus aparece aqui.")}
           <div class="ap-card"><h3>Indique um amigo</h3>
-            <p class="muted small" style="margin-bottom:8px">${ref?.reward ? `Ganhe ${RS.money(ref.reward)} de bônus quando seu amigo fizer o primeiro depósito.` : "Convide amigos para a Real Sports."}
+            <p class="muted small" style="margin-bottom:8px">${ref?.reward ? `Ganhe ${RS.money(ref.reward)} de bônus quando seu amigo depositar ${RS.money(ref.min || 10)} e apostar ${RS.money(ref.min || 10)}.` : "Convide amigos para a Real Sports."}
               ${ref ? ` Convidados: <b>${ref.invited}</b> · com depósito: <b>${ref.qualified}</b> · ganho: <b>${RS.money(ref.earned)}</b>` : ""}</p>
             <input class="input" readonly value="${url}" style="margin-bottom:8px"><button class="btn btn-primary w-full" id="ref-cp">Copiar link</button></div>`;
         RS.$("#cp-f", w).onsubmit = async (e) => {
