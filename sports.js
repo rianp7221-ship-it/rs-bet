@@ -740,9 +740,11 @@
     localStorage.setItem("rs-saved-slip", code());
     RS.toast("Bilhete guardado neste aparelho.", "ok");
   };
+  let myRef = "";
+  RS.user().then((u) => { if (u) myRef = u.id.slice(0, 8); }, () => {});
   RS.$("#slip-share").onclick = async () => {
     if (!slip.size) { RS.toast("Adicione seleções para compartilhar.", "error"); return; }
-    const url = `${location.origin}${location.pathname}?b=${code()}#sports`;
+    const url = `${location.origin}${location.pathname}?${myRef ? `ref=${myRef}&` : ""}b=${code()}#sports`;
     try {
       if (navigator.share) await navigator.share({ title: "Meu bilhete Real Sports", url });
       else { await navigator.clipboard.writeText(url); RS.toast("Link do bilhete copiado!", "ok"); }

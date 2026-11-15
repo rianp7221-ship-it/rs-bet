@@ -126,6 +126,93 @@
   }
   const selCode = (b) => b.bet_selections.map((s) => `${s.match_id}~${s.market || "1x2"}.${s.pick}`).join(",");
 
+  // imagem do bilhete (1080x1920, stories/status) com o link de indicação de quem compartilha
+  const pic = (src) => new Promise((ok) => {
+    if (!src) return ok(null);
+    const i = new Image(); i.crossOrigin = "anonymous";
+    i.onload = () => ok(i); i.onerror = () => ok(null); i.src = src;
+  });
+  const plain = (h) => { const d = document.createElement("div"); d.innerHTML = h; return d.textContent; };
+  async function betImage(b, refUrl) {
+    const W = 1080, H = 1920, c = document.createElement("canvas"); c.width = W; c.height = H;
+    const x = c.getContext("2d"), all = b.bet_selections, sels = all.slice(0, 5), more = all.length - sels.length;
+    const [mark, ...logos] = await Promise.all([pic("icons/rs-mark.png"), ...sels.flatMap((s) => [pic(s.matches.home_logo), pic(s.matches.away_logo)])]);
+    const F = (w, px) => (x.font = `${w} ${px}px Roboto, system-ui, sans-serif`);
+    const fit = (t, max) => { t = String(t); if (x.measureText(t).width <= max) return t; while (t.length > 1 && x.measureText(t + "…").width > max) t = t.slice(0, -1); return t + "…"; };
+    const box = (X, Y, w, h, r) => { x.beginPath(); if (x.roundRect) x.roundRect(X, Y, w, h, r); else x.rect(X, Y, w, h); x.fill(); };
+    const bg = x.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#ff5a0f"); bg.addColorStop(1, "#c93700");
+    x.fillStyle = bg; x.fillRect(0, 0, W, H);
+    const rowH = 160, cardH = 190 + sels.length * rowH + (more ? 60 : 0) + 230;
+    const oy = Math.max(0, (H - (cardH + 610)) / 2 - 60), top = 300 + oy;
+    if (mark) x.drawImage(mark, 80, 110 + oy, 196, 110);
+    x.fillStyle = "#fff"; x.textBaseline = "middle";
+    F(900, 76); x.fillText("REAL SPORTS", mark ? 300 : 80, 165 + oy);
+    const [st, stc] = { won: ["GANHOU!", "#16a34a"], cashout: ["CASH OUT RECEBIDO", "#16a34a"], lost: ["BILHETE", "#5d6883"], canceled: ["BILHETE", "#5d6883"] }[b.status] || ["BILHETE EM ABERTO", "#ff4d00"];
+    x.fillStyle = "#fff"; box(60, top, W - 120, cardH, 36);
+    x.fillStyle = stc; F(900, 40); x.fillText(st, 110, top + 70);
+    x.fillStyle = "#1c2233"; F(900, 56); x.fillText(`${TYPE(all.length)} · Odd ${betOdd(b).toFixed(2)}`, 110, top + 140);
+    let y = top + 200;
+    sels.forEach((s, i) => {
+      x.fillStyle = "#dde2ee"; x.fillRect(110, y - 10, W - 220, 2);
+      F(700, 44); const odd = selOdd(s).toFixed(2), ow = x.measureText(odd).width;
+      x.fillStyle = "#ff4d00"; x.fillText(odd, W - 110 - ow, y + 40);
+      x.fillStyle = s.status === "won" ? "#16a34a" : s.status === "lost" ? "#dc2626" : "#1c2233";
+      x.fillText(fit((s.status === "won" ? "✓ " : s.status === "lost" ? "✕ " : "") + selName(s), W - 280 - ow), 110, y + 40);
+      x.fillStyle = "#5d6883"; F(400, 32); x.fillText(fit(plain(mname(s.market || "1x2")), 760), 110, y + 88);
+      let tx = 110;
+      for (const l of [logos[i * 2], logos[i * 2 + 1]]) if (l) { x.drawImage(l, tx, y + 108, 36, 36); tx += 44; }
+      x.fillStyle = "#1c2233"; F(500, 32); x.fillText(fit(`${s.matches.home} x ${s.matches.away}`, W - 220 - (tx - 110)), tx + (tx > 110 ? 6 : 0), y + 128);
+      y += rowH;
+    });
+    if (more) { x.fillStyle = "#5d6883"; F(500, 34); x.fillText(`+ ${more} ${more === 1 ? "seleção" : "seleções"}`, 110, y + 20); y += 60; }
+    x.fillStyle = "#dde2ee"; x.fillRect(110, y - 10, W - 220, 2);
+    const [wl, wv] = winLine(b), right = (t, Y) => x.fillText(t, W - 110 - x.measureText(t).width, Y);
+    x.fillStyle = "#5d6883"; F(500, 36); x.fillText("Aposta", 110, y + 50);
+    x.fillStyle = "#1c2233"; F(700, 40); right(RS.money(b.stake), y + 50);
+    x.fillStyle = "#5d6883"; F(500, 36); x.fillText(wl, 110, y + 140);
+    x.fillStyle = b.status === "won" || b.status === "cashout" ? "#16a34a" : "#1c2233"; F(900, 64); right(RS.money(wv), y + 140);
+    const fy = Math.min(top + cardH + 110, H - 250);
+    x.fillStyle = "#fff"; x.textAlign = "center";
+    F(900, 54); x.fillText("Aposte também na Real Sports", W / 2, fy);
+    F(400, 38); x.fillText("Cadastre-se pelo meu link:", W / 2, fy + 70);
+    F(700, 42); const link = refUrl.replace(/^https?:\/\/(www\.)?/, ""), lw = x.measureText(link).width + 80;
+    x.fillStyle = "rgba(0,0,0,.25)"; box((W - lw) / 2, fy + 110, lw, 84, 42);
+    x.fillStyle = "#fff"; x.fillText(link, W / 2, fy + 153);
+    return c;
+  }
+  async function shareBet(bet) {
+    const u = await RS.user(), ref = u ? u.id.slice(0, 8) : "";
+    const refUrl = `${location.origin}/${ref ? `?ref=${ref}` : ""}`;
+    const url = `${location.origin}/?${ref ? `ref=${ref}&` : ""}b=${selCode(bet)}#sports`;
+    const text = `Olha meu bilhete na Real Sports! Cadastre-se pelo meu link: ${url}`;
+    const m = RS.modal(`<h3>Compartilhar bilhete</h3>
+      <div class="sh-prev"><p class="muted small">Gerando imagem…</p></div>
+      <button class="btn btn-primary w-full" id="sh-go" disabled>Compartilhar</button>
+      <div class="sh-row"><button class="btn btn-outline" id="sh-dl" disabled>Baixar imagem</button><button class="btn btn-outline" id="sh-link">Copiar link</button></div>
+      ${ref ? `<p class="muted small">Quem se cadastrar pelo seu link e depositar te dá bônus de indicação.</p>` : ""}`);
+    let file = null, href = "";
+    RS.$("#sh-link", m).onclick = async () => { try { await navigator.clipboard.writeText(url); RS.toast("Link copiado!", "ok"); } catch { RS.toast(url); } };
+    try {
+      const cv = await betImage(bet, refUrl);
+      const blob = await new Promise((ok) => cv.toBlob(ok, "image/png"));
+      file = new File([blob], `bilhete-real-sports-${bet.id}.png`, { type: "image/png" });
+      href = URL.createObjectURL(blob);
+      RS.$(".sh-prev", m).innerHTML = `<img src="${href}" alt="Imagem do bilhete">`;
+      RS.$("#sh-dl", m).disabled = false;
+    } catch { RS.$(".sh-prev", m).innerHTML = `<p class="muted small">Não deu para gerar a imagem; compartilhe o link.</p>`; }
+    const canFile = !!file && !!navigator.canShare?.({ files: [file] });
+    const go = RS.$("#sh-go", m);
+    go.disabled = !canFile && !navigator.share;
+    if (!canFile && !navigator.share) go.classList.add("hidden");
+    go.onclick = async () => {
+      try {
+        if (canFile) await navigator.share({ files: [file], text });
+        else await navigator.share({ title: "Meu bilhete Real Sports", text, url });
+      } catch { /* cancelado */ }
+    };
+    RS.$("#sh-dl", m).onclick = () => { const a = document.createElement("a"); a.href = href; a.download = file.name; a.click(); };
+  }
+
   async function load() {
     const u = await RS.user();
     if (!u) { box.innerHTML = `<p class="muted">Entre na sua conta para ver o histórico. <a href="login.html">Entrar</a></p>`; return; }
@@ -247,11 +334,7 @@
       return;
     }
     if (sh && bet) {
-      const url = `${location.origin}${location.pathname}?b=${selCode(bet)}#sports`;
-      try {
-        if (navigator.share) await navigator.share({ title: `Meu bilhete Real Sports #${bet.id}`, url });
-        else { await navigator.clipboard.writeText(url); RS.toast("Link do bilhete copiado!", "ok"); }
-      } catch { /* cancelado */ }
+      shareBet(bet);
       return;
     }
     const b = t.closest("[data-cash]");
