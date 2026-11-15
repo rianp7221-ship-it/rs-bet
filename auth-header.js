@@ -34,6 +34,7 @@
     };
   }
 
+  let fbTimer = 0;
   async function render() {
     me = await RS.profile();
     el.innerHTML = `
@@ -67,6 +68,9 @@
     if (!me) return;
     if (me.blocked) RS.toast("Sua conta está bloqueada. Fale com o suporte.", "error");
     if ((!me.cpf || !me.full_name) && page !== "admin.html") askIdentity(me);
+    // pergunta uma vez por aparelho, sem atropelar outra janela aberta
+    if (page === "index.html" && !me.blocked && !localStorage.getItem("rs-fb-asked") && !fbTimer)
+      fbTimer = setTimeout(() => { if (!document.querySelector(".rs-modal")) RS.feedback(); }, 20000);
     RS.$("#btn-deposit").onclick = () => panel("overview");
     RS.$("#hdr-bal").onclick = () => panel("overview");
     RS.$("#hdr-avatar").onclick = togglePop;
@@ -93,6 +97,7 @@
       ${grp("card", "Transações", [["deposit", "Depositar"], ["withdraw", "Sacar"], ["tx", "Histórico de transações"]])}
       ${grp("clock", "Histórico", [["h:bets", "Apostas esportivas"], ["h:casino", "Cassino"]])}
       ${grp("user", "Perfil", [["data", "Dados pessoais"], ["security", "Login & Segurança"], ["betcfg", "Configurações de apostas"], ["limits", "Proteção do jogador"], ["kyc", "Processo de verificação"]])}
+      <button class="la-item" data-la="feedback">${RS.icon("msg")}<span>Enviar sugestão</span></button>
       <button class="la-item" data-la="privacy">${RS.icon("lock")}<span>Definições de privacidade</span></button>
       <button class="la-out" data-la="logout">Sair ${RS.icon("logout")}</button>`;
     nav.before(d);
@@ -162,7 +167,7 @@
       <div class="acct-grid"><button class="btn btn-outline" data-a="withdraw">Sacar</button><button class="btn btn-green" data-a="deposit">Depositar</button></div>
       <nav class="acct-menu">${item("overview", "grid", "Minha conta")}${item("tx", "card", "Transações")}${item("bets", "receipt", "Minhas apostas")}${item("bonus", "gift", "Bônus")}
         ${item("wheel", "star", "Roda da Sorte")}${item("refer", "share", "Indique e ganhe")}${item("data", "user", "Dados pessoais")}${item("security", "key", "Login & Segurança")}
-        ${item("limits", "lock", "Jogo responsável")}${item("support", "headset", "Suporte")}</nav>
+        ${item("limits", "lock", "Jogo responsável")}${item("support", "headset", "Suporte")}${item("feedback", "msg", "Enviar sugestão")}</nav>
       ${me.is_admin || me.staff_role ? `<a class="btn btn-primary" href="admin.html" style="margin:8px 0">Painel Admin</a>` : ""}
       <button class="acct-out" data-a="logout">${RS.icon("logout")} Sair</button>`;
     RS.$(".hdr-right", el).appendChild(d);
@@ -172,10 +177,12 @@
       if (a === "refresh") { RS.refreshBalance(); RS.toast("Saldo atualizado.", "ok"); return; }
       d.remove();
       if (a === "refer") RS.refer();
+      if (a === "feedback") RS.feedback();
       if (a === "panel") panel("data");
       if (a === "data") panel("data");
       if (a === "pass") resetPass();
       if (a === "support") RS.support();
+      if (a === "feedback") RS.feedback();
       if (a === "logout") { await sb.auth.signOut(); location.href = "index.html"; }
       if (a === "deposit" || a === "withdraw") moneyModal(a);
       if (a === "wheel") { if (window.RSwheel) window.RSwheel(); else location.href = "index.html"; }
