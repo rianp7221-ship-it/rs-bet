@@ -47,7 +47,14 @@
     : PX[k.replace(/\d+$/, "")] && /\d$/.test(k) ? [`${PX[k.replace(/\d+$/, "")]} ${pxLine(k)}`, { over: `Mais de ${pxLine(k)}`, under: `Menos de ${pxLine(k)}` }]
     : /^[st]\d+$/.test(k) ? [`${k[0] === "s" ? "Chutes" : "Chutes no Gol"} ${kLine(k)}`, { over: `Mais de ${kLine(k)}`, under: `Menos de ${kLine(k)}` }] : [k, {}]);
   const stKeys = (m, p) => Object.keys(m?.markets || {}).filter((k) => k[0] === p && /^[st]\d+$/.test(k)).sort((a, b) => a.slice(1) - b.slice(1));
-  const oddOf = (m, mk, pick) => mk === "bb" ? bbOdd(m, pick) : Number(mk === "1x2" ? m?.["odd_" + pick] : m?.markets?.[mk]?.[pick]) || 0;
+  const oddRaw = (m, mk, pick) => mk === "bb" ? bbOdd(m, pick) : Number(mk === "1x2" ? m?.["odd_" + pick] : m?.markets?.[mk]?.[pick]) || 0;
+  // odd turbinada do dia (boost_today): só no palpite escolhido, dentro do prazo e antes do jogo
+  let boost = null;
+  // mercado próprio "boost": mesma vitória do 1x2, com a odd turbinada e sem cash out; o 1x2 normal continua igual
+  const boostOn = (m, pick) => !!boost && !!m && m.id === boost.match && pick === boost.pick
+    && m.status === "open" && Date.now() >= new Date(boost.starts_at) && Date.now() < new Date(boost.ends_at) && new Date(m.starts_at) > Date.now();
+  const boosted = (m, pick) => { const o = oddRaw(m, "1x2", pick); return o > 1 ? Math.round(o * (100 + Number(boost.pct))) / 100 : 0; };
+  const oddOf = (m, mk, pick) => (mk === "boost" ? (boostOn(m, pick) ? boosted(m, pick) : 0) : oddRaw(m, mk, pick));
   // Criar Aposta: mesmo modelo de Poisson do servidor (_bb_odd); o servidor recalcula a odd ao apostar
   // pernas de gols: Poisson do placar; escanteios/cartões/chutes: odd justa do próprio mercado, 1 perna por grupo
   const GOAL_RE = /^(1x2|dc|btts|btts1|btts2|ht1x2|eg|cs|ou\d+|hto\d+|gh\d+|ga\d+)$/, HALF_RE = /^(ht1x2|btts1|btts2|hto\d+)$/, BB_MAX = 13;
@@ -248,7 +255,39 @@
     loadMarkets([...slip.keys()]);
     lastFull = Date.now();
     paint();
+    loadBoost();
   }
+  async function loadBoost() {
+    boost = await RS.rpc("boost_today").catch(() => null);
+    paint();
+  }
+  const clock = (ms) => { const t = Math.max(0, Math.floor(ms / 1000)); return [t / 3600, (t % 3600) / 60, t % 60].map((x) => String(Math.floor(x)).padStart(2, "0")).join(":"); };
+  function paintBoost() {
+    const el = RS.$("#boost-card"), m = boost && matches.find((x) => x.id === boost.match);
+    if (!el) return;
+    const show = !!m && Date.now() < new Date(boost.ends_at) && new Date(m.starts_at) > Date.now();
+    el.classList.toggle("hidden", !show);
+    if (!show) { el.innerHTML = ""; return; }
+    const on = boostOn(m, boost.pick), base = oddRaw(m, "1x2", boost.pick), team = boost.pick === "home" ? m.home : m.away;
+    const lg = (u) => (safeUrl(u) ? `<img src="${RS.esc(u)}" alt="">` : "");
+    el.innerHTML = `<div class="bst-top"><b class="bst-tag">${RS.icon("bolt")} ODD TURBINADA</b>
+        <span class="bst-clock"><small>${on ? "Acaba em" : "Começa em"}</small><b id="bst-clock">${clock(new Date(on ? boost.ends_at : boost.starts_at) - Date.now())}</b></span></div>
+      <div class="bst-match"><span class="bst-lg">${RS.esc(lname(m.league))} · ${dayLabel(m.starts_at)} ${hhmm(m.starts_at)}</span>
+        <div class="bst-teams"><span>${lg(m.home_logo)}<b>${RS.esc(m.home)}</b></span><i>x</i><span>${lg(m.away_logo)}<b>${RS.esc(m.away)}</b></span></div></div>
+      <div class="bst-pick"><div><small>Resultado Final</small><b>${RS.esc(team)} vence</b></div>
+        <button class="odd bst-odd${isSel(m.id, "boost", boost.pick) ? " selected" : ""}" data-id="${m.id}" data-pick="${boost.pick}" data-mk="boost"${on && !suspended(m) ? "" : " disabled"}>
+          <s>${base.toFixed(2)}</s><b>${boosted(m, boost.pick).toFixed(2)}</b></button></div>
+      <p class="bst-rules"><b>Sem cash out</b> nesta odd${Number(boost.max_stake) > 0 ? ` · Aposta máxima ${RS.money(boost.max_stake)}` : ""} · Só 1 jogo por dia</p>
+      <button class="bst-normal odd${isSel(m.id, "1x2", boost.pick) ? " selected" : ""}" data-id="${m.id}" data-pick="${boost.pick}"${suspended(m) ? " disabled" : ""}>
+        <span>Quer cash out? Aposte na odd normal</span><b>${base.toFixed(2)}</b></button>`;
+  }
+  setInterval(() => {
+    if (!boost) return;
+    const c = RS.$("#bst-clock"), on = boostOn(matches.find((x) => x.id === boost.match), boost.pick);
+    const left = new Date(on ? boost.ends_at : boost.starts_at) - Date.now();
+    if (c && left > 0) c.textContent = clock(left);
+    else if (left <= 0) paint();
+  }, 1000);
   // aplica uma linha atualizada (consulta dos jogos ao vivo) sem recarregar a lista inteira
   function applyPayload(payload) {
     const row = payload.new?.id ? payload.new : null;
@@ -275,11 +314,14 @@
   const odds = (m) => `<div class="odds">${["home", "draw", "away"].map((p) => oddBtn(m, p)).join("")}</div>`;
   const score = (m) => (m.score_home != null ? `<b class="score">${m.score_home} - ${m.score_away}</b>` : "");
 
+  const boostRow = (m) => (boostOn(m, boost?.pick) && !suspended(m) ? `<button class="odd boost-row${isSel(m.id, "boost", boost.pick) ? " selected" : ""}" data-id="${m.id}" data-pick="${boost.pick}" data-mk="boost">
+      <small>${RS.icon("bolt")} Odd turbinada · ${RS.esc(boost.pick === "home" ? m.home : m.away)} vence · sem cash out</small><span><s>${oddRaw(m, "1x2", boost.pick).toFixed(2)}</s><b>${boosted(m, boost.pick).toFixed(2)}</b></span></button>` : "");
   const row = (m) => `<div class="row">
       <div class="row-time">${live(m) ? `<i class="live">${m.sport === "Basquete" ? RS.esc(m.period || "AO VIVO") : m.period === "HT" ? "Intervalo" : m.minute ? m.minute + "'" : "AO VIVO"}</i>${score(m)}` : `${ddmm(m.starts_at)} <br>${hhmm(m.starts_at)}`}</div>
       <div class="row-teams"><span>${crest(m, "home")}${RS.esc(m.home)}</span><span>${crest(m, "away")}${RS.esc(m.away)}</span>
         <small>${lico(m.league)} ${RS.esc(lname(m.league))}</small></div>
       <div class="row-odds">${odds(m)}</div>
+      ${boostRow(m)}
       <button class="fav ${favs.has(m.id) ? "on" : ""}" data-fav="${m.id}" aria-label="Favoritar">${RS.icon("star")}</button>
       ${(m.markets ? extras(m).length : m.n_markets) ? `<button class="more-mk" data-more="${m.id}">+${m.markets ? extras(m).length : m.n_markets} mercados</button>` : ""}
     </div>`;
@@ -431,6 +473,7 @@
   const TITLE = { all: "Junte-se à ação", live: "Ao vivo", today: "Jogos de hoje", week: "Calendário de 7 dias", fav: "Favoritos", next: "Próximos jogos" };
 
   function render() {
+    paintBoost();
     const byLeague = {};
     matches.forEach((m) => { (byLeague[m.league] ||= { n: 0, sport: m.sport }).n++; });
     const names = new Set(Object.keys(byLeague).map(lname));
@@ -586,9 +629,9 @@
       ${fb ? `<small>Odd mínima ${Number(fb.min_odd).toFixed(2)}${total < fb.min_odd ? ` · <b class="fb-warn">bilhete com ${total.toFixed(2)}</b>` : ""} · se ganhar, recebe só o lucro, sem rollover</small>` : ""}</div>` : "";
     slipEl.innerHTML = items.map(([id, s]) => {
       const m = matches.find((x) => x.id === id);
-      const name = (mk, p) => (mk === "1x2" || mk === "dnb" || /^([cst]|ht)1x2$/.test(mk) ? (p === "home" ? m.home : p === "away" ? m.away : "Empate")
+      const name = (mk, p) => (mk === "1x2" || mk === "boost" || mk === "dnb" || /^([cst]|ht)1x2$/.test(mk) ? (p === "home" ? m.home : p === "away" ? m.away : "Empate")
         : /^hc[mp]\d+$/.test(mk) ? `${p === "home" ? m.home : m.away} ${hcLine(mk, p === "home" ? 1 : -1)}` : mkDef(mk)[1][p]);
-      const mkName = (mk) => (mk === "1x2" ? (m.sport === "Basquete" ? "Vencedor" : "Resultado Final") : /^hc[mp]\d+$/.test(mk) ? "Handicap de Pontos" : mkDef(mk)[0]);
+      const mkName = (mk) => (mk === "boost" ? "Resultado Final · Odd turbinada" : mk === "1x2" ? (m.sport === "Basquete" ? "Vencedor" : "Resultado Final") : /^hc[mp]\d+$/.test(mk) ? "Handicap de Pontos" : mkDef(mk)[0]);
       const up = s.odd > s.base;
       return `<div class="slip-item">
         <div class="si-main">${s.market === "bb"
@@ -596,6 +639,7 @@
             <ul class="si-legs">${legsOf(s).map(([k, p]) => `<li><b>${RS.esc(name(k, p))}</b><small>${mkName(k)}</small></li>`).join("")}</ul>`
           : `<b>${icon(m.sport)} ${RS.esc(name(s.market, s.pick))}</b><small class="si-mkt">${mkName(s.market)}</small>
           <small class="si-teams">${crest(m, "home")}${RS.esc(m.home)}<br>${crest(m, "away")}${RS.esc(m.away)}</small>`}
+          ${s.market === "boost" ? `<small class="si-boost">${RS.icon("bolt")} Odd turbinada · <b>Sem cash out</b>${Number(boost.max_stake) > 0 ? ` · máx. ${RS.money(boost.max_stake)}` : ""}</small>` : ""}
           ${suspended(m) ? `<small class="si-lock">${RS.icon("lock")} Mercado suspenso</small>` : ""}</div>
         <div class="si-odd">${s.odd !== s.base
           ? `<s>${s.base.toFixed(2)}</s><span class="${up ? "up" : "down"}">${up ? "▲" : "▼"} ${s.odd.toFixed(2)}</span>`

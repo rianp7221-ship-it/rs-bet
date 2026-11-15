@@ -12,7 +12,7 @@
   // cashout acima do apostado = verde, abaixo = vermelho
   const betBadge = (b) => (b.status === "cashout" ? RS.betBadge(b) : badge(b.status));
   const TYPE = (n) => (n === 1 ? "Simples" : n === 2 ? "Dupla" : n === 3 ? "Tripla" : "Múltipla");
-  const MNAME = { "1x2": "Resultado Final", ou15: "Total de Gols", ou25: "Total de Gols", ou35: "Total de Gols", btts: "Ambas Marcam", btts1: "Ambas Marcam 1º Tempo", btts2: "Ambas Marcam 2º Tempo", ht1x2: "Resultado 1º Tempo", ou05: "Total de Gols", ou45: "Total de Gols", ou55: "Total de Gols", dc: "Chance Dupla", dnb: "Empate Anula", c1x2: "Escanteios 1X2", s1x2: "Chutes 1X2", t1x2: "Chutes no Gol 1X2", eg: "Gols Exatos", cs: "Placar Exato" };
+  const MNAME = { "1x2": "Resultado Final", boost: "Resultado Final · Odd turbinada", ou15: "Total de Gols", ou25: "Total de Gols", ou35: "Total de Gols", btts: "Ambas Marcam", btts1: "Ambas Marcam 1º Tempo", btts2: "Ambas Marcam 2º Tempo", ht1x2: "Resultado 1º Tempo", ou05: "Total de Gols", ou45: "Total de Gols", ou55: "Total de Gols", dc: "Chance Dupla", dnb: "Empate Anula", c1x2: "Escanteios 1X2", s1x2: "Chutes 1X2", t1x2: "Chutes no Gol 1X2", eg: "Gols Exatos", cs: "Placar Exato" };
   const mname = (mk) => MNAME[mk] || (/^ou\d{4,}$/.test(mk) ? "Total de Pontos" : /^hc[mp]\d+$/.test(mk) ? "Handicap de Pontos" : /^co\d+$/.test(mk) ? "Total de Escanteios" : /^k\d+$/.test(mk) ? "Total de Cartões" : PXN[mk.replace(/\d+$/, "")] && /\d$/.test(mk) ? PXN[mk.replace(/\d+$/, "")] : /^s\d+$/.test(mk) ? "Total de Chutes" : /^t\d+$/.test(mk) ? "Total de Chutes no Gol" : RS.esc(mk));
   const LINE = { ou05: "0,5", ou15: "1,5", ou25: "2,5", ou35: "3,5", ou45: "4,5", ou55: "5,5" };
   const PXN = { hto: "Gols 1º Tempo", gh: "Gols Casa", ga: "Gols Fora", ch: "Escanteios Casa", ca: "Escanteios Fora", kh: "Cartões Casa", ka: "Cartões Fora", sh: "Chutes Casa", sa: "Chutes Fora" };
@@ -100,7 +100,8 @@
         <span class="bc-odd">${betOdd(b).toFixed(2)}</span><i class="bc-chev"></i></div>
       <div class="bc-body">
         ${sels.map((s) => `<div class="bc-sel" data-m="${s.match_id}">
-          <div class="bc-l1">${RS.icon("ball")}<b${s.market === "bb" ? ' class="bc-bb"' : ""}>${RS.esc(selName(s))}</b>${mark(s)}<span>${selOdd(s).toFixed(2)}</span></div>
+          <div class="bc-l1">${RS.icon("ball")}<b${s.market === "bb" ? ' class="bc-bb"' : ""}>${RS.esc(selName(s))}</b>${mark(s)}${s.boosted ? `<em class="bc-boost">${RS.icon("bolt")}</em>` : ""}<span>${selOdd(s).toFixed(2)}</span></div>
+          ${s.boosted ? `<div class="bc-boost-l">${RS.icon("bolt")} Odd turbinada · sem cash out</div>` : ""}
           ${s.market === "bb" ? "" : `<div class="bc-mk">${mname(s.market || "1x2")}</div>`}
           <div class="bc-l3"><span class="bc-teams">${logo(s.matches.home_logo)}${RS.esc(s.matches.home)}<br>${logo(s.matches.away_logo)}${RS.esc(s.matches.away)}</span><span class="bc-st" data-st="${s.match_id}">${selState(s)}</span></div>
           ${s.market === "bb" ? `<ul class="bc-legs">${legList(s)}</ul>` : ""}</div>`).join("")}
@@ -220,7 +221,7 @@
 
     if (kind === "bets") {
       const { data } = await sb.from("bets")
-        .select("*, bet_selections(match_id, market, pick, odd, status, matches(home, away, league, status, starts_at, score_home, score_away, minute, period, clock_secs, clock_at, ext365_id, home_logo, away_logo))")
+        .select("*, bet_selections(match_id, market, pick, odd, status, boosted, matches(home, away, league, status, starts_at, score_home, score_away, minute, period, clock_secs, clock_at, ext365_id, home_logo, away_logo))")
         .eq("user_id", u.id).or(`status.eq.pending,created_at.gte.${new Date(Date.now() - 7 * 864e5).toISOString()}`)
         .order("created_at", { ascending: false }).limit(1000);
       bets = data || [];
@@ -271,6 +272,7 @@
     card?.classList.toggle("co-ok", !!q && !q.suspended);
     // barra laranja no jogo que está travando o cashout
     for (const sel of RS.$$(".bc-sel[data-m]", card || el)) sel.classList.toggle("co-block", !!q?.suspended && Number(sel.dataset.m) === Number(q.match));
+    if (q?.boost) { el.innerHTML = `<button class="btn btn-co w-full" disabled>Sem cash out · odd turbinada</button>`; return; }
     if (!q || q.suspended) {
       el.innerHTML = CO_OFF + (q?.min ? `<p class="co-min">O valor do cash out está em ${RS.money(q.now)}. O mínimo para cash out é ${RS.money(q.min)}.</p>` : "");
       return;
