@@ -184,7 +184,7 @@ RS.refer = async () => {
   const prize = ref?.reward ? RS.money(ref.reward) : "";
   const text = `Bora apostar comigo na Real Sports! Cria sua conta pelo meu link: ${url}`;
   const m = RS.modal(`<h3>${prize ? `Convide e ganhe ${prize}` : "Indique um amigo"}</h3>
-    <p class="muted">${prize ? `Para cada amigo que criar conta pelo seu link e fizer o primeiro depósito, você ganha ${prize} de bônus.` : "Envie seu link para amigos criarem conta na Real Sports."}</p>
+    <p class="muted">${prize ? `Para cada amigo que criar conta pelo seu link, depositar ${RS.money(ref.min || 10)} e apostar ${RS.money(ref.min || 10)}, você ganha ${prize} de bônus.` : "Envie seu link para amigos criarem conta na Real Sports."}</p>
     ${ref ? `<p class="muted small">Convidados: <b>${ref.invited}</b> · com depósito: <b>${ref.qualified}</b> · ganho: <b>${RS.money(ref.earned)}</b></p>` : ""}
     <input class="input" readonly value="${url}">
     <a class="btn btn-green w-full" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(text)}">Enviar pelo WhatsApp</a>
