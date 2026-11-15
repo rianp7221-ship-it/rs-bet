@@ -1243,3 +1243,28 @@ body.on-casino { background: #1b1d24; }
   .auth-card > .auth-have { display: none; }
   .auth-card h2 { font-size: 22px; margin: 18px 0 16px; }
 }
+
+/* barra de baixo como na Betano: Início, Ao Vivo, Esportes (A-Z), Apostas, Explorar */
+.az-page { display: none; }
+@media (max-width: 760px) {
+  .bottom-nav { grid-template-columns: repeat(5, 1fr) 72px; }
+  body.on-casino .bottom-nav { grid-template-columns: repeat(4, 1fr) 72px; }
+  body.az-open { overflow: hidden; }
+  body.az-open .az-page { display: flex; flex-direction: column; position: fixed; inset: 0; z-index: 84; background: var(--bg); }
+  .az-top { display: flex; align-items: center; justify-content: space-between; background: var(--primary); color: #fff; padding: calc(10px + env(safe-area-inset-top)) 12px 10px 16px; }
+  .az-top b { font-size: 18px; font-weight: 800; }
+  .az-top .icon-btn { color: #fff; }
+  .az-body { flex: 1; overflow-y: auto; padding: 4px 12px calc(110px + env(safe-area-inset-bottom)); }
+  .az-h { font-size: 15px; font-weight: 800; margin: 16px 4px 8px; }
+  .az-list { background: #fff; border-radius: 14px; overflow: hidden; box-shadow: 0 2px 8px rgba(20,25,40,.06); }
+  .az-list > button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 14px; border: 0; border-bottom: 1px solid var(--line); background: none; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+  .az-list > button:last-child { border-bottom: 0; }
+  .az-list b { flex: 1; font-size: 15px; font-weight: 600; }
+  .az-list em { font-style: normal; font-size: 13px; color: var(--muted); }
+  .az-list em::after { content: "›"; margin-left: 10px; font-size: 18px; color: #9aa1b0; }
+  .az-ico { width: 26px; display: grid; place-items: center; font-size: 20px; }
+  .az-live { font-style: normal; font-size: 11px; font-weight: 700; color: #fff; background: #e0261b; border-radius: 6px; padding: 2px 6px; }
+  .az-list .comp-item { padding: 10px 14px; margin: 0; border-radius: 0; background: none; border-width: 0 0 1px; border-color: var(--line); }
+  .az-list .comp-item b { color: var(--text); font-size: 14px; }
+  .az-list .comp-item small { display: block; font-size: 12px; color: var(--muted); font-weight: 400; }
+}

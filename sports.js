@@ -441,6 +441,14 @@
         <span><b>${RS.esc(lname(l))}</b><small>${RS.esc(v.sport)}</small></span>${v.n ? `<em>${v.n}</em>` : ""}</button>`).join("")
       || `<p class="muted small" style="padding:0 6px">Sem competições no momento.</p>`);
 
+    const all = {};
+    matches.forEach((m) => { const c = (all[m.sport] ||= { n: 0, live: 0 }); c.n++; if (live(m)) c.live++; });
+    RS.morph(RS.$("#az-sports"), Object.keys(all).sort((a, b) => a.localeCompare(b, "pt-BR")).map((s) =>
+      `<button class="az-item" data-az-sport="${RS.esc(s)}"><span class="az-ico">${icon(s)}</span><b>${RS.esc(s)}</b>
+        ${all[s].live ? `<i class="az-live">${all[s].live} ao vivo</i>` : ""}<em>${all[s].n}</em></button>`).join("")
+      || `<p class="muted small">Sem jogos no momento.</p>`);
+    RS.morph(RS.$("#az-comps"), RS.$("#comp-list").innerHTML);
+
     const count = {};
     matches.filter((m) => (view === "live" ? live(m) : view !== "all" || league || query || mainDay(m))).forEach((m) => (count[m.sport] = (count[m.sport] || 0) + 1));
     if (sport !== "Popular" && !count[sport]) sport = "Popular";
@@ -480,7 +488,8 @@
           <button data-view="all">Todas as ligas</button></div>`);
     }
     RS.$("#list-title").textContent = query ? `Busca: "${query}"` : league ? lname(league) : view === "live" ? `Jogos ao vivo (${matches.filter(live).length})` : TITLE[view];
-    RS.$$("[data-view]").forEach((a) => a.classList.toggle("active", a.dataset.view === view && !league && !query));
+    const onList = !RS.$("#sports").classList.contains("hidden") && !document.body.classList.contains("az-open");
+    RS.$$("[data-view]").forEach((a) => a.classList.toggle("active", a.dataset.view === view && !league && !query && (onList || !a.closest(".bottom-nav"))));
 
     const rows = visible();
     const reset = home ? "" : `<div class="filter-bar"><button class="btn btn-outline sm" data-view="all">Ver todos os jogos</button></div>`;
@@ -698,12 +707,21 @@
     if (lb) { lt = lb.dataset.lt; render(); return; }
     const v = t.closest("[data-view]");
     if (v) { setView(v.dataset.view); if (!v.matches("a")) scrollTo({ top: 0, behavior: "smooth" }); return; }
+    const az = t.closest("[data-az-sport]");
+    if (az) {
+      document.querySelector('[data-tabs] [data-tab="sports"]').click();
+      document.body.classList.remove("az-open");
+      RS.$$(".bottom-nav a").forEach((x) => x.classList.toggle("active", x.dataset.view === "all"));
+      setView("all"); sport = az.dataset.azSport; render();
+      scrollTo({ top: RS.$("#list-title").getBoundingClientRect().top + scrollY - 70 });
+      return;
+    }
     const s = t.closest("[data-sport]");
     if (s) { sport = s.dataset.sport; render(); return; }
     const l = t.closest("[data-league]");
     if (l) {
       document.querySelector('[data-tabs] [data-tab="sports"]').click();
-      document.body.classList.remove("menu-open");
+      document.body.classList.remove("menu-open", "az-open");
       setView("all", { league: l.dataset.league });
       scrollTo({ top: 0, behavior: "smooth" });
       return;
