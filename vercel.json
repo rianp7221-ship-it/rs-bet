@@ -51,5 +51,23 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/seo?p=sitemap"
+    },
+    {
+      "source": "/jogos",
+      "destination": "/api/seo?p=jogos"
+    },
+    {
+      "source": "/apostas/:s",
+      "destination": "/api/seo?p=liga&s=:s"
+    },
+    {
+      "source": "/jogo/:s",
+      "destination": "/api/seo?p=jogo&s=:s"
+    }
   ]
 }
