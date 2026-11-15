@@ -418,7 +418,7 @@
   function visible() {
     const q = query.toLowerCase(), now = Date.now();
     return matches.filter((m) =>
-      (sport === "Popular" || m.sport === sport) &&
+      (sport === "Popular" ? league || q || m.sport === "Futebol" : m.sport === sport) &&
       (!league || (m.league === league && (lt !== "live" || live(m)))) &&
       (!q || `${m.home} ${m.away} ${m.league} ${lname(m.league)}`.toLowerCase().includes(q)) &&
       ((view === "all" && (league || q || mainDay(m))) ||
@@ -459,7 +459,7 @@
     }
 
     const home = view === "all" && sport === "Popular" && !league && !query;
-    const top = featPick(matches.filter((m) => !live(m) && !suspended(m)));
+    const top = featPick(matches.filter((m) => m.sport === "Futebol" && !live(m) && !suspended(m)));
     RS.$("#feat-cards").classList.toggle("hidden", !home || !top.length);
     featTop = home ? top : null;
     RS.morph(RS.$("#feat-cards"), home ? top.map(feat).join("") : "");
