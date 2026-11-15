@@ -264,12 +264,17 @@
 
   // ---------- AUDITORIA ----------
   async function feedback() {
-    main.innerHTML = head("Sugestões dos jogadores", `<button class="btn btn-outline" id="fb-csv">Exportar CSV</button>`) + `<div id="fb-list"></div>`;
+    main.innerHTML = head("Sugestões dos jogadores", `${can("settings.manage") ? `<button class="btn btn-primary" id="fb-ask">Perguntar de novo a todos</button>` : ""}<button class="btn btn-outline" id="fb-csv">Exportar CSV</button>`) + `<div id="fb-list"></div>`;
     let rows = [];
     try { rows = (await RS.rpc("admin_feedback", { p_limit: 500 })) || []; } catch (e) { RS.toast(e.message, "error"); }
     RS.$("#fb-list").innerHTML = table(["Quando", "Jogador", "Sugestão"], rows.map((f) => [
       RS.date(f.created_at), `<a href="#" data-open-user="${f.user_id}" style="color:var(--primary)">${esc(f.username || f.email || "")}</a><br><small>${esc(f.email || "")}</small>`,
       `<div style="white-space:pre-wrap;max-width:640px">${esc(f.body)}</div>`]), "Nenhuma sugestão ainda.");
+    const ask = RS.$("#fb-ask");
+    if (ask) ask.onclick = async () => {
+      if (confirm("Mostrar a janela \"O que podemos melhorar?\" de novo para todos os jogadores?"))
+        await act("admin_feedback_ask", {}, "Pronto: a janela vai aparecer de novo para todos os jogadores");
+    };
     RS.$("#fb-csv").onclick = () => csv("sugestoes.csv", [["data", "usuario", "email", "sugestao"], ...rows.map((f) => [f.created_at, f.username, f.email, f.body])]);
   }
 

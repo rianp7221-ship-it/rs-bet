@@ -68,9 +68,13 @@
     if (!me) return;
     if (me.blocked) RS.toast("Sua conta está bloqueada. Fale com o suporte.", "error");
     if ((!me.cpf || !me.full_name) && page !== "admin.html") askIdentity(me);
-    // pergunta uma vez por aparelho, sem atropelar outra janela aberta
-    if (page === "index.html" && !me.blocked && !localStorage.getItem("rs-fb-asked2") && !fbTimer)
-      fbTimer = setTimeout(() => { if (!document.querySelector(".rs-modal")) RS.feedback(); }, 20000);
+    // a cada "Perguntar de novo" no admin a rodada sobe e a janela abre mais uma vez
+    if (page === "index.html" && !me.blocked && !fbTimer)
+      fbTimer = setTimeout(async () => {
+        const round = await RS.rpc("feedback_round").catch(() => 0);
+        const seen = +localStorage.getItem("rs-fb-round") || (localStorage.getItem("rs-fb-asked2") ? 1 : 0);
+        if (round > seen && !document.querySelector(".rs-modal")) RS.feedback(round);
+      }, 20000);
     RS.$("#btn-deposit").onclick = () => panel("overview");
     RS.$("#hdr-bal").onclick = () => panel("overview");
     RS.$("#hdr-avatar").onclick = togglePop;

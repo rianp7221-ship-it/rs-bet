@@ -159,8 +159,8 @@ RS.support = () => {
     : `<p class="muted">O canal de atendimento será liberado em breve.</p>`}`);
 };
 // "O que podemos melhorar?": o jogador escreve e a equipe lê em Admin → Sugestões
-RS.feedback = () => {
-  localStorage.setItem("rs-fb-asked2", "1");
+RS.feedback = (round) => {
+  if (round) localStorage.setItem("rs-fb-round", String(round));
   const m = RS.modal(`<h3>O que podemos melhorar?</h3>
     <p class="muted small">Conta pra gente o que você mudaria na Real Sports: apostas, odds, cassino, depósito e saque, app… Lemos todas as mensagens.</p>
     <form id="fb-f"><textarea class="input" id="fb-txt" rows="5" maxlength="2000" required placeholder="Escreva sua sugestão"></textarea>
