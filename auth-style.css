@@ -1249,8 +1249,8 @@ body.on-casino { background: #1b1d24; }
 @media (max-width: 760px) {
   .bottom-nav { grid-template-columns: repeat(5, 1fr) 72px; }
   body.on-casino .bottom-nav { grid-template-columns: repeat(4, 1fr) 72px; }
-  body.az-open { overflow: hidden; }
-  body.az-open .az-page { display: flex; flex-direction: column; position: fixed; inset: 0; z-index: 84; background: var(--bg); }
+  body.az-open, body.ex-open { overflow: hidden; }
+  body.az-open #az-page, body.ex-open #ex-page { display: flex; flex-direction: column; position: fixed; inset: 0; z-index: 84; background: var(--bg); }
   .az-top { display: flex; align-items: center; justify-content: space-between; background: var(--primary); color: #fff; padding: calc(10px + env(safe-area-inset-top)) 12px 10px 16px; }
   .az-top b { font-size: 18px; font-weight: 800; }
   .az-top .icon-btn { color: #fff; }
@@ -1272,4 +1272,40 @@ body.on-casino { background: #1b1d24; }
 /* iPhone dá zoom ao focar campo com fonte < 16px */
 @media (max-width: 760px) {
   input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea { font-size: 16px !important; }
+}
+
+/* tiles da fileira (Roda da Sorte, Mais apostado, banners) no tamanho da Betano: ~4 visíveis no celular */
+@media (max-width: 760px) {
+  .pt-strip { gap: 8px; padding-bottom: 4px; }
+  .pt, .pt-wide { width: 86px; height: 112px; padding: 7px; border-radius: 10px; }
+  .pt-ic { left: 6px; top: 6px; width: 24px; height: 24px; border-width: 1.5px; }
+  .pt-ic svg.i { width: 12px; height: 12px; }
+  .pt-t { gap: 0; }
+  .pt-t b, .pt-wheel .pt-t b, .pt-top .pt-t b { font-size: 12px; line-height: 1.15; font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .pt-t small, .pt-kick, .pt-pill, .pt-corner, .ptc-chip { display: none !important; }
+  .pt-wheel .pc-wheel-art { right: -14px; top: 8px; width: 72px; height: 72px; }
+  .pt-top .pc-top-logos { right: 6px; top: 34px; gap: 2px; }
+  .pt-top .pc-top-logos img { width: 30px; height: 30px; padding: 3px; }
+  .pt-art-ic { right: -8px; top: 22px; }
+  .pt-art-ic svg.i { width: 60px; height: 60px; }
+  .pt .ptc { transform: scale(.42); transform-origin: top right; }
+  .casino-strip { grid-auto-columns: 86px; gap: 8px; }
+  .cs-tile { aspect-ratio: auto; height: 112px; padding: 7px; font-size: 12px; }
+  .cs-tile i { font-size: 30px; }
+
+  /* menu da conta cobre a barra de baixo (no app o Painel Admin ficava escondido atrás dela) */
+  body:has(.acct-pop) .bottom-nav, body:has(.acct-pop) .slip-fab { display: none; }
+  .acct-pop { padding-bottom: calc(18px + env(safe-area-inset-bottom)); max-height: calc(100dvh - 70px); overflow-y: auto; }
+
+  /* como na Betano: deslogado não tem lupa no topo, a busca fica no Explorar */
+  .hdr-right:not(.logged) #hdr-search { display: none; }
+}
+
+@media (max-width: 760px) {
+  .ex-search { position: relative; margin: 14px 0 4px; }
+  .ex-search svg.i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; color: var(--muted); }
+  .ex-search .input { margin: 0; height: 48px; padding-left: 44px; border-radius: 999px; background: #fff; border-color: var(--line); }
+  .ex-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .ex-grid a { display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 12px; padding: 14px 12px; color: var(--text); font-size: 14px; font-weight: 600; text-decoration: none; box-shadow: 0 2px 8px rgba(20,25,40,.06); }
+  .ex-grid svg.i { width: 22px; height: 22px; color: var(--primary); flex: none; }
 }
