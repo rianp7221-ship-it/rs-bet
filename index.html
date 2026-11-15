@@ -210,14 +210,25 @@
   <nav class="bottom-nav">
     <a href="#sports" data-view="all" class="active"><i data-ic="home"></i>Início</a>
     <a href="#sports" data-view="live"><i data-ic="live"></i>Ao Vivo</a>
-    <a href="#" data-open-menu><i data-ic="grid"></i>Esportes</a>
+    <a href="#" data-az><i data-ic="grid"></i>Esportes</a>
     <a href="#history" data-bets><i data-ic="receipt"></i>Apostas<em class="bn-badge hidden" id="bn-count">0</em></a>
+    <a href="#" data-explore><i data-ic="search"></i>Explorar</a>
     <a href="#casino" class="bn-cz" data-cz="all"><i data-ic="dice"></i>Cassino</a>
     <a href="#casino" class="bn-cz" data-cz="fort"><i data-ic="star"></i>Fortuna</a>
     <a href="#casino" class="bn-cz" data-cz="feat"><i data-ic="fire"></i>Mais jogados</a>
     <a href="#casino" class="bn-cz" data-cz="search"><i data-ic="search"></i>Explorar</a>
     <a href="#casino" class="bn-switch" id="bn-switch" aria-label="Cassino"><span class="bn-chip"><i data-ic="chip"></i></span><span class="bn-ball"><i data-ic="ball"></i></span></a>
   </nav>
+
+  <div class="az-page" id="az-page">
+    <div class="az-top"><b>Esportes</b><button class="icon-btn" data-az-close aria-label="Fechar"><i data-ic="x"></i></button></div>
+    <div class="az-body">
+      <h3 class="az-h">Esportes de A-Z</h3>
+      <div class="az-list" id="az-sports"></div>
+      <h3 class="az-h">Competições</h3>
+      <div class="az-list" id="az-comps"></div>
+    </div>
+  </div>
 
   <footer class="footer">
     <div class="foot-cols">
@@ -263,7 +274,11 @@
     // links #sports / #casino / #history / #proximos trocam a aba sem recarregar
     document.addEventListener("click", (e) => {
       const a = e.target.closest("a[href*='#']");
-      if (a?.matches("[data-bets]") && RS.$("#fab-count").textContent !== "0") { e.preventDefault(); document.body.classList.add("slip-open"); return; }
+      const az = e.target.closest("[data-az]"), ex = e.target.closest("[data-explore]");
+      if (az || ex || e.target.closest(".bottom-nav a, [data-az-close]")) document.body.classList.toggle("az-open", !!az && !document.body.classList.contains("az-open"));
+      if (az) { e.preventDefault(); RS.$$(".bottom-nav a").forEach((x) => x.classList.toggle("active", x === az && document.body.classList.contains("az-open"))); return; }
+      if (ex) { e.preventDefault(); RS.$("#hdr-search")?.click(); return; }
+      if (e.target.closest("[data-az-close]")) { RS.$$(".bottom-nav a").forEach((x) => x.classList.toggle("active", x.dataset.view === "all")); return; }
       if (!a || a.origin !== location.origin || !/\/(index\.html)?$/.test(a.pathname)) return;
       let t = a.hash.slice(1);
       if (t !== "proximos" && !TABS.includes(t)) return;
