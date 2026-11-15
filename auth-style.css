@@ -1113,7 +1113,7 @@ body.on-casino .bottom-nav a.bn-cz.active { color: #ff7a1a; }
 
 /* faixa laranja do Início, que continua o cabeçalho até o fundo claro */
 body.is-home .main { position: relative; }
-body.is-home .main::before { content: ""; position: absolute; z-index: 0; top: 0; left: -16px; right: -16px; height: 470px; pointer-events: none;
+body.is-home .main:has(> #sports:not(.hidden))::before { content: ""; position: absolute; z-index: 0; top: 0; left: -16px; right: -16px; height: 470px; pointer-events: none;
   background: linear-gradient(180deg, var(--primary) 0, #f2430a 90px, #d6350d 210px, #a8290f 330px, rgba(236,238,242,0) 470px); }
 body.is-home .main > section { position: relative; z-index: 1; }
 body.is-home .feat-top { background: rgba(0,0,0,.35); }
@@ -1157,7 +1157,9 @@ body.is-home .feat-top { background: rgba(0,0,0,.35); }
 .odd { background: #f0f1f4; border: 1px solid transparent; border-radius: 8px; transition: background .12s, border-color .12s; }
 .odd small { color: var(--muted); }
 .odd b { color: var(--odd); font-weight: 700; }
-.odd:hover:not(:disabled) { border-color: transparent; background: #e4e6eb; }
+.odd:hover:not(:disabled) { border-color: transparent; }
+@media (hover: hover) { .odd:hover:not(:disabled):not(.selected) { background: #e4e6eb; } }
+.odd.selected:hover:not(:disabled) { background: var(--dark); border-color: var(--dark); }
 .odd.selected, .feat-card .odd.selected { background: var(--dark); border-color: var(--dark); }
 .odd.selected b, .odd.selected small { color: #fff; }
 .more-mk { background: transparent; padding: 4px 0; color: var(--text); font-weight: 600; }
@@ -1206,7 +1208,7 @@ body.is-home .feat-top { background: rgba(0,0,0,.35); }
   .bn-switch span { box-shadow: 0 0 0 6px #eceef2, 0 4px 12px rgba(0,0,0,.25); }
   body.on-casino .bottom-nav a.active svg.i { background: #3a2a24; }
   body.on-casino .bn-switch span { box-shadow: 0 0 0 6px #23252d, 0 4px 12px rgba(0,0,0,.4); }
-  .slip-fab { border-width: 2px; border-radius: 12px 28px 28px 12px; }
+  .slip-fab { border-width: 2px; border-radius: 12px 28px 28px 12px; bottom: calc(86px + env(safe-area-inset-bottom)); }
 }
 
 /* cassino escuro em cinza neutro */
