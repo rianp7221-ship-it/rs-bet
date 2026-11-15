@@ -1208,7 +1208,8 @@ body.is-home .feat-top { background: rgba(0,0,0,.35); }
   .bn-switch span { box-shadow: 0 0 0 6px #eceef2, 0 4px 12px rgba(0,0,0,.25); }
   body.on-casino .bottom-nav a.active svg.i { background: #3a2a24; }
   body.on-casino .bn-switch span { box-shadow: 0 0 0 6px #23252d, 0 4px 12px rgba(0,0,0,.4); }
-  .slip-fab { border-width: 2px; border-radius: 12px 28px 28px 12px; bottom: calc(86px + env(safe-area-inset-bottom)); }
+  .slip-fab { bottom: calc(86px + env(safe-area-inset-bottom)); }
+  .slip-fab::before { left: 6px; font-size: 20px; }
 }
 
 /* cassino escuro em cinza neutro */
