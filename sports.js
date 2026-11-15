@@ -249,7 +249,7 @@
     lastFull = Date.now();
     paint();
   }
-  // o tempo real manda a linha que mudou; a lista inteira só volta na rede se o socket cair
+  // aplica uma linha atualizada (consulta dos jogos ao vivo) sem recarregar a lista inteira
   function applyPayload(payload) {
     const row = payload.new?.id ? payload.new : null;
     const id = row?.id || payload.old?.id;
@@ -776,31 +776,38 @@
   loadFb();
   document.addEventListener("rs:balance", loadFb);
 
-  // odds e placar ao vivo; várias linhas do sync chegam juntas e redesenham uma vez só
-  let lastFull = 0, rtOk = false, queue = [], pend;
+  // odds e placar ao vivo por consulta curta só dos jogos ao vivo; sem tempo real na tabela matches
+  // (cada linha alterada virava 1 mensagem do Realtime por jogador conectado e estourava a cota)
+  const LIVE_MS = 8000, FULL_MS = 180000;
+  let lastFull = 0;
   const sportsOpen = () => !document.getElementById("sports")?.classList.contains("hidden");
   const needFeed = () => sportsOpen() || slip.size > 0;
-  sb.channel("matches").on("postgres_changes", { event: "*", schema: "public", table: "matches" }, (payload) => {
-    const row = payload.new?.id ? payload.new : null;
-    const prev = row && matches.find((m) => m.id === row.id);
-    const goal = !!row && !!prev && (Number(prev.score_home) !== Number(row.score_home) || Number(prev.score_away) !== Number(row.score_away));
-    const locked = !!row && (row.locked || (row.suspended_until && new Date(row.suspended_until) > new Date()));
-    if (row && (goal || locked)) document.dispatchEvent(new CustomEvent("rs:match-lock", { detail: [{ id: row.id, goal }] }));
-    queue.push(payload);
-    clearTimeout(pend);
-    pend = setTimeout(() => { for (const p of queue) applyPayload(p); queue = []; paint(); }, 400);
-  }).subscribe((status) => { rtOk = status === "SUBSCRIBED"; });
-  // lista completa no máximo 1 vez por minuto com o socket saudável; a cada 15 s se ele cair
+  async function pollLive() {
+    const { data, error } = await sb.from("matches").select(LIST_COLS).eq("status", "live");
+    if (error || !data) return;
+    const ids = new Set(data.map((r) => r.id)), hits = [];
+    for (const row of data) {
+      const prev = matches.find((m) => m.id === row.id);
+      const goal = !!prev && (Number(prev.score_home) !== Number(row.score_home) || Number(prev.score_away) !== Number(row.score_away));
+      if (goal || row.locked || (row.suspended_until && new Date(row.suspended_until) > new Date())) hits.push({ id: row.id, goal });
+      applyPayload({ new: row });
+    }
+    for (let i = matches.length - 1; i >= 0; i--) if (live(matches[i]) && !ids.has(matches[i].id)) matches.splice(i, 1);
+    if (hits.length) document.dispatchEvent(new CustomEvent("rs:match-lock", { detail: hits }));
+    const mk = [...new Set([...slip.keys(), mvId])].filter((id) => ids.has(id));
+    if (mk.length) await loadMarkets(mk); else paint();
+  }
+  const refresh = () => (Date.now() - lastFull > FULL_MS ? load() : pollLive());
   setInterval(() => {
     if (document.hidden || !needFeed()) return;
-    if (rtOk && Date.now() - lastFull < 60000) return;
-    load();
-  }, 15000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && needFeed()) load(); });
+    if (Date.now() - lastFull > FULL_MS) load();
+    else if (matches.some((m) => live(m) || new Date(m.starts_at) <= Date.now())) pollLive();
+  }, LIVE_MS);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && needFeed()) refresh(); });
   document.addEventListener("rs:tab", (e) => {
     if (e.detail !== "sports") return;
     paint();
-    if (!rtOk || Date.now() - lastFull > 60000) load();
+    refresh();
   });
 
   (async () => {
