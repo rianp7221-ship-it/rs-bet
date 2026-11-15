@@ -33,7 +33,10 @@
       const { data } = await sb.from("banners").select("*").order("sort").order("id");
       const promo = `<a class="pt pt-wheel" href="#" data-wheel><span class="pt-ic">${RS.icon("star")}</span><span class="pt-art pc-wheel-art"></span>
           <span class="pt-t"><b>Roda da Sorte</b><small id="pc-wheel-sub">Gire grátis todo dia</small></span></a>
-        <a class="pt pt-wide pt-top hidden" href="#" id="pc-top"></a>`;
+        <a class="pt pt-wide pt-top hidden" href="#" id="pc-top"></a>
+        <a class="pt pt-wide pt-refer" href="#" data-refer><span class="pt-ic">${RS.icon("gift")}</span><span class="pt-art pt-art-ic">${RS.icon("gift")}</span>
+          <span class="pt-t"><small class="pt-kick">Indique um amigo</small><b id="pc-refer-t">Convide e ganhe bônus</b>
+          <span class="pt-pill">Convidar pelo WhatsApp</span></span></a>`;
       const czArt = `<span class="pt-art ptc"><i class="ptc-rays"></i><i class="ptc-glow"></i><span class="ptc-covers"></span>
           <i class="ptc-coin c1"></i><i class="ptc-coin c2"></i><i class="ptc-coin c3"></i><i class="ptc-spark s1"></i><i class="ptc-spark s2"></i><i class="ptc-spark s3"></i></span>`;
       strip.insertAdjacentHTML("beforebegin", `<div class="pc-strip pt-strip" id="pc-strip">${promo}${(data || []).map((b) => `<a class="pt pt-wide pt-${RS.esc(b.theme)}${b.image_url ? " pt-img" : b.link === "#casino" ? " pt-casino" : ""}" ${linkOf(b)}
@@ -42,7 +45,7 @@
             : `<span class="pt-art pt-art-ic">${RS.icon(b.icon || "ball")}</span>`}
           <span class="pt-t">${b.subtitle ? `<small class="pt-kick">${RS.esc(b.subtitle)}</small>` : ""}${!b.image_url && b.link === "#casino" ? `<span class="ptc-chip hidden"></span>` : ""}<b>${RS.esc(b.title)}</b>
           ${b.cta ? `<span class="pt-pill">${RS.esc(b.cta)}</span>` : ""}</span></a>`).join("")}</div>`);
-      wheelSub(); loadTop(); casinoArt();
+      wheelSub(); loadTop(); casinoArt(); referCard();
     })();
     document.addEventListener("click", (e) => { if (e.target.closest("#pc-strip [data-promo-dep]")) { e.preventDefault(); document.dispatchEvent(new Event("rs:deposit")); } });
     strip.addEventListener("click", (e) => { if (e.target.closest("[data-promo-dep]")) { e.preventDefault(); document.dispatchEvent(new Event("rs:deposit")); } });
@@ -168,6 +171,11 @@
     el.textContent = st.spun ? "Volte amanhã" : st.logged && st.dep ? "Giro liberado!" : "Gire grátis todo dia";
     card.classList.toggle("pt-ready", !st.spun && st.logged && st.dep);
   }
+  async function referCard() {
+    const ref = await RS.user().then((u) => (u ? RS.rpc("my_referrals") : null)).catch(() => null);
+    const el = RS.$("#pc-refer-t");
+    if (el && ref?.reward) el.textContent = `Convide e ganhe ${RS.money(ref.reward)}`;
+  }
   let topPick = null;
   async function loadTop() {
     topPick = await RS.rpc("top_pick_today").catch(() => null);
@@ -185,6 +193,7 @@
   }
   document.addEventListener("click", (e) => {
     if (e.target.closest("#pc-strip [data-wheel]")) { e.preventDefault(); openWheel(); return; }
+    if (e.target.closest("#pc-strip [data-refer]")) { e.preventDefault(); RS.refer(); return; }
     if (e.target.closest("#pc-top") && topPick) {
       e.preventDefault();
       if (!window.RSsports?.add([{ id: topPick.match, pick: topPick.pick, market: topPick.market }])) RS.toast("Esse jogo não está disponível agora.", "error");

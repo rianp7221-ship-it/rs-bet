@@ -179,12 +179,19 @@ RS.feedback = (round) => {
 RS.refer = async () => {
   const u = await RS.user();
   if (!u) { location.href = "login.html"; return; }
-  const url = `${location.origin}/login.html?ref=${u.id.slice(0, 8)}`;
-  const m = RS.modal(`<h3>Indique um amigo</h3><p class="muted">Envie seu link para amigos criarem conta na Real Sports.</p>
-    <input class="input" readonly value="${url}"><button class="btn btn-primary w-full" id="ref-copy">Compartilhar link</button>`);
+  const ref = await RS.rpc("my_referrals").catch(() => null);
+  const url = `${location.origin}/login.html?ref=${ref?.code || u.id.slice(0, 8)}`;
+  const prize = ref?.reward ? RS.money(ref.reward) : "";
+  const text = `Bora apostar comigo na Real Sports! Cria sua conta pelo meu link: ${url}`;
+  const m = RS.modal(`<h3>${prize ? `Convide e ganhe ${prize}` : "Indique um amigo"}</h3>
+    <p class="muted">${prize ? `Para cada amigo que criar conta pelo seu link e fizer o primeiro depósito, você ganha ${prize} de bônus.` : "Envie seu link para amigos criarem conta na Real Sports."}</p>
+    ${ref ? `<p class="muted small">Convidados: <b>${ref.invited}</b> · com depósito: <b>${ref.qualified}</b> · ganho: <b>${RS.money(ref.earned)}</b></p>` : ""}
+    <input class="input" readonly value="${url}">
+    <a class="btn btn-green w-full" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(text)}">Enviar pelo WhatsApp</a>
+    <button class="btn btn-primary w-full" id="ref-copy">${navigator.share ? "Compartilhar link" : "Copiar link"}</button>`);
   RS.$("#ref-copy", m).onclick = async () => {
     try {
-      if (navigator.share) await navigator.share({ title: "Real Sports", url });
+      if (navigator.share) await navigator.share({ title: "Real Sports", text });
       else { await navigator.clipboard.writeText(url); RS.toast("Link copiado!", "ok"); }
     } catch { /* cancelado */ }
   };
