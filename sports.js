@@ -817,5 +817,10 @@
     const shared = new URLSearchParams(location.search).get("b");
     restore(shared || sessionStorage.getItem("rs-slip"));
     if (shared) { history.replaceState(null, "", location.pathname + location.hash); document.body.classList.add("slip-open"); }
+    const jogo = Number(new URLSearchParams(location.search).get("jogo"));
+    if (jogo && matches.some((m) => m.id === jogo)) {
+      history.replaceState(null, "", location.pathname + location.hash);
+      mvId = jogo; mvTab = "all"; render(); loadMarkets([mvId]);
+    }
   })();
 })();
