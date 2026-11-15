@@ -126,7 +126,7 @@
     "Saudi Pro League": "Pro League Arábia Saudita" };
   const lname = (l) => LEAGUE_PT[l] || l;
   // ligas principais primeiro nas listas; o resto pela quantidade de jogos
-  const TOP = ["Brazil Série A", "Brazil Série B", "Copa do Brasil", "CONMEBOL Libertadores", "CONMEBOL Sudamericana",
+  const TOP = ["UEFA Nations League", "Brazil Série A", "Brazil Série B", "Copa do Brasil", "CONMEBOL Libertadores", "CONMEBOL Sudamericana",
     "UEFA Champions League", "Premier League", "La Liga", "Serie A - Italy", "Bundesliga", "Ligue 1", "UEFA Europa League",
     "UEFA Conference League", "Primeira Liga Portugal", "Liga Profesional Argentina", "Copa del Rey", "FA Cup Inglaterra",
     "Championship Inglaterra", "2. Bundesliga Alemanha", "3. Liga Alemanha", "Eredivisie Holanda", "Eerste Divisie Holanda",
@@ -135,7 +135,7 @@
     "Superliga Dinamarca", "HNL Croácia", "NBA", "EuroLeague"];
   // id da liga na API-Football (basquete: caminho da API-Basketball): logo no bucket logos, pra liga principal aparecer mesmo sem jogo
   const TOP_ID = {
-    "Brazil Série A": 71, "Brazil Série B": 72, "Copa do Brasil": 73, "CONMEBOL Libertadores": 13, "CONMEBOL Sudamericana": 11,
+    "UEFA Nations League": 5, "Brazil Série A": 71, "Brazil Série B": 72, "Copa do Brasil": 73, "CONMEBOL Libertadores": 13, "CONMEBOL Sudamericana": 11,
     "UEFA Champions League": 2, "Premier League": 39, "La Liga": 140, "Serie A - Italy": 135, Bundesliga: 78, "Ligue 1": 61,
     "UEFA Europa League": 3, "UEFA Conference League": 848, "Primeira Liga Portugal": 94, "Liga Profesional Argentina": 128,
     "Copa del Rey": 143, "FA Cup Inglaterra": 45, "Championship Inglaterra": 40, "2. Bundesliga Alemanha": 79,
