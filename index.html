@@ -230,6 +230,26 @@
     </div>
   </div>
 
+  <div class="az-page" id="ex-page">
+    <div class="az-top"><b>Explorar</b><button class="icon-btn" data-az-close aria-label="Fechar"><i data-ic="x"></i></button></div>
+    <div class="az-body">
+      <form class="ex-search" id="ex-form"><i data-ic="search"></i><input class="input" id="ex-q" type="search" placeholder="Buscar time ou campeonato" autocomplete="off"></form>
+      <h3 class="az-h">Atalhos</h3>
+      <div class="ex-grid">
+        <a href="#sports" data-view="live"><i data-ic="live"></i>Ao vivo</a>
+        <a href="#sports" data-view="today"><i data-ic="calendar"></i>Jogos de hoje</a>
+        <a href="#proximos"><i data-ic="clock"></i>Próximos</a>
+        <a href="#sports" data-view="week"><i data-ic="week"></i>Calendário</a>
+        <a href="#sports" data-view="fav"><i data-ic="star"></i>Favoritos</a>
+        <a href="#history"><i data-ic="receipt"></i>Minhas apostas</a>
+        <a href="#casino"><i data-ic="dice"></i>Cassino</a>
+        <a href="#" data-ex-wheel><i data-ic="gift"></i>Roda da Sorte</a>
+        <a href="#" data-act="refer"><i data-ic="share"></i>Indique um amigo</a>
+        <a href="#" data-act="support"><i data-ic="headset"></i>Suporte</a>
+      </div>
+    </div>
+  </div>
+
   <footer class="footer">
     <div class="foot-cols">
       <div><a href="index.html" class="logo">Real<span>Sports</span></a><p class="muted small">Apostas esportivas e cassino online.</p></div>
@@ -274,10 +294,13 @@
     // links #sports / #casino / #history / #proximos trocam a aba sem recarregar
     document.addEventListener("click", (e) => {
       const a = e.target.closest("a[href*='#']");
-      const az = e.target.closest("[data-az]"), ex = e.target.closest("[data-explore]");
-      if (az || ex || e.target.closest(".bottom-nav a, [data-az-close]")) document.body.classList.toggle("az-open", !!az && !document.body.classList.contains("az-open"));
-      if (az) { e.preventDefault(); RS.$$(".bottom-nav a").forEach((x) => x.classList.toggle("active", x === az && document.body.classList.contains("az-open"))); return; }
-      if (ex) { e.preventDefault(); RS.$("#hdr-search")?.click(); return; }
+      const az = e.target.closest("[data-az]"), ex = e.target.closest("[data-explore]"), B = document.body;
+      if (az || ex || e.target.closest(".bottom-nav a, [data-az-close], #ex-page a")) {
+        const oAz = !!az && !B.classList.contains("az-open"), oEx = !!ex && !B.classList.contains("ex-open");
+        B.classList.toggle("az-open", oAz); B.classList.toggle("ex-open", oEx);
+        if (az || ex) { e.preventDefault(); RS.$$(".bottom-nav a").forEach((x) => x.classList.toggle("active", (x === az && oAz) || (x === ex && oEx))); return; }
+      }
+      if (e.target.closest("[data-ex-wheel]")) { e.preventDefault(); window.RSwheel?.(); return; }
       if (e.target.closest("[data-az-close]")) { RS.$$(".bottom-nav a").forEach((x) => x.classList.toggle("active", x.dataset.view === "all")); return; }
       if (!a || a.origin !== location.origin || !/\/(index\.html)?$/.test(a.pathname)) return;
       let t = a.hash.slice(1);
@@ -301,6 +324,14 @@
       else delete sw.dataset.view;
     }
     document.addEventListener("click", (e) => { const b = e.target.closest("[data-tabs] [data-tab]"); if (b) navMode(b.dataset.tab); });
+    RS.$("#ex-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const q = RS.$("#ex-q").value.trim();
+      if (!q) return;
+      RS.$("#ex-q").blur(); document.body.classList.remove("ex-open");
+      RS.$$(".bottom-nav a").forEach((x) => x.classList.toggle("active", x.dataset.view === "all"));
+      RSsports.search(q);
+    });
     openHash();
   </script>
 </body>
