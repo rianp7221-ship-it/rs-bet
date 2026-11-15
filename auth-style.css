@@ -1268,3 +1268,8 @@ body.on-casino { background: #1b1d24; }
   .az-list .comp-item b { color: var(--text); font-size: 14px; }
   .az-list .comp-item small { display: block; font-size: 12px; color: var(--muted); font-weight: 400; }
 }
+
+/* iPhone dá zoom ao focar campo com fonte < 16px */
+@media (max-width: 760px) {
+  input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea { font-size: 16px !important; }
+}
