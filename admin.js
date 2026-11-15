@@ -68,6 +68,7 @@
     { id: "sports", t: "Apostas e jogos", ic: "receipt", p: "sports.view", run: () => window.RSmods.sports() },
     { id: "art", t: "Gerar arte", ic: "share", p: "sports.view", run: () => window.RSmods.art() },
     { id: "staff", t: "Equipe e acessos", ic: "key", p: "staff.manage", run: staff },
+    { id: "feedback", t: "Sugestões", ic: "msg", p: "users.view", run: feedback },
     { id: "audit", t: "Auditoria", ic: "id", p: "audit.view", run: audit },
     { id: "settings", t: "Configurações", ic: "wallet", p: "settings.manage", run: settings },
     { id: "security", t: "Minha segurança (2FA)", ic: "lock", p: null, run: security },
@@ -262,6 +263,16 @@
   }
 
   // ---------- AUDITORIA ----------
+  async function feedback() {
+    main.innerHTML = head("Sugestões dos jogadores", `<button class="btn btn-outline" id="fb-csv">Exportar CSV</button>`) + `<div id="fb-list"></div>`;
+    let rows = [];
+    try { rows = (await RS.rpc("admin_feedback", { p_limit: 500 })) || []; } catch (e) { RS.toast(e.message, "error"); }
+    RS.$("#fb-list").innerHTML = table(["Quando", "Jogador", "Sugestão"], rows.map((f) => [
+      RS.date(f.created_at), `<a href="#" data-open-user="${f.user_id}" style="color:var(--primary)">${esc(f.username || f.email || "")}</a><br><small>${esc(f.email || "")}</small>`,
+      `<div style="white-space:pre-wrap;max-width:640px">${esc(f.body)}</div>`]), "Nenhuma sugestão ainda.");
+    RS.$("#fb-csv").onclick = () => csv("sugestoes.csv", [["data", "usuario", "email", "sugestao"], ...rows.map((f) => [f.created_at, f.username, f.email, f.body])]);
+  }
+
   async function audit() {
     main.innerHTML = head("Auditoria", `<input class="input" id="au-q" placeholder="Filtrar por ação, e-mail ou ID"><button class="btn btn-outline" id="au-csv">Exportar CSV</button>`) + `<div id="au-list"></div>`;
     let rows = [];
