@@ -1001,6 +1001,7 @@ body.on-casino .bottom-nav a.bn-cz.active { color: #ff7a1a; }
 .pt-top::before { content: ""; position: absolute; inset: 0; z-index: -1; background: repeating-linear-gradient(115deg, rgba(255,255,255,.07) 0 14px, transparent 14px 40px); }
 .pt-top .pc-top-logos { right: 14px; top: 40px; display: flex; gap: 4px; margin: 0; }
 .pt-top .pc-top-logos img { width: 44px; height: 44px; }
+.pt-refer { --pt-bg: linear-gradient(150deg, #1fbf6d, #0b6b3a 60%, #062a17); --pt-g: rgba(198,255,107,.3); }
 .pt-art-ic { right: -10px; top: 18px; transform: rotate(-12deg); opacity: .9; }
 .pt-art-ic svg.i { width: 96px; height: 96px; color: rgba(255,255,255,.25); }
 .pt-casino { --pt-bg: radial-gradient(circle at 76% 34%, rgba(122,76,255,.55), transparent 48%), linear-gradient(150deg, #2b5ce6, #14246e 60%, #0a0f2a); }
