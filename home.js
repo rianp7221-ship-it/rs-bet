@@ -32,10 +32,10 @@
     (async () => {
       const { data } = await sb.from("banners").select("*").order("sort").order("id");
       const promo = `<a class="pt pt-wheel" href="#" data-wheel><span class="pt-ic">${RS.icon("star")}</span><span class="pt-art pc-wheel-art"></span>
-          <span class="pt-t"><b>Roda da Sorte</b><small id="pc-wheel-sub">Gire grátis todo dia</small></span></a>
+          <span class="pt-t"><i class="pt-tag pt-tag-gold">Grátis</i><b>Roda da Sorte</b><small id="pc-wheel-sub">Gire grátis todo dia</small></span></a>
         <a class="pt pt-wide pt-top hidden" href="#" id="pc-top"></a>`;
       const refer = `<a class="pt pt-wide pt-refer" href="#" data-refer><span class="pt-ic">${RS.icon("gift")}</span><span class="pt-art pt-art-ic">${RS.icon("gift")}</span>
-          <span class="pt-t"><small class="pt-kick">Indique um amigo</small><b id="pc-refer-t">Convide e ganhe bônus</b>
+          <span class="pt-t"><i class="pt-tag pt-tag-lime">Bônus</i><small class="pt-kick">Indique um amigo</small><b id="pc-refer-t">Convide e ganhe bônus</b>
           <span class="pt-pill">Convidar pelo WhatsApp</span></span></a>`;
       const czArt = `<span class="pt-art ptc"><i class="ptc-rays"></i><i class="ptc-glow"></i><span class="ptc-covers"></span>
           <i class="ptc-coin c1"></i><i class="ptc-coin c2"></i><i class="ptc-coin c3"></i><i class="ptc-spark s1"></i><i class="ptc-spark s2"></i><i class="ptc-spark s3"></i></span>`;
@@ -43,7 +43,7 @@
           ${b.image_url ? `style="--pc-img:url('${RS.esc(b.image_url)}')"` : ""}>
           <span class="pt-ic">${RS.icon(b.icon || "ball")}</span>${b.image_url ? "" : b.link === "#casino" ? czArt
             : `<span class="pt-art pt-art-ic">${RS.icon(b.icon || "ball")}</span>`}
-          <span class="pt-t">${b.subtitle ? `<small class="pt-kick">${RS.esc(b.subtitle)}</small>` : ""}${!b.image_url && b.link === "#casino" ? `<span class="ptc-chip hidden"></span>` : ""}<b>${RS.esc(b.title)}</b>
+          <span class="pt-t">${!b.image_url && b.link === "#casino" ? `<i class="pt-tag pt-tag-gold">Top</i>` : ""}${b.subtitle ? `<small class="pt-kick">${RS.esc(b.subtitle)}</small>` : ""}${!b.image_url && b.link === "#casino" ? `<span class="ptc-chip hidden"></span>` : ""}<b>${RS.esc(b.title)}</b>
           ${b.cta ? `<span class="pt-pill">${RS.esc(b.cta)}</span>` : ""}</span></a>`).join("")}</div>`);
       const ps = RS.$("#pc-strip"), cz = RS.$(".pt-casino", ps);
       if (cz) cz.insertAdjacentHTML("afterend", refer); else ps.insertAdjacentHTML("beforeend", refer);
@@ -189,7 +189,8 @@
     const hora = new Date(topPick.starts_at).toLocaleString("pt-BR", { weekday: "short", hour: "2-digit", minute: "2-digit" });
     el.innerHTML = `<span class="pt-ic">${RS.icon("fire")}</span><small class="pt-corner">Mais apostado do dia</small>
       <span class="pt-art pc-top-logos">${logo(topPick.home_logo)}${logo(topPick.away_logo)}</span>
-      <span class="pt-t"><small class="pt-kick">${RS.esc(topPick.league || "")} · ${hora}</small><b>${RS.esc(topPick.home)} x ${RS.esc(topPick.away)}</b>
+      <span class="pt-t"><i class="pt-tag pt-tag-hot">${RS.icon("fire")}Hot</i><small class="pt-kick">${RS.esc(topPick.league || "")} · ${hora}</small><b>${RS.esc(topPick.home)} x ${RS.esc(topPick.away)}</b>
+      <span class="pt-pct"><em>${topPick.pct}%</em> apostou em ${RS.esc(side)}</span>
       <span class="pt-pill"><em>${topPick.pct}%</em> em ${RS.esc(side)} · ${Number(topPick.odd).toFixed(2)}</span></span>`;
     el.classList.remove("hidden");
   }
