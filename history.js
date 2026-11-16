@@ -39,10 +39,12 @@
   // "won" = já garantida, "lost" = já impossível, null = em aberto. Com o jogo encerrado, avalia o resultado final.
   const STAT = { c: "corners", k: "cards", s: "shots", t: "sot" };
   const STAT_NAME = { corners: "Escanteios", cards: "Cartões", shots: "Chutes", sot: "Chutes no gol" };
+  // a API preenche o placar do intervalo já durante o 1º tempo (0 x 0 aos 5'): só vale depois do 1º tempo
+  const htFinal = (m) => m.ht_home != null && m.ht_away != null && !["1H", "NS"].includes(m.period);
   function legStat(mk, m) {
     const g = /^(ou|gh|ga|hto)\d+$/.test(mk) ? mk.replace(/\d+$/, "") : null;
     if (g) {
-      if (g === "hto") return m.ht_home != null ? m.ht_home + m.ht_away : m.score_home != null ? m.score_home + m.score_away : null;
+      if (g === "hto") return htFinal(m) ? m.ht_home + m.ht_away : m.score_home != null ? m.score_home + m.score_away : null;
       if (m.score_home == null) return null;
       return g === "gh" ? m.score_home : g === "ga" ? m.score_away : m.score_home + m.score_away;
     }
@@ -55,7 +57,7 @@
   function legState(mk, pick, m) {
     if (!m || m.score_home == null) return null;
     const done = !["live", "open"].includes(m.status) && m.status != null;
-    const h = m.score_home, a = m.score_away, ht = m.ht_home != null, h1 = m.ht_home, a1 = m.ht_away;
+    const h = m.score_home, a = m.score_away, ht = htFinal(m), h1 = m.ht_home, a1 = m.ht_away;
     const res = (x, y) => (x > y ? "home" : x < y ? "away" : "draw");
     const yes = pick === "yes" || pick === "over", line = Number(mk.replace(/^[a-z]+/, "")) / 10;
     const ou = (v, firstHalfOver) => (v == null ? null : v > line ? (yes ? "won" : "lost") : done || firstHalfOver ? (yes ? "lost" : "won") : null);
