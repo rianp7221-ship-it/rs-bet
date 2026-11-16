@@ -81,6 +81,7 @@ async function waitStats(sb: any, m: Started): Promise<boolean> {
   if (need) await sb.from("matches").update({ suspended_until: new Date(Date.now() + STATS_RETRY_MS).toISOString(), suspend_reason: STATS_WAIT }).eq("id", m.id);
   return need;
 }
+const RESCHEDULED_MS = 15 * 60_000, NOT_PLAYED_MS = 6 * 3600_000;
 // jogo adiado ou cancelado na fonte: seleções viram odd 1 (devolvidas) e o resto do bilhete segue
 // deno-lint-ignore no-explicit-any
 async function voidMatch(sb: any, id: number): Promise<string | null> {
@@ -261,6 +262,23 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
       for (const u of await feed.live([...byId.keys()], idle)) {
         const m = byId.get(u.id);
         if (!m) continue;
+        // remarcado sem "PST" na fonte: segue "NS" com outra data. Volta a ser jogo aberto na data nova (bilhetes seguem valendo);
+        // sem data nova e NOT_PLAYED_MS depois do horário, não foi realizado: anula as seleções como jogo adiado
+        if (u.period === "NS" || u.period === "TBD") {
+          const next = Date.parse(u.starts_at ?? ""), was = Date.parse(m.starts_at);
+          if (next > Date.now() && next - was > RESCHEDULED_MS) {
+            const { error } = await sb.from("matches").update({ status: "open", starts_at: new Date(next).toISOString(), period: null, minute: null,
+              score_home: null, score_away: null, ht_home: null, ht_away: null, suspended_until: null, suspend_reason: null, synced_at: new Date().toISOString() }).eq("id", m.id);
+            if (error) errors.push(`${m.home} x ${m.away}: ${error.message}`); else updated++;
+            continue;
+          }
+          // horário revisado na fonte (mesmo que já passou) conta como o novo horário do jogo
+          if (Date.now() - Math.max(was, next || 0) > NOT_PLAYED_MS) {
+            const e2 = await voidMatch(sb, m.id);
+            if (e2) errors.push(`${m.home} x ${m.away}: ${e2}`); else settled++;
+            continue;
+          }
+        }
         const patch: Record<string, unknown> = { synced_at: new Date().toISOString() };
         if (u.home != null && u.away != null) { patch.score_home = u.home; patch.score_away = u.away; }
         if (u.ht) { patch.ht_home = u.ht.home; patch.ht_away = u.ht.away; }
