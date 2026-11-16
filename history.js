@@ -323,7 +323,7 @@
     for (const el of RS.$$("[data-legs]", box)) {
       const b = bets.find((x) => x.id === Number(el.closest("[data-bet]")?.dataset.bet));
       const s = b?.bet_selections.find((x) => x.match_id === Number(el.dataset.legs) && x.market === "bb");
-      if (s) el.innerHTML = legList(s);
+      if (s) RS.morph(el, legList(s));
     }
   }
   // uma chamada cota todos os bilhetes; nunca duas ao mesmo tempo; valor velho trava o botão
