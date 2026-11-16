@@ -272,7 +272,8 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
             if (error) errors.push(`${m.home} x ${m.away}: ${error.message}`); else updated++;
             continue;
           }
-          if (Date.now() - was > NOT_PLAYED_MS) {
+          // horário revisado na fonte (mesmo que já passou) conta como o novo horário do jogo
+          if (Date.now() - Math.max(was, next || 0) > NOT_PLAYED_MS) {
             const e2 = await voidMatch(sb, m.id);
             if (e2) errors.push(`${m.home} x ${m.away}: ${e2}`); else settled++;
             continue;
