@@ -97,10 +97,14 @@
   function bbStatQ(f, legs) {
     if (legs.length === 1) return legs[0][2];
     const sc = legs.map(([mk]) => /1x2$/.test(mk) ? "x" : /^(ch|kh|sh)/.test(mk) ? "h" : /^(ca|ka|sa)/.test(mk) ? "a" : "t");
-    const lam = {};
+    // média tirada de todas as linhas do mesmo escopo (não depende da ordem das pernas)
+    const sum = {}, cnt = {}, lam = {};
     legs.forEach(([mk, p, q], k) => {
-      if (sc[k] !== "x" && lam[sc[k]] == null) lam[sc[k]] = poisInv(ouL(mk), p === "over" ? q : 1 - q);
+      if (sc[k] === "x") return;
+      sum[sc[k]] = (sum[sc[k]] || 0) + poisInv(ouL(mk), p === "over" ? q : 1 - q);
+      cnt[sc[k]] = (cnt[sc[k]] || 0) + 1;
     });
+    for (const k in sum) lam[k] = sum[k] / cnt[k];
     const [dh, da] = BB_AVG[f];
     let lh = lam.h, la = lam.a;
     if (lam.t != null) {
@@ -407,7 +411,7 @@
     { key: "btts1", tab: "goals", name: "Ambas Marcam 1º Tempo", rows: () => [[["btts1", "yes", "Sim"], ["btts1", "no", "Não"]]] },
     { key: "btts2", tab: "goals", name: "Ambas Marcam 2º Tempo", rows: () => [[["btts2", "yes", "Sim"], ["btts2", "no", "Não"]]] },
     { key: "dc", tab: "main", name: "Chance Dupla", rows: (m) => [[["dc", "1x", `${m.home} ou Empate`], ["dc", "x2", `Empate ou ${m.away}`], ["dc", "12", `${m.home} ou ${m.away}`]]] },
-    { key: "dnb", tab: "main", name: "Empate Anula", ca: false, rows: (m) => [[["dnb", "home", m.home], ["dnb", "away", m.away]]] },
+    { key: "dnb", tab: "main", name: "Empate Anula", rows: (m) => [[["dnb", "home", m.home], ["dnb", "away", m.away]]] },
     { key: "c1x2", tab: "corners", name: "Escanteios 1X2", rows: (m) => [[["c1x2", "home", m.home], ["c1x2", "draw", "Empate"], ["c1x2", "away", m.away]]] },
     { key: "co", tab: "corners", name: "Total de Escanteios Mais/Menos", rows: (m) => coKeys(m).map((k) => [[k, "over", mkDef(k)[1].over], [k, "under", mkDef(k)[1].under]]) },
     { key: "ch", tab: "corners", name: "Escanteios Casa Mais/Menos", rows: pxRows("ch") },
