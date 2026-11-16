@@ -35,8 +35,65 @@
     if (mk === "dc") return { "1x": `${home} ou Empate`, x2: `Empate ou ${away}`, "12": `${home} ou ${away}` }[s.pick] || s.pick;
     return s.pick === "home" ? home : s.pick === "away" ? away : "Empate";
   }
+  // Criar Aposta: status de cada perna com o placar/estatísticas atuais (indicativo; a liquidação oficial é no fim do jogo).
+  // "won" = já garantida, "lost" = já impossível, null = em aberto. Com o jogo encerrado, avalia o resultado final.
+  const STAT = { c: "corners", k: "cards", s: "shots", t: "sot" };
+  const STAT_NAME = { corners: "Escanteios", cards: "Cartões", shots: "Chutes", sot: "Chutes no gol" };
+  function legStat(mk, m) {
+    const g = /^(ou|gh|ga|hto)\d+$/.test(mk) ? mk.replace(/\d+$/, "") : null;
+    if (g) {
+      if (g === "hto") return m.ht_home != null ? m.ht_home + m.ht_away : m.score_home != null ? m.score_home + m.score_away : null;
+      if (m.score_home == null) return null;
+      return g === "gh" ? m.score_home : g === "ga" ? m.score_away : m.score_home + m.score_away;
+    }
+    const x = /^(co|k|s|t)\d+$/.exec(mk) || /^([cst])(1x2)$/.exec(mk) || /^([cks])([ha])\d+$/.exec(mk);
+    if (!x) return null;
+    const f = STAT[x[1][0]], h = m[f + "_home"], a = m[f + "_away"];
+    if (h == null || a == null) return null;
+    return x[2] === "h" ? h : x[2] === "a" ? a : x[2] === "1x2" ? [h, a] : h + a;
+  }
+  function legState(mk, pick, m) {
+    if (!m || m.score_home == null) return null;
+    const done = !["live", "open"].includes(m.status) && m.status != null;
+    const h = m.score_home, a = m.score_away, ht = m.ht_home != null, h1 = m.ht_home, a1 = m.ht_away;
+    const res = (x, y) => (x > y ? "home" : x < y ? "away" : "draw");
+    const yes = pick === "yes" || pick === "over", line = Number(mk.replace(/^[a-z]+/, "")) / 10;
+    const ou = (v, firstHalfOver) => (v == null ? null : v > line ? (yes ? "won" : "lost") : done || firstHalfOver ? (yes ? "lost" : "won") : null);
+    if (mk === "1x2" || mk === "dc" || mk === "dnb") {
+      if (!done) return null;
+      const r = res(h, a);
+      if (mk === "dnb") return r === "draw" ? null : r === pick ? "won" : "lost";
+      if (mk === "dc") return (pick === "1x" ? h >= a : pick === "x2" ? h <= a : h !== a) ? "won" : "lost";
+      return r === pick ? "won" : "lost";
+    }
+    if (mk === "btts") return h > 0 && a > 0 ? (yes ? "won" : "lost") : done ? (yes ? "lost" : "won") : null;
+    if (mk === "eg") return h + a > Number(pick.slice(1)) ? "lost" : done ? (h + a === Number(pick.slice(1)) ? "won" : "lost") : null;
+    if (mk === "cs") return h > Number(pick[1]) || a > Number(pick[2]) ? "lost" : done ? (h === Number(pick[1]) && a === Number(pick[2]) ? "won" : "lost") : null;
+    // 1º tempo sem o placar do intervalo: só dá para avaliar com o 1º tempo ainda em andamento
+    if (!ht && /^(ht1x2|btts1|hto\d+)$/.test(mk) && m.period !== "1H") return null;
+    if (mk === "ht1x2") return ht ? (res(h1, a1) === pick ? "won" : "lost") : null;
+    if (mk === "btts1") { const x = ht ? h1 : h, y = ht ? a1 : a; return x > 0 && y > 0 ? (yes ? "won" : "lost") : ht ? (yes ? "lost" : "won") : null; }
+    if (mk === "btts2") { if (!ht) return null; const x = h - h1, y = a - a1; return x > 0 && y > 0 ? (yes ? "won" : "lost") : done ? (yes ? "lost" : "won") : null; }
+    if (/^hto\d+$/.test(mk)) return ou(legStat(mk, m), ht);
+    const v = legStat(mk, m);
+    if (Array.isArray(v)) return done ? (res(v[0], v[1]) === pick ? "won" : "lost") : null;
+    return /^(ou|gh|ga)\d+$/.test(mk) || /^(c|k|s|t)/.test(mk) ? ou(v, false) : null;
+  }
+  // texto curto do andamento da perna (ex.: "Escanteios 7/10")
+  function legNow(mk, pick, m) {
+    const v = legStat(mk, m);
+    if (v == null) return "";
+    const f = /^(c|k|s|t)/.test(mk) ? STAT_NAME[STAT[mk[0]]] : "Gols";
+    if (Array.isArray(v)) return `${f} ${v[0]} - ${v[1]}`;
+    const need = Math.floor(Number(mk.replace(/^[a-z]+/, "")) / 10) + 1;
+    return pick === "over" ? `${f} ${Math.min(v, need)}/${need}` : `${f} ${v} (máx. ${need - 1})`;
+  }
+  const legLive = (s) => s.status === "pending" && s.matches.status === "live";
+  const legShow = (s) => legLive(s) || ["won", "lost"].includes(s.status);
   const legList = (s) => s.pick.split("|").map((l) => { const [market, pick] = l.split(":");
-    return `<li><b>${RS.esc(selName({ ...s, market, pick }))}</b><small>${mname(market)}</small></li>`; }).join("");
+    const st = legShow(s) ? legState(market, pick, s.matches) : null, now = legLive(s) ? legNow(market, pick, s.matches) : "";
+    return `<li class="lg-${st || "open"}"><b>${RS.esc(selName({ ...s, market, pick }))}</b><small>${mname(market)}${now ? ` · <em>${RS.esc(now)}</em>` : ""}</small></li>`; }).join("")
+    + (legLive(s) ? `<li class="lg-note">Status ao vivo indicativo · a liquidação oficial é no fim do jogo</li>` : "");
   function when(iso) {
     const d = new Date(iso), hm = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     const days = Math.round((new Date(iso).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 864e5);
@@ -104,7 +161,7 @@
           ${s.boosted ? `<div class="bc-boost-l">${RS.icon("bolt")} Odd turbinada · sem cash out</div>` : ""}
           ${s.market === "bb" ? "" : `<div class="bc-mk">${mname(s.market || "1x2")}</div>`}
           <div class="bc-l3"><span class="bc-teams">${logo(s.matches.home_logo)}${RS.esc(s.matches.home)}<br>${logo(s.matches.away_logo)}${RS.esc(s.matches.away)}</span><span class="bc-st" data-st="${s.match_id}">${selState(s)}</span></div>
-          ${s.market === "bb" ? `<ul class="bc-legs">${legList(s)}</ul>` : ""}</div>`).join("")}
+          ${s.market === "bb" ? `<ul class="bc-legs" data-legs="${s.match_id}">${legList(s)}</ul>` : ""}</div>`).join("")}
         <div class="bc-row"><span>Aposta</span><b>${RS.money(b.stake)}</b></div>
         <div class="bc-row bc-win"><span>${wl}</span><b>${RS.money(wv)}</b></div>
         ${b.status === "pending" ? `<div class="cashout-box" data-co="${b.id}"><small class="muted">Calculando cash out…</small></div>` : ""}
@@ -221,7 +278,7 @@
 
     if (kind === "bets") {
       const { data } = await sb.from("bets")
-        .select("*, bet_selections(match_id, market, pick, odd, status, boosted, matches(home, away, league, status, starts_at, score_home, score_away, minute, period, clock_secs, clock_at, ext365_id, home_logo, away_logo))")
+        .select("*, bet_selections(match_id, market, pick, odd, status, boosted, matches(home, away, league, status, starts_at, score_home, score_away, minute, period, clock_secs, clock_at, ext365_id, home_logo, away_logo, ht_home, ht_away, corners_home, corners_away, cards_home, cards_away, shots_home, shots_away, sot_home, sot_away))")
         .eq("user_id", u.id).or(`status.eq.pending,created_at.gte.${new Date(Date.now() - 7 * 864e5).toISOString()}`)
         .order("created_at", { ascending: false }).limit(1000);
       bets = data || [];
@@ -255,13 +312,18 @@
   async function refreshLive() {
     const ids = [...new Set(bets.filter((b) => b.status === "pending").flatMap((b) => b.bet_selections.map((s) => s.match_id)))];
     if (!ids.length) return;
-    const { data } = await sb.from("matches").select("id, status, starts_at, score_home, score_away, minute, period, clock_secs, clock_at, ext365_id").in("id", ids);
+    const { data } = await sb.from("matches").select("id, status, starts_at, score_home, score_away, minute, period, clock_secs, clock_at, ext365_id, ht_home, ht_away, corners_home, corners_away, cards_home, cards_away, shots_home, shots_away, sot_home, sot_away").in("id", ids);
     const byId = new Map((data || []).map((m) => [m.id, m]));
     for (const b of bets) for (const s of b.bet_selections) { const m = byId.get(s.match_id); if (m) Object.assign(s.matches, m); }
     for (const el of RS.$$("[data-st]", box)) {
       const b = bets.find((x) => x.id === Number(el.closest("[data-bet]")?.dataset.bet));
       const s = b?.bet_selections.find((x) => x.match_id === Number(el.dataset.st));
       if (s) el.innerHTML = selState(s);
+    }
+    for (const el of RS.$$("[data-legs]", box)) {
+      const b = bets.find((x) => x.id === Number(el.closest("[data-bet]")?.dataset.bet));
+      const s = b?.bet_selections.find((x) => x.match_id === Number(el.dataset.legs) && x.market === "bb");
+      if (s) el.innerHTML = legList(s);
     }
   }
   // uma chamada cota todos os bilhetes; nunca duas ao mesmo tempo; valor velho trava o botão

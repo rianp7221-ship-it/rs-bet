@@ -47,10 +47,10 @@ function parse(j: { statistics?: S365[] } | null, h: number, a: number): Stats {
     shots, sot: shots && pair(4),
   };
 }
-async function load(m: MatchRef, id: number): Promise<{ id: number; stats: Stats } | null> {
+async function load(m: MatchRef, id: number, live = false): Promise<{ id: number; stats: Stats } | null> {
   const j = await get(`${BASE}/game/stats/?${QS}&games=${id}`);
   const g = (j?.games ?? [])[0] as G365 | undefined;
-  if (!g || g.statusGroup !== 4) return null;
+  if (!g || (g.statusGroup !== 4 && !(live && g.statusGroup === 3))) return null;
   const straight = side(m, g);
   if (straight === null) return null;
   const [h, a] = straight ? [g.homeCompetitor.id, g.awayCompetitor.id] : [g.awayCompetitor.id, g.homeCompetitor.id];
@@ -58,11 +58,12 @@ async function load(m: MatchRef, id: number): Promise<{ id: number; stats: Stats
 }
 // só com o jogo encerrado lá; cada grupo (escanteios, cartões...) vem null se faltar o dado de um dos times.
 // O ext365_id salvo pelo goal-guard às vezes é de outro jogo: se os times não batem, procura o jogo pela data.
-export async function stats365(m: MatchRef): Promise<{ id: number; stats: Stats } | null> {
-  const saved = m.ext365_id ? await load(m, m.ext365_id) : null;
+// live = true: também com o jogo em andamento (estatísticas parciais, só para o acompanhamento do bilhete)
+export async function stats365(m: MatchRef, live = false): Promise<{ id: number; stats: Stats } | null> {
+  const saved = m.ext365_id ? await load(m, m.ext365_id, live) : null;
   if (saved) return saved;
   const g = await find(m);
-  return g && g.id !== m.ext365_id ? load(m, g.id) : null;
+  return g && g.id !== m.ext365_id ? load(m, g.id, live) : null;
 }
 
 export type Coverage = { corners: boolean; cards: boolean; shots: boolean };

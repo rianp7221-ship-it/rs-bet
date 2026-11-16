@@ -22,6 +22,7 @@ function applyMargin(o: Odds, marginPct: number): Odds {
 // mesma margem nos mercados extras; na Chance Dupla cada resultado cobre 2 de 3, então a soma justa das probabilidades é 2
 // grava escanteios, cartões e chutes finais antes de liquidar (c1x2/coNN/kNN/s1x2/sNNN/t1x2/tNNN); sem o dado as seleções são anuladas.
 // A API principal não tem estatísticas de muitas ligas: aí vale o 365Scores. Devolve false se faltou algum grupo de estatística.
+const NO_STATS = { corners_home: null, corners_away: null, cards_home: null, cards_away: null, shots_home: null, shots_away: null, sot_home: null, sot_away: null };
 type FeedStats = { home: number; away: number; cards: { home: number; away: number }; shots: { home: number; away: number }; sot: { home: number; away: number } };
 // deno-lint-ignore no-explicit-any
 async function saveStats(sb: any, feed: { corners?: (id: string) => Promise<FeedStats | null> }, m: Started, fixture: string): Promise<boolean> {
@@ -32,12 +33,40 @@ async function saveStats(sb: any, feed: { corners?: (id: string) => Promise<Feed
     return true;
   }
   const r = await stats365(m).catch(() => null);
-  if (!r) return false;
+  // sem as finais: apaga as parciais do ao vivo, para nada ser liquidado com número velho
+  if (!r) { await sb.from("matches").update(NO_STATS).eq("id", m.id); return false; }
   const { corners, cards, shots, sot } = r.stats;
   await sb.from("matches").update({ ext365_id: r.id, corners_home: corners?.home ?? null, corners_away: corners?.away ?? null,
     cards_home: cards?.home ?? null, cards_away: cards?.away ?? null, shots_home: shots?.home ?? null, shots_away: shots?.away ?? null,
     sot_home: sot?.home ?? null, sot_away: sot?.away ?? null }).eq("id", m.id);
   return !!(corners && cards && shots && sot);
+}
+// ao vivo: escanteios/cartões/chutes parciais só para o acompanhamento das pernas do Criar Aposta (indicativo; a liquidação usa os finais).
+// Só jogos com Criar Aposta pendente que tenha perna de estatística. 365Scores (grátis) ~1x por minuto;
+// API-Football (gasta cota) só se o 365Scores não tiver o jogo, ~1x a cada 5 min. A rodada ao vivo roda a cada 10 s.
+const LIVE_STATS_365 = 6, LIVE_STATS_API = 30;
+// deno-lint-ignore no-explicit-any
+async function bbStatMatches(sb: any, ids: number[]): Promise<Set<number>> {
+  const { data } = await sb.from("bet_selections").select("match_id, pick").in("match_id", ids).eq("market", "bb").eq("status", "pending");
+  return new Set(((data ?? []) as { match_id: number; pick: string }[])
+    .filter((s) => s.pick.split("|").some((l) => STAT_RE.test(l.split(":")[0]))).map((s) => s.match_id));
+}
+// deno-lint-ignore no-explicit-any
+async function liveStats(sb: any, feed: { corners?: (id: string) => Promise<FeedStats | null> }, m: Started, fixture: string, slot: number): Promise<void> {
+  const r = await stats365(m, true).catch(() => null);
+  const st = r?.stats;
+  const patch: Record<string, unknown> = {};
+  if (r && r.id !== m.ext365_id) patch.ext365_id = r.id;
+  if (st?.corners) { patch.corners_home = st.corners.home; patch.corners_away = st.corners.away; }
+  if (st?.cards) { patch.cards_home = st.cards.home; patch.cards_away = st.cards.away; }
+  if (st?.shots) { patch.shots_home = st.shots.home; patch.shots_away = st.shots.away; }
+  if (st?.sot) { patch.sot_home = st.sot.home; patch.sot_away = st.sot.away; }
+  if (!st?.corners && feed.corners && slot % LIVE_STATS_API === 0) {
+    const c = await feed.corners(fixture).catch(() => null);
+    if (c) Object.assign(patch, { corners_home: c.home, corners_away: c.away, cards_home: c.cards.home, cards_away: c.cards.away,
+      shots_home: c.shots.home, shots_away: c.shots.away, sot_home: c.sot.home, sot_away: c.sot.away });
+  }
+  if (Object.keys(patch).length) await sb.from("matches").update(patch).eq("id", m.id);
 }
 // mercados liquidados por escanteios, cartões ou chutes (também como perna do Criar Aposta)
 const STAT_RE = /^(c1x2|co\d+|k\d+|s(\d+|1x2)|t(\d+|1x2)|(ch|ca|kh|ka|sh|sa)\d+)$/;
@@ -227,6 +256,8 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
     try {
       // jogos que ainda não começaram ou foram adiados: entram no "ao vivo" quando começam; por id só 1 vez por minuto
       const idle = new Set(ids.filter((m) => !m.period || ["NS", "TBD", "PST"].includes(m.period)).map((m) => m.external_id.split(":")[1]));
+      const slot = Math.floor(Date.now() / 10_000);
+      const statsFor = slot % LIVE_STATS_365 === 0 ? await bbStatMatches(sb, ids.map((m) => m.id)).catch(() => new Set<number>()) : new Set<number>();
       for (const u of await feed.live([...byId.keys()], idle)) {
         const m = byId.get(u.id);
         if (!m) continue;
@@ -276,6 +307,7 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
         const { error } = await sb.from("matches").update(patch).eq("id", m.id);
         if (error) { errors.push(`${m.home} x ${m.away}: ${error.message}`); continue; }
         updated++;
+        if (statsFor.has(m.id) && !u.completed && !u.cancelled && !u.voided && !idle.has(u.id)) await liveStats(sb, feed, m, u.id, slot);
         if (u.voided || u.cancelled) {
           // a suspensão de 10 min acima fica só como reserva se a anulação falhar
           const e2 = await voidMatch(sb, m.id);

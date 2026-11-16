@@ -55,10 +55,12 @@
     && m.status === "open" && Date.now() >= new Date(boost.starts_at) && Date.now() < new Date(boost.ends_at) && new Date(m.starts_at) > Date.now();
   const boosted = (m, pick) => { const o = oddRaw(m, "1x2", pick); return o > 1 ? Math.round(o * (100 + Number(boost.pct))) / 100 : 0; };
   const oddOf = (m, mk, pick) => (mk === "boost" ? (boostOn(m, pick) ? boosted(m, pick) : 0) : oddRaw(m, mk, pick));
-  // Criar Aposta: mesmo modelo de Poisson do servidor (_bb_odd); o servidor recalcula a odd ao apostar
-  // pernas de gols: Poisson do placar; escanteios/cartões/chutes: odd justa do próprio mercado, 1 perna por grupo
-  const GOAL_RE = /^(1x2|dc|btts|btts1|btts2|ht1x2|eg|cs|ou\d+|hto\d+|gh\d+|ga\d+)$/, HALF_RE = /^(ht1x2|btts1|btts2|hto\d+)$/, BB_MAX = 13;
-  const bbFam = (mk) => /^(c1x2|co\d+|ch\d+|ca\d+)$/.test(mk) ? "c" : /^(k\d+|kh\d+|ka\d+)$/.test(mk) ? "k" : /^(s1x2|t1x2|[st]\d+|sh\d+|sa\d+)$/.test(mk) ? "s" : null;
+  // Criar Aposta: mesmo modelo do servidor (_bb_odd); o servidor recalcula a odd ao apostar
+  // pernas de gols: Poisson do placar; escanteios/cartões/chutes: várias linhas da mesma estatística,
+  // ligadas por um Poisson casa/fora (_bb_stat_q). Chutes e Chutes no Gol não combinam entre si.
+  const GOAL_RE = /^(1x2|dc|dnb|btts|btts1|btts2|ht1x2|eg|cs|ou\d+|hto\d+|gh\d+|ga\d+)$/, HALF_RE = /^(ht1x2|btts1|btts2|hto\d+)$/, BB_MAX = 13;
+  const bbFam = (mk) => /^(c1x2|co\d+|ch\d+|ca\d+)$/.test(mk) ? "c" : /^(k\d+|kh\d+|ka\d+)$/.test(mk) ? "k"
+    : /^(s1x2|s\d+|sh\d+|sa\d+)$/.test(mk) ? "s" : /^(t1x2|t\d+)$/.test(mk) ? "t" : null;
   const bbOk = (mk) => GOAL_RE.test(mk) || !!bbFam(mk);
   let bbMargin = 10;
   sb.rpc("bb_params").then(({ data }) => { if (data?.margin != null) bbMargin = Number(data.margin); });
@@ -66,6 +68,7 @@
   const ouL = (mk) => Number(mk.replace(/^[a-z]+/, "")) / 10;
   const legWon = (mk, p, h, a, h1 = 0, a1 = 0) => {
     if (mk === "1x2") return (h > a ? "home" : h < a ? "away" : "draw") === p;
+    if (mk === "dnb") return h !== a && (h > a) === (p === "home");
     if (mk === "btts") return (h > 0 && a > 0) === (p === "yes");
     if (mk === "dc") return p === "1x" ? h >= a : p === "x2" ? h <= a : h !== a;
     if (mk === "eg") return h + a === Number(p.slice(1));
@@ -78,35 +81,86 @@
     if (/^ga\d+$/.test(mk)) return (a > ouL(mk)) === (p === "over");
     return (h + a > ouL(mk)) === (p === "over");
   };
+  const pois = (l, n) => { const r = [Math.exp(-l)]; for (let i = 1; i <= n; i++) r.push((r[i - 1] * l) / i); return r; };
+  // média de Poisson com P(X > linha) = p
+  const poisInv = (line, p) => {
+    let lo = 0.05, hi = 80;
+    for (let k = 0; k < 40; k++) {
+      const l = (lo + hi) / 2;
+      let t = Math.exp(-l), c = t;
+      for (let i = 1; i <= Math.floor(line); i++) { t = (t * l) / i; c += t; }
+      if (1 - c < p) lo = l; else hi = l;
+    }
+    return (lo + hi) / 2;
+  };
+  const BB_AVG = { c: [5.3, 4.4], k: [2.1, 2.4], s: [13, 10.5], t: [4.6, 3.7] };
+  function bbStatQ(f, legs) {
+    if (legs.length === 1) return legs[0][2];
+    const sc = legs.map(([mk]) => /1x2$/.test(mk) ? "x" : /^(ch|kh|sh)/.test(mk) ? "h" : /^(ca|ka|sa)/.test(mk) ? "a" : "t");
+    const lam = {};
+    legs.forEach(([mk, p, q], k) => {
+      if (sc[k] !== "x" && lam[sc[k]] == null) lam[sc[k]] = poisInv(ouL(mk), p === "over" ? q : 1 - q);
+    });
+    const [dh, da] = BB_AVG[f];
+    let lh = lam.h, la = lam.a;
+    if (lam.t != null) {
+      if (lh != null && la != null) { const r = lam.t / (lh + la); lh *= r; la *= r; }
+      else if (lh != null) la = Math.max(lam.t - lh, 0.05);
+      else if (la != null) lh = Math.max(lam.t - la, 0.05);
+      else { lh = (lam.t * dh) / (dh + da); la = (lam.t * da) / (dh + da); }
+    }
+    lh ??= dh; la ??= da;
+    const nh = Math.ceil(lh + 6 * Math.sqrt(lh) + 5), na = Math.ceil(la + 6 * Math.sqrt(la) + 5);
+    const ph = pois(lh, nh), pa = pois(la, na), pm = legs.map(() => 0);
+    let pj = 0;
+    for (let i = 0; i <= nh; i++) for (let j = 0; j <= na; j++) {
+      const w = ph[i] * pa[j];
+      let ok = true;
+      legs.forEach(([mk, p], k) => {
+        const c = sc[k] === "x" ? (i > j ? "home" : i < j ? "away" : "draw") === p
+          : (sc[k] === "h" ? i : sc[k] === "a" ? j : i + j) > ouL(mk) === (p === "over");
+        if (c) pm[k] += w; else ok = false;
+      });
+      if (ok) pj += w;
+    }
+    let q = pj;
+    for (let k = 0; k < legs.length; k++) { if (pm[k] < 1e-9) return 0; q *= legs[k][2] / pm[k]; }
+    return Math.min(q, ...legs.map((l) => l[2]));
+  }
   const bbReady = (m) => !!m && m.status === "open" && m.bb_lh != null && new Date(m.starts_at) > new Date();
   function bbOdd(m, pick) {
     const legs = String(pick).split("|").map((l) => l.split(":"));
     if (!bbReady(m) || legs.length < 2 || legs.length > BB_MAX || new Set(legs.map((l) => l[0])).size !== legs.length) return 0;
     let prod = 1, pst = 1, half = false;
-    const goal = [], fams = new Set();
+    const goal = [], st = { c: [], k: [], s: [], t: [] };
     for (const [mk, p] of legs) {
       const o = bbOk(mk) ? oddOf(m, mk, p) : 0;
       if (!(o > 1)) return 0;
       prod *= o;
       if (GOAL_RE.test(mk)) { goal.push([mk, p]); half ||= HALF_RE.test(mk); continue; }
-      const f = bbFam(mk);
-      if (fams.has(f)) return 0;
-      fams.add(f);
-      pst *= (1 / o) / Object.values(m.markets?.[mk] || {}).filter((x) => x > 1).reduce((t, x) => t + 1 / x, 0);
+      st[bbFam(mk)].push([mk, p, (1 / o) / Object.values(m.markets?.[mk] || {}).filter((x) => x > 1).reduce((t, x) => t + 1 / x, 0)]);
     }
-    const pois = (l, n) => { const r = [Math.exp(-l)]; for (let i = 1; i <= n; i++) r.push((r[i - 1] * l) / i); return r; };
-    const lh = Number(m.bb_lh), la = Number(m.bb_la), won = (h, a, h1, a1) => goal.every(([mk, p]) => legWon(mk, p, h, a, h1, a1));
-    let pr = 0;
+    if (st.s.length && st.t.length) return 0;
+    for (const f in st) if (st[f].length) { const q = bbStatQ(f, st[f]); if (!(q > 0)) return 0; pst *= q; }
+    // pr: todas as pernas de gols ganham; pv: Empate Anula devolvido e nenhuma perdeu (aposta devolvida)
+    const dnb = goal.find(([mk]) => mk === "dnb"), rest = goal.filter(([mk]) => mk !== "dnb");
+    const lh = Number(m.bb_lh), la = Number(m.bb_la);
+    let pr = 0, pv = 0;
+    const add = (h, a, h1, a1, w) => {
+      if (!rest.every(([mk, p]) => legWon(mk, p, h, a, h1, a1))) return;
+      if (dnb && h === a) pv += w; else if (!dnb || legWon("dnb", dnb[1], h, a)) pr += w;
+    };
     if (!goal.length) pr = 1;
     else if (!half) {
       const ph = pois(lh, 10), pa = pois(la, 10);
-      for (let h = 0; h <= 10; h++) for (let a = 0; a <= 10; a++) if (won(h, a, 0, 0)) pr += ph[h] * pa[a];
+      for (let h = 0; h <= 10; h++) for (let a = 0; a <= 10; a++) add(h, a, 0, 0, ph[h] * pa[a]);
     } else {
       const h1 = pois(0.45 * lh, 6), a1 = pois(0.45 * la, 6), h2 = pois(0.55 * lh, 6), a2 = pois(0.55 * la, 6);
       for (let i = 0; i <= 6; i++) for (let j = 0; j <= 6; j++) for (let x = 0; x <= 6; x++) for (let y = 0; y <= 6; y++)
-        if (won(i + x, j + y, i, j)) pr += h1[i] * a1[j] * h2[x] * a2[y];
+        add(i + x, j + y, i, j, h1[i] * a1[j] * h2[x] * a2[y]);
     }
-    pr *= pst;
+    if (pv * pst >= 0.999) return 0;
+    pr = (pr * pst) / (1 - pv * pst);
     if (pr < 0.002) return 0;
     const v = Math.round(Math.min(prod, (1 / pr) * (1 - bbMargin / 100)) * 100) / 100;
     return v >= 1.05 ? v : 0;
