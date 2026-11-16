@@ -255,16 +255,18 @@
     loadMarkets([...slip.keys()]);
     lastFull = Date.now();
     paint();
-    loadBoost();
+    await loadBoost();
   }
   async function loadBoost() {
     boost = await RS.rpc("boost_today").catch(() => null);
     paint();
   }
   const clock = (ms) => { const t = Math.max(0, Math.floor(ms / 1000)); return [t / 3600, (t % 3600) / 60, t % 60].map((x) => String(Math.floor(x)).padStart(2, "0")).join(":"); };
+  let boostShown = false;
   function paintBoost() {
     const el = RS.$("#boost-card"), m = boost && matches.find((x) => x.id === boost.match);
     if (!el) return;
+    boostShown = boostOn(m, boost?.pick);
     const show = !!m && Date.now() < new Date(boost.ends_at) && new Date(m.starts_at) > Date.now();
     el.classList.toggle("hidden", !show);
     if (!show) { el.innerHTML = ""; return; }
@@ -285,8 +287,8 @@
     if (!boost) return;
     const c = RS.$("#bst-clock"), on = boostOn(matches.find((x) => x.id === boost.match), boost.pick);
     const left = new Date(on ? boost.ends_at : boost.starts_at) - Date.now();
-    if (c && left > 0) c.textContent = clock(left);
-    else if (left <= 0) paint();
+    if (on !== boostShown || left <= 0) paint();
+    else if (c) c.textContent = clock(left);
   }, 1000);
   // aplica uma linha atualizada (consulta dos jogos ao vivo) sem recarregar a lista inteira
   function applyPayload(payload) {
