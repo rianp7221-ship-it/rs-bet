@@ -428,7 +428,13 @@
         if (v && await act("admin_void_match", { p_match: +b.dataset.void, p_reason: v.r }, "Mercado anulado")) matches();
         return;
       }
-      if (b.dataset.res && confirm("Confirmar resultado? Os bilhetes serão pagos agora.") && await act("settle_match", { p_match: +b.dataset.res, p_result: b.dataset.r }, "Jogo liquidado")) matches();
+      if (b.dataset.res && confirm("Confirmar resultado? Os bilhetes serão pagos agora. Apostas de escanteios, cartões e chutes serão devolvidas (as estatísticas salvas podem ser parciais do ao vivo).")) {
+        // estatísticas gravadas durante o ao vivo são parciais: na liquidação manual não valem
+        const { error } = await sb.from("matches").update({ corners_home: null, corners_away: null, cards_home: null, cards_away: null,
+          shots_home: null, shots_away: null, sot_home: null, sot_away: null }).eq("id", +b.dataset.res);
+        if (error) RS.toast(error.message, "error");
+        else if (await act("settle_match", { p_match: +b.dataset.res, p_result: b.dataset.r }, "Jogo liquidado")) matches();
+      }
       if (b.dataset.lock && await act("admin_match_set", { p_match: +b.dataset.lock, p_locked: b.dataset.v === "1" }, "Atualizado")) matches();
       if (b.dataset.st && await act("admin_match_set", { p_match: +b.dataset.st, p_status: b.dataset.v }, "Atualizado")) matches();
       if (b.dataset.del && confirm("Excluir jogo?")) {
