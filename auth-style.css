@@ -1107,7 +1107,7 @@ body.on-casino .bottom-nav a.bn-cz.active { color: #ff7a1a; }
   #feat-cards::-webkit-scrollbar { display: none; }
 }
 .sh-prev { margin: 8px 0 14px; text-align: center; }
-.sh-prev img { width: 100%; max-height: 52vh; object-fit: contain; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+.sh-prev img { display: inline-block; width: auto; max-width: 100%; max-height: 52vh; border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
 .sh-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 10px; }
 
 /* =====================================================
