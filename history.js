@@ -195,67 +195,114 @@
   const plain = (h) => { const d = document.createElement("div"); d.innerHTML = h; return d.textContent; };
   async function betImage(b, refUrl) {
     const W = 1080, H = 1920, c = document.createElement("canvas"); c.width = W; c.height = H;
-    const x = c.getContext("2d"), all = b.bet_selections, sels = all.slice(0, 5), more = all.length - sels.length;
-    const [mark, ...logos] = await Promise.all([pic("icons/rs-mark.png"), ...sels.flatMap((s) => [pic(s.matches.home_logo), pic(s.matches.away_logo)])]);
+    const x = c.getContext("2d"), all = b.bet_selections, one = new Set(all.map((s) => s.match_id)).size === 1, m0 = all[0].matches;
+    // cartão começa abaixo do destaque; só entram as seleções que cabem acima da chamada do rodapé
+    const rowH = one ? 110 : 160, cardTop = one ? 760 : 560;
+    const sels = all.slice(0, Math.max(1, Math.min(5, Math.floor((H - cardTop - 680) / rowH)))), more = all.length - sels.length;
+    const [mark, hl, al, ...logos] = await Promise.all([pic("icons/rs-mark.png"), pic(m0.home_logo), pic(m0.away_logo), ...sels.flatMap((s) => [pic(s.matches.home_logo), pic(s.matches.away_logo)])]);
     const F = (w, px) => (x.font = `${w} ${px}px Roboto, system-ui, sans-serif`);
     const fit = (t, max) => { t = String(t); if (x.measureText(t).width <= max) return t; while (t.length > 1 && x.measureText(t + "…").width > max) t = t.slice(0, -1); return t + "…"; };
-    const box = (X, Y, w, h, r) => { x.beginPath(); if (x.roundRect) x.roundRect(X, Y, w, h, r); else x.rect(X, Y, w, h); x.fill(); };
-    const bg = x.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#ff5a0f"); bg.addColorStop(1, "#c93700");
+    const rr = (X, Y, w, h, r) => { x.beginPath(); if (x.roundRect) x.roundRect(X, Y, w, h, r); else x.rect(X, Y, w, h); };
+    const box = (X, Y, w, h, r) => { rr(X, Y, w, h, r); x.fill(); };
+    const center = (t, Y) => x.fillText(t, (W - x.measureText(t).width) / 2, Y);
+    const right = (t, X, Y) => x.fillText(t, X - x.measureText(t).width, Y);
+    const won = b.status === "won" || b.status === "cashout", OR = "#ff5a0f";
+    // fundo escuro com brilho laranja e faixas diagonais
+    const bg = x.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#151b2e"); bg.addColorStop(1, "#0a0e1a");
     x.fillStyle = bg; x.fillRect(0, 0, W, H);
-    // Criar Aposta: lista as pernas embaixo do jogo (cabe no story; o excedente vira "+ N pernas")
-    const legH = 66, legsOf2 = (s) => (s.market === "bb" ? s.pick.split("|").map((l) => l.split(":")) : []);
-    let room = Math.floor((1180 - sels.length * 160) / legH);
-    const shown = sels.map((s) => { const lg = legsOf2(s), n = Math.max(0, Math.min(lg.length, room - (lg.length > room ? 1 : 0))); room -= n + (n < lg.length ? 1 : 0); return { lg: lg.slice(0, n), rest: lg.length - n }; });
-    const rowOf = (i) => 160 + (shown[i].lg.length + (shown[i].rest ? 1 : 0)) * legH + (shown[i].lg.length ? 20 : 0);
-    const cardH = 190 + sels.reduce((t, _, i) => t + rowOf(i), 0) + (more ? 60 : 0) + 230;
-    const oy = Math.max(0, (H - (cardH + 610)) / 2 - 60), top = 300 + oy;
-    if (mark) x.drawImage(mark, 80, 110 + oy, 196, 110);
-    x.fillStyle = "#fff"; x.textBaseline = "middle";
-    F(900, 76); x.fillText("REAL SPORTS", mark ? 300 : 80, 165 + oy);
-    const [st, stc] = { won: ["GANHOU!", "#16a34a"], cashout: ["CASH OUT RECEBIDO", "#16a34a"], lost: ["BILHETE", "#5d6883"], canceled: ["BILHETE", "#5d6883"] }[b.status] || ["BILHETE EM ABERTO", "#ff4d00"];
-    x.fillStyle = "#fff"; box(60, top, W - 120, cardH, 36);
-    x.fillStyle = stc; F(900, 40); x.fillText(st, 110, top + 70);
-    x.fillStyle = "#1c2233"; F(900, 56); x.fillText(`${TYPE(all.length)} · Odd ${betOdd(b).toFixed(2)}`, 110, top + 140);
-    let y = top + 200;
+    for (const [cx, cy, r, col] of [[W, 0, 900, won ? "rgba(22,163,74,.45)" : "rgba(255,90,15,.5)"], [0, H, 800, "rgba(255,90,15,.22)"]]) {
+      const g = x.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)");
+      x.fillStyle = g; x.fillRect(0, 0, W, H);
+    }
+    x.save(); x.globalAlpha = 0.07; x.fillStyle = "#fff";
+    for (let i = -4; i < 14; i++) { x.beginPath(); x.moveTo(i * 140, 0); x.lineTo(i * 140 + 60, 0); x.lineTo(i * 140 - 540, H); x.lineTo(i * 140 - 600, H); x.fill(); }
+    x.restore();
+    x.textBaseline = "middle";
+    // topo: marca + selo de status
+    // a marca tem "R" branco e "S" escuro: vai num selo laranja para as duas letras aparecerem
+    if (mark) { x.fillStyle = OR; box(60, 72, 180, 110, 28); x.drawImage(mark, 78, 82, 144, 81); }
+    x.fillStyle = "#fff"; F(900, 60); x.fillText("REAL SPORTS", mark ? 262 : 70, 127);
+    const [st, stc] = { won: ["GANHOU!", "#16a34a"], cashout: ["CASH OUT", "#16a34a"], lost: ["BILHETE", "#5d6883"], canceled: ["BILHETE", "#5d6883"] }[b.status] || ["EM ABERTO", OR];
+    F(900, 30); const sw = x.measureText(st).width + 60;
+    x.fillStyle = stc; box(W - 70 - sw, 100, sw, 56, 28); x.fillStyle = "#fff"; x.fillText(st, W - 70 - sw + 30, 129);
+    // destaque: escudos + VS (um jogo) ou tipo da múltipla
+    let y = 230;
+    const crest = (img, name, cx) => {
+      x.fillStyle = "rgba(255,255,255,.08)"; x.beginPath(); x.arc(cx, y + 110, 105, 0, 7); x.fill();
+      x.strokeStyle = "rgba(255,255,255,.18)"; x.lineWidth = 4; x.stroke();
+      if (img) x.drawImage(img, cx - 70, y + 40, 140, 140);
+      else { x.fillStyle = "#fff"; F(900, 70); const t = name.slice(0, 2).toUpperCase(); x.fillText(t, cx - x.measureText(t).width / 2, y + 112); }
+      x.fillStyle = "#fff"; F(700, 40); const t = fit(name, 360); x.fillText(t, cx - x.measureText(t).width / 2, y + 260);
+    };
+    if (one) {
+      crest(hl, m0.home, 250); crest(al, m0.away, W - 250);
+      x.fillStyle = OR; F(900, 72); center("VS", y + 110);
+      x.fillStyle = "rgba(255,255,255,.65)"; F(500, 30); center(fit(`${m0.league || ""}${m0.starts_at ? ` · ${when(m0.starts_at)}` : ""}`, W - 160), y + 320);
+      y += 370;
+    } else {
+      x.fillStyle = "#fff"; F(900, 88); center(TYPE(all.length).toUpperCase(), y + 60);
+      x.fillStyle = "rgba(255,255,255,.65)"; F(500, 34); center(`${all.length} seleções`, y + 130);
+      y += 170;
+    }
+    // selo da odd
+    const odd = `ODD ${betOdd(b).toFixed(2)}`; F(900, 64); const ow = x.measureText(odd).width + 100;
+    const og = x.createLinearGradient(0, y, 0, y + 110); og.addColorStop(0, "#ff7a2f"); og.addColorStop(1, "#e04400");
+    x.save(); x.shadowColor = "rgba(255,90,15,.55)"; x.shadowBlur = 40; x.fillStyle = og; box((W - ow) / 2, y, ow, 110, 55); x.restore();
+    x.fillStyle = "#fff"; center(odd, y + 57);
+    y += 160;
+    // cartão branco com as seleções (Criar Aposta: pernas com bolinha de status)
+    const legH = 70, legsOf2 = (s) => (s.market === "bb" ? s.pick.split("|").map((l) => l.split(":")) : []);
+    let room = Math.floor((H - y - 680 - sels.length * rowH) / legH);
+    const shown = sels.map((s) => { const lg = legsOf2(s), n = Math.max(0, Math.min(lg.length, room - (lg.length > room ? 1 : 0))), rest = n ? lg.length - n : 0; room -= n + (rest ? 1 : 0); return { lg: lg.slice(0, n), rest }; });
+    const rowOf = (i) => rowH + (shown[i].lg.length + (shown[i].rest ? 1 : 0)) * legH;
+    const cardH = 60 + sels.reduce((t, _, i) => t + rowOf(i), 0) + (more ? 60 : 0) + 230, top = y;
+    x.save(); x.shadowColor = "rgba(0,0,0,.45)"; x.shadowBlur = 50; x.shadowOffsetY = 16; x.fillStyle = "#fff"; box(60, top, W - 120, cardH, 40); x.restore();
+    x.fillStyle = OR; box(60, top, 14, cardH, 7);
+    y = top + 50;
     sels.forEach((s, i) => {
-      x.fillStyle = "#dde2ee"; x.fillRect(110, y - 10, W - 220, 2);
-      F(700, 44); const odd = selOdd(s).toFixed(2), ow = x.measureText(odd).width;
-      x.fillStyle = "#ff4d00"; x.fillText(odd, W - 110 - ow, y + 40);
-      x.fillStyle = s.status === "won" ? "#16a34a" : s.status === "lost" ? "#dc2626" : "#1c2233";
-      x.fillText(fit((s.status === "won" ? "✓ " : s.status === "lost" ? "✕ " : "") + selName(s), W - 280 - ow), 110, y + 40);
+      if (i) { x.fillStyle = "#e6e9f2"; x.fillRect(110, y - 20, W - 220, 2); }
+      F(900, 46); const so = selOdd(s).toFixed(2), sw2 = x.measureText(so).width;
+      x.fillStyle = OR; x.fillText(so, W - 110 - sw2, y + 30);
+      x.fillStyle = s.status === "won" ? "#16a34a" : s.status === "lost" ? "#dc2626" : "#141a2b";
+      x.fillText(fit((s.status === "won" ? "✓ " : s.status === "lost" ? "✕ " : "") + selName(s), W - 260 - sw2), 110, y + 30);
       const lgs = legsOf2(s);
-      x.fillStyle = "#5d6883"; F(400, 32); x.fillText(fit(lgs.length ? `${lgs.length} seleções no mesmo jogo` : plain(mname(s.market || "1x2")), 760), 110, y + 88);
-      let tx = 110;
-      for (const l of [logos[i * 2], logos[i * 2 + 1]]) if (l) { x.drawImage(l, tx, y + 108, 36, 36); tx += 44; }
-      x.fillStyle = "#1c2233"; F(500, 32); x.fillText(fit(`${s.matches.home} x ${s.matches.away}`, W - 220 - (tx - 110)), tx + (tx > 110 ? 6 : 0), y + 128);
-      let ly = y + 190;
+      x.fillStyle = "#6b7590"; F(500, 30);
+      x.fillText(fit(lgs.length ? `${lgs.length} seleções no mesmo jogo` : plain(mname(s.market || "1x2")), W - 220), 110, y + 78);
+      if (!one) {
+        let tx = 110;
+        for (const l of [logos[i * 2], logos[i * 2 + 1]]) if (l) { x.drawImage(l, tx, y + 100, 34, 34); tx += 42; }
+        x.fillStyle = "#141a2b"; F(500, 30); x.fillText(fit(`${s.matches.home} x ${s.matches.away}`, W - 230 - (tx - 110)), tx + (tx > 110 ? 6 : 0), y + 118);
+      }
+      let ly = y + rowH + 20;
       for (const [li, [mk, pk]] of shown[i].lg.entries()) {
-        const st = legState(mk, pk, s.matches);
-        x.fillStyle = st === "won" ? "#16a34a" : st === "lost" ? "#dc2626" : "#c3c9d8";
-        x.beginPath(); x.arc(124, ly, 12, 0, 7); x.fill();
-        if (li < shown[i].lg.length - 1) { x.fillStyle = "#e4e8f1"; x.fillRect(122, ly + 14, 4, legH - 28); }
-        x.fillStyle = "#1c2233"; F(700, 34); const nm = fit(selName({ ...s, market: mk, pick: pk }), 520); x.fillText(nm, 156, ly);
+        const ls = legState(mk, pk, s.matches);
+        if (li < shown[i].lg.length - 1) { x.fillStyle = "#e6e9f2"; x.fillRect(127, ly + 18, 6, legH - 36); }
+        x.fillStyle = ls === "won" ? "#16a34a" : ls === "lost" ? "#dc2626" : OR;
+        x.beginPath(); x.arc(130, ly, 16, 0, 7); x.fill();
+        x.fillStyle = "#fff"; F(900, 20); const ic = ls === "won" ? "✓" : ls === "lost" ? "✕" : String(li + 1); x.fillText(ic, 130 - x.measureText(ic).width / 2, ly + 1);
+        x.fillStyle = "#141a2b"; F(700, 36); const nm = fit(selName({ ...s, market: mk, pick: pk }), 500); x.fillText(nm, 170, ly);
         const nw = x.measureText(nm).width;
-        x.fillStyle = "#5d6883"; F(400, 30); x.fillText(fit(` · ${plain(mname(mk))}`, W - 266 - nw), 156 + nw, ly);
+        x.fillStyle = "#6b7590"; F(400, 30); x.fillText(fit(` · ${plain(mname(mk))}`, W - 280 - nw), 170 + nw, ly);
         ly += legH;
       }
-      if (shown[i].rest) { x.fillStyle = "#5d6883"; F(500, 30); x.fillText(`+ ${shown[i].rest} ${shown[i].rest === 1 ? "seleção" : "seleções"}`, 156, ly); }
+      if (shown[i].rest) { x.fillStyle = "#6b7590"; F(500, 30); x.fillText(`+ ${shown[i].rest} ${shown[i].rest === 1 ? "seleção" : "seleções"}`, 170, ly); }
       y += rowOf(i);
     });
-    if (more) { x.fillStyle = "#5d6883"; F(500, 34); x.fillText(`+ ${more} ${more === 1 ? "seleção" : "seleções"}`, 110, y + 20); y += 60; }
-    x.fillStyle = "#dde2ee"; x.fillRect(110, y - 10, W - 220, 2);
-    const [wl, wv] = winLine(b), right = (t, Y) => x.fillText(t, W - 110 - x.measureText(t).width, Y);
-    x.fillStyle = "#5d6883"; F(500, 36); x.fillText("Aposta", 110, y + 50);
-    x.fillStyle = "#1c2233"; F(700, 40); right(RS.money(b.stake), y + 50);
-    x.fillStyle = "#5d6883"; F(500, 36); x.fillText(wl, 110, y + 140);
-    x.fillStyle = b.status === "won" || b.status === "cashout" ? "#16a34a" : "#1c2233"; F(900, 64); right(RS.money(wv), y + 140);
-    const fy = Math.min(top + cardH + 110, H - 250);
-    x.fillStyle = "#fff"; x.textAlign = "center";
-    F(900, 54); x.fillText("Aposte também na Real Sports", W / 2, fy);
-    F(400, 38); x.fillText("Cadastre-se pelo meu link:", W / 2, fy + 70);
-    F(700, 42); const link = refUrl.replace(/^https?:\/\/(www\.)?/, ""), lw = x.measureText(link).width + 80;
-    x.fillStyle = "rgba(0,0,0,.25)"; box((W - lw) / 2, fy + 110, lw, 84, 42);
-    x.fillStyle = "#fff"; x.fillText(link, W / 2, fy + 153);
+    if (more) { x.fillStyle = "#6b7590"; F(500, 32); x.fillText(`+ ${more} ${more === 1 ? "seleção" : "seleções"}`, 110, y); y += 60; }
+    // rodapé do cartão: aposta e ganho
+    x.fillStyle = "#f4f6fb"; rr(74, top + cardH - 210, W - 134, 210, [0, 0, 40, 0]); x.fill();
+    const [wl, wv] = winLine(b), fy0 = top + cardH - 210;
+    x.fillStyle = "#6b7590"; F(500, 32); x.fillText("Aposta", 110, fy0 + 60);
+    x.fillStyle = "#141a2b"; F(700, 38); right(RS.money(b.stake), W - 110, fy0 + 60);
+    x.fillStyle = "#6b7590"; F(500, 32); x.fillText(wl, 110, fy0 + 145);
+    x.fillStyle = won ? "#16a34a" : "#141a2b"; F(900, 72); right(RS.money(wv), W - 110, fy0 + 145);
+    // chamada com link de indicação
+    const fy = top + cardH + 100;
+    x.fillStyle = "#fff"; F(900, 52); center("Aposte também na Real Sports", fy);
+    x.fillStyle = "rgba(255,255,255,.7)"; F(400, 34); center("Cadastre-se pelo meu link", fy + 62);
+    F(800, 40); const link = refUrl.replace(/^https?:\/\/(www\.)?/, ""), lw = x.measureText(link).width + 90;
+    x.fillStyle = OR; box((W - lw) / 2, fy + 105, lw, 86, 43);
+    x.fillStyle = "#fff"; center(link, fy + 149);
     return c;
   }
   async function shareBet(bet) {
