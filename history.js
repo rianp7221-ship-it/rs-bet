@@ -194,11 +194,16 @@
   });
   const plain = (h) => { const d = document.createElement("div"); d.innerHTML = h; return d.textContent; };
   async function betImage(b, refUrl) {
-    const W = 1080, H = 1920, c = document.createElement("canvas"); c.width = W; c.height = H;
+    const W = 1080, c = document.createElement("canvas");
     const x = c.getContext("2d"), all = b.bet_selections, one = new Set(all.map((s) => s.match_id)).size === 1, m0 = all[0].matches;
     // cartão começa abaixo do destaque; só entram as seleções que cabem acima da chamada do rodapé
     const rowH = one ? 110 : 160, cardTop = one ? 760 : 560;
-    const sels = all.slice(0, Math.max(1, Math.min(5, Math.floor((H - cardTop - 680) / rowH)))), more = all.length - sels.length;
+    // todas as seleções e pernas entram (igual Betano): a imagem cresce para baixo quando não cabe em 1920
+    const sels = all, more = 0, legH = 70, legsOf2 = (s) => (s.market === "bb" ? s.pick.split("|").map((l) => l.split(":")) : []);
+    const shown = sels.map((s) => ({ lg: legsOf2(s), rest: 0 }));
+    const rowOf = (i) => rowH + shown[i].lg.length * legH;
+    const cardH = 60 + sels.reduce((t, _, i) => t + rowOf(i), 0) + 230, H = Math.max(1920, cardTop + cardH + 360);
+    c.width = W; c.height = H;
     const [mark, hl, al, ...logos] = await Promise.all([pic("icons/rs-mark.png"), pic(m0.home_logo), pic(m0.away_logo), ...sels.flatMap((s) => [pic(s.matches.home_logo), pic(s.matches.away_logo)])]);
     const F = (w, px) => (x.font = `${w} ${px}px Roboto, system-ui, sans-serif`);
     const fit = (t, max) => { t = String(t); if (x.measureText(t).width <= max) return t; while (t.length > 1 && x.measureText(t + "…").width > max) t = t.slice(0, -1); return t + "…"; };
@@ -251,11 +256,7 @@
     x.fillStyle = "#fff"; center(odd, y + 57);
     y += 160;
     // cartão branco com as seleções (Criar Aposta: pernas com bolinha de status)
-    const legH = 70, legsOf2 = (s) => (s.market === "bb" ? s.pick.split("|").map((l) => l.split(":")) : []);
-    let room = Math.floor((H - y - 680 - sels.length * rowH) / legH);
-    const shown = sels.map((s) => { const lg = legsOf2(s), n = Math.max(0, Math.min(lg.length, room - (lg.length > room ? 1 : 0))), rest = n ? lg.length - n : 0; room -= n + (rest ? 1 : 0); return { lg: lg.slice(0, n), rest }; });
-    const rowOf = (i) => rowH + (shown[i].lg.length + (shown[i].rest ? 1 : 0)) * legH;
-    const cardH = 60 + sels.reduce((t, _, i) => t + rowOf(i), 0) + (more ? 60 : 0) + 230, top = y;
+    const top = y;
     x.save(); x.shadowColor = "rgba(0,0,0,.45)"; x.shadowBlur = 50; x.shadowOffsetY = 16; x.fillStyle = "#fff"; box(60, top, W - 120, cardH, 40); x.restore();
     x.fillStyle = OR; box(60, top, 14, cardH, 7);
     y = top + 50;
