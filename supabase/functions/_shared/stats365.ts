@@ -80,3 +80,27 @@ export async function coverage365(m: MatchRef): Promise<Coverage | null> {
   const ok = (k: keyof Stats) => st.filter((x) => x?.[k]).length >= last.length - 1;
   return { corners: ok("corners"), cards: ok("cards"), shots: ok("shots") && ok("sot") };
 }
+
+export type Result365 = { id: number; done: boolean; void: boolean; home: number; away: number; ht: Pair | null };
+type Stage = { id: number; homeCompetitorScore?: number; awayCompetitorScore?: number; isEnded?: boolean };
+const VOID_365 = /postpon|cancel|abandon|adiad/i;
+// resultado do jogo no 365Scores (casa, fora = ordem do nosso jogo); null = jogo não achado lá.
+// done = encerrado com placar dos 90 min; void = adiado/cancelado/abandonado lá também
+export async function result365(m: MatchRef): Promise<Result365 | null> {
+  const g = await find(m);
+  if (!g) return null;
+  const straight = side(m, g);
+  if (straight === null) return null;
+  const j = await get(`${BASE}/game/?${QS}&gameId=${g.id}`);
+  const d = j?.game as (G365 & { statusText?: string; stages?: Stage[]; homeCompetitor: C365 & { score?: number }; awayCompetitor: C365 & { score?: number } }) | undefined;
+  if (!d || d.id !== g.id) return null;
+  const st = (id: number) => d.stages?.find((s) => s.id === id && s.isEnded && s.homeCompetitorScore != null && s.awayCompetitorScore != null);
+  // 9 = fim dos 90 min (com prorrogação o "atual" inclui o tempo extra); 7 = intervalo
+  const ft = st(9), half = st(7);
+  const h = ft?.homeCompetitorScore ?? d.homeCompetitor.score ?? -1, a = ft?.awayCompetitorScore ?? d.awayCompetitor.score ?? -1;
+  const isVoid = VOID_365.test(d.statusText ?? "");
+  const done = d.statusGroup === 4 && !isVoid && h >= 0 && a >= 0;
+  const ht = half ? { home: half.homeCompetitorScore!, away: half.awayCompetitorScore! } : null;
+  const flip = (p: Pair | null) => (p && !straight ? { home: p.away, away: p.home } : p);
+  return { id: g.id, done, void: isVoid, home: straight ? h : a, away: straight ? a : h, ht: flip(ht) };
+}

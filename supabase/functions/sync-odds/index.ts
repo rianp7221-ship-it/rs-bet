@@ -7,7 +7,7 @@ import { adminClient, cors, json } from "../_shared/auth.ts";
 import { getProvider, type Markets } from "../_shared/providers.ts";
 import { BK_EXT, bkDone, bkLeague, bkLeagueLogo, bkLines, bkList, bkScore, bkTeamLogo, bkVoid, type List365 } from "../_shared/basket.ts";
 import { adjustMarkets, adjustOdds, capMarkets, capOdds, overCap, type Adjust } from "../_shared/adjust.ts";
-import { coverage365, type MatchRef, stats365 } from "../_shared/stats365.ts";
+import { coverage365, type MatchRef, result365, stats365 } from "../_shared/stats365.ts";
 
 type Odds = { home: number | null; draw?: number | null; away: number | null };
 // margem da casa: tira a margem do mercado (probabilidade justa) e aplica a margem configurada
@@ -121,6 +121,22 @@ async function settleFinished(sb: any, feed: { corners?: (id: string) => Promise
   if (!(await saveStats(sb, feed, m, fixture)) && (await waitStats(sb, m))) return { waiting: true };
   const { error } = await sb.rpc("settle_match", { p_match: m.id, p_result: result });
   return { error: error?.message };
+}
+// "adiado/cancelado" na API-Football às vezes chega no horário do jogo e o jogo acontece (ex.: America de Cali x Inter Bogotá):
+// antes de anular confere no 365Scores. Encerrado lá = liquida com o placar de lá; adiado lá ou NOT_PLAYED_MS sem acontecer = anula;
+// senão segue suspenso e é conferido de novo na próxima rodada
+// deno-lint-ignore no-explicit-any
+async function sourceVoid(sb: any, feed: { corners?: (id: string) => Promise<FeedStats | null> }, m: Started, fixture: string): Promise<{ error?: string; waiting?: boolean }> {
+  const r = await result365(m).catch(() => null);
+  if (r?.done) {
+    const { error } = await sb.from("matches").update({ ext365_id: r.id, score_home: r.home, score_away: r.away,
+      ht_home: r.ht?.home ?? null, ht_away: r.ht?.away ?? null, period: "FT" }).eq("id", m.id);
+    if (error) return { error: error.message };
+    return settleFinished(sb, feed, { ...m, ext365_id: r.id }, fixture, r.home > r.away ? "home" : r.home < r.away ? "away" : "draw");
+  }
+  if (!r?.void && Date.now() - Date.parse(m.starts_at) <= NOT_PLAYED_MS) return { waiting: true };
+  const e = await voidMatch(sb, m.id);
+  return { error: e ?? undefined };
 }
 
 function marginMarkets(mk: Markets | null | undefined, marginPct: number): Markets | null {
@@ -274,8 +290,8 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
           }
           // horário revisado na fonte (mesmo que já passou) conta como o novo horário do jogo
           if (Date.now() - Math.max(was, next || 0) > NOT_PLAYED_MS) {
-            const e2 = await voidMatch(sb, m.id);
-            if (e2) errors.push(`${m.home} x ${m.away}: ${e2}`); else settled++;
+            const r = await sourceVoid(sb, feed, m, u.id);
+            if (r.error) errors.push(`${m.home} x ${m.away}: ${r.error}`); else if (!r.waiting) settled++;
             continue;
           }
         }
@@ -327,9 +343,9 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
         updated++;
         if (statsFor.has(m.id) && !u.completed && !u.cancelled && !u.voided && !idle.has(u.id)) await liveStats(sb, feed, m, u.id, slot);
         if (u.voided || u.cancelled) {
-          // a suspensão de 10 min acima fica só como reserva se a anulação falhar
-          const e2 = await voidMatch(sb, m.id);
-          if (e2) errors.push(`${m.home} x ${m.away}: ${e2}`); else settled++;
+          // segue suspenso (10 min acima) enquanto o 365Scores não confirma
+          const r = await sourceVoid(sb, feed, m, u.id);
+          if (r.error) errors.push(`${m.home} x ${m.away}: ${r.error}`); else if (r.waiting) waiting++; else settled++;
         } else if (u.completed && u.home != null && u.away != null) {
           const result = u.home > u.away ? "home" : u.home < u.away ? "away" : "draw";
           const r = await settleFinished(sb, feed, m, u.id, result);
@@ -454,8 +470,8 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
         const s = byExt.get(m.external_id);
         if (!s) continue;
         if (s.voided) {
-          const e2 = await voidMatch(sb, m.id);
-          if (e2) errors.push(`${m.home} x ${m.away}: ${e2}`); else settled++;
+          const r = await sourceVoid(sb, feed, m, s.id);
+          if (r.error) errors.push(`${m.home} x ${m.away}: ${r.error}`); else if (r.waiting) waiting++; else settled++;
           continue;
         }
         const goal = !s.completed && scoreChanged(m, s.home, s.away)
