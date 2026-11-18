@@ -65,7 +65,12 @@ async function gamePage(base, s) {
   const name = `${m.home} x ${m.away}`;
   const ld = { "@context": "https://schema.org", "@type": "SportsEvent", name, sport: m.sport, startDate: m.starts_at,
     eventStatus: "https://schema.org/EventScheduled", homeTeam: { "@type": "SportsTeam", name: m.home }, awayTeam: { "@type": "SportsTeam", name: m.away },
-    location: { "@type": "Place", name: lg }, superEvent: { "@type": "SportsEvent", name: lg } };
+    // sem superEvent: o Google lia o campeonato como outro evento sem startDate/location
+    endDate: new Date(Date.parse(m.starts_at) + (/basq/i.test(m.sport ?? "") ? 2.5 : 2) * 3600e3).toISOString(),
+    description: `${name} pela ${lg}: odds e palpites na Real Sports.`, image: new URL("/icons/icon-512.png", canon).href,
+    performer: [{ "@type": "SportsTeam", name: m.home }, { "@type": "SportsTeam", name: m.away }],
+    organizer: { "@type": "SportsOrganization", name: lg, url: canon },
+    location: { "@type": "Place", name: lg, address: lg } };
   const body = `<nav class="bc"><a href="/jogos">Jogos</a> › <a href="/apostas/${slug(lg)}">${esc(lg)}</a></nav>
 <h1>${esc(name)}: palpites e odds</h1><p class="muted">${esc(lg)} · ${esc(when(m.starts_at))}${m.status === "live" ? ` · <span class="live">AO VIVO ${m.score_home ?? 0}–${m.score_away ?? 0}${m.minute ? ` (${esc(m.minute)}')` : ""}</span>` : ""}</p>
 ${open ? `<div class="card"><b>Resultado final</b>${oddsRow(m)}</div>
