@@ -94,12 +94,13 @@ export async function result365(m: MatchRef): Promise<Result365 | null> {
   const j = await get(`${BASE}/game/?${QS}&gameId=${g.id}`);
   const d = j?.game as (G365 & { statusText?: string; stages?: Stage[]; homeCompetitor: C365 & { score?: number }; awayCompetitor: C365 & { score?: number } }) | undefined;
   if (!d || d.id !== g.id) return null;
-  const st = (id: number) => d.stages?.find((s) => s.id === id && s.isEnded && s.homeCompetitorScore != null && s.awayCompetitorScore != null);
+  const st = (id: number) => d.stages?.find((s) => s.id === id && s.isEnded && (s.homeCompetitorScore ?? -1) >= 0 && (s.awayCompetitorScore ?? -1) >= 0);
   // 9 = fim dos 90 min (com prorrogação o "atual" inclui o tempo extra); 7 = intervalo
   const ft = st(9), half = st(7);
-  const h = ft?.homeCompetitorScore ?? d.homeCompetitor.score ?? -1, a = ft?.awayCompetitorScore ?? d.awayCompetitor.score ?? -1;
+  // só o placar do fim dos 90 min vale: "Current" inclui prorrogação/pênaltis; Suspended/After Penalties sem estágio 9 encerrado não liquidam
+  const h = ft?.homeCompetitorScore ?? -1, a = ft?.awayCompetitorScore ?? -1;
   const isVoid = VOID_365.test(d.statusText ?? "");
-  const done = d.statusGroup === 4 && !isVoid && h >= 0 && a >= 0;
+  const done = d.statusGroup === 4 && /^(ended|after (extra time|et|penalties))$/i.test(d.statusText ?? "") && h >= 0 && a >= 0;
   const ht = half ? { home: half.homeCompetitorScore!, away: half.awayCompetitorScore! } : null;
   const flip = (p: Pair | null) => (p && !straight ? { home: p.away, away: p.home } : p);
   return { id: g.id, done, void: isVoid, home: straight ? h : a, away: straight ? a : h, ht: flip(ht) };

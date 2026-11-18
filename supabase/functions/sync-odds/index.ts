@@ -329,7 +329,8 @@ async function run(req: Request, sb: Admin, body: { mode?: string; leagues?: unk
         if (u.odds || u.markets !== undefined) patch.cashout_odds = Object.keys(co).length ? co : null;
         if (scoreChanged(m, u.home, u.away) && !u.completed) {
           patch.suspended_until = new Date(Date.now() + GOAL_LOCK_MS).toISOString(); patch.suspend_reason = "Gol";
-        } else if (u.cancelled || u.voided) { patch.suspended_until = new Date(Date.now() + 600_000).toISOString(); patch.suspend_reason = "Jogo adiado ou cancelado"; }
+        } else if ((u.cancelled || u.voided) && m.suspend_reason === STATS_WAIT && lockedUntil > Date.now()) { /* mantém a espera das estatísticas */ }
+        else if (u.cancelled || u.voided) { patch.suspended_until = new Date(Date.now() + 600_000).toISOString(); patch.suspend_reason = "Jogo adiado ou cancelado"; }
         else if (jumped && !u.completed && lockedUntil < Date.now() + JUMP_LOCK_MS) {
           patch.suspended_until = new Date(Date.now() + JUMP_LOCK_MS).toISOString(); patch.suspend_reason = "Odds em movimento brusco";
         }
