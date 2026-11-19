@@ -71,12 +71,20 @@ async function sync() {
 }
 
 // rodadas grátis da roleta: libera o pacote no próprio jogo (aposta travada pelo jogo); depois que acaba o jogo volta pro saldo
+const REGRANT_MS = 10 * 60_000;
 async function grantFree(uid: string, g: any) {
   const { data: rw } = await sb.from("user_rewards").select("id,spins_left,pf_granted_at")
     .eq("user_id", uid).eq("kind", "freespins").eq("status", "em_uso").eq("game_id", g.id)
     .gt("spins_left", 0).gt("expires_at", new Date().toISOString()).order("id").limit(1).maybeSingle();
   if (!rw) return { free: 0, granted: false };
-  if (rw.pf_granted_at) return { free: rw.spins_left, granted: false };
+  if (rw.pf_granted_at) {
+    // às vezes a PlayFiver responde "agendada" e as rodadas não aparecem no jogo: sem nenhuma rodada grátis em REGRANT_MS, pede de novo
+    if (Date.now() - Date.parse(rw.pf_granted_at) < REGRANT_MS) return { free: rw.spins_left, granted: false };
+    const { count } = await sb.from("casino_tx").select("id", { count: "exact", head: true }).eq("user_id", uid)
+      .gt("created_at", rw.pf_granted_at).not("raw->slot->free_rounds", "is", null);
+    if (count !== 0) return { free: rw.spins_left, granted: false };
+    await sb.from("user_rewards").update({ pf_granted_at: null }).eq("id", rw.id).eq("pf_granted_at", rw.pf_granted_at);
+  }
   // a PlayFiver não deixa escolher o valor da rodada (o jogo define); settings.freespin_native = false pausa a liberação nativa
   const { data: nat } = await sb.from("settings").select("value").eq("key", "freespin_native").maybeSingle();
   if (nat && [false, "false", '"false"'].includes(nat.value)) return { free: 0, granted: false, fallback: rw.spins_left };
