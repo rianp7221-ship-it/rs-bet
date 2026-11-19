@@ -81,7 +81,7 @@ async function grantFree(uid: string, g: any) {
     // às vezes a PlayFiver responde "agendada" e as rodadas não aparecem no jogo: sem nenhuma rodada grátis em REGRANT_MS, pede de novo
     if (Date.now() - Date.parse(rw.pf_granted_at) < REGRANT_MS) return { free: rw.spins_left, granted: false };
     const { count } = await sb.from("casino_tx").select("id", { count: "exact", head: true }).eq("user_id", uid)
-      .gt("created_at", rw.pf_granted_at).not("raw->slot->free_rounds", "is", null);
+      .gt("created_at", rw.pf_granted_at).not("raw->slot->free_rounds->>id", "is", null);
     if (count !== 0) return { free: rw.spins_left, granted: false };
     await sb.from("user_rewards").update({ pf_granted_at: null }).eq("id", rw.id).eq("pf_granted_at", rw.pf_granted_at);
   }
