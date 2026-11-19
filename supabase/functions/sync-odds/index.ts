@@ -21,22 +21,19 @@ function applyMargin(o: Odds, marginPct: number): Odds {
 
 // mesma margem nos mercados extras; na Chance Dupla cada resultado cobre 2 de 3, então a soma justa das probabilidades é 2
 // grava escanteios, cartões e chutes finais antes de liquidar (c1x2/coNN/kNN/s1x2/sNNN/t1x2/tNNN); sem o dado as seleções são anuladas.
-// A API principal não tem estatísticas de muitas ligas: aí vale o 365Scores. Devolve false se faltou algum grupo de estatística.
-const NO_STATS = { corners_home: null, corners_away: null, cards_home: null, cards_away: null, shots_home: null, shots_away: null, sot_home: null, sot_away: null };
+// Vale o 365Scores; o que faltar lá vem da API-Football. Devolve false se faltou algum grupo de estatística.
 type FeedStats = { home: number; away: number; cards: { home: number; away: number }; shots: { home: number; away: number }; sot: { home: number; away: number } };
 // deno-lint-ignore no-explicit-any
 async function saveStats(sb: any, feed: { corners?: (id: string) => Promise<FeedStats | null> }, m: Started, fixture: string): Promise<boolean> {
-  const c = feed.corners ? await feed.corners(fixture).catch(() => null) : null;
-  if (c) {
-    await sb.from("matches").update({ corners_home: c.home, corners_away: c.away, cards_home: c.cards.home, cards_away: c.cards.away,
-      shots_home: c.shots.home, shots_away: c.shots.away, sot_home: c.sot.home, sot_away: c.sot.away }).eq("id", m.id);
-    return true;
-  }
+  // 365Scores (Opta) primeiro: é o que os clientes conferem; a API-Football às vezes conta menos (Remo x Chapecoense: 17 x 18 chutes)
   const r = await stats365(m).catch(() => null);
+  let { corners, cards, shots, sot } = r?.stats ?? { corners: null, cards: null, shots: null, sot: null };
+  if (!(corners && cards && shots && sot) && feed.corners) {
+    const c = await feed.corners(fixture).catch(() => null);
+    if (c) { corners ??= { home: c.home, away: c.away }; cards ??= c.cards; shots ??= c.shots; sot ??= c.sot; }
+  }
   // sem as finais: apaga as parciais do ao vivo, para nada ser liquidado com número velho
-  if (!r) { await sb.from("matches").update(NO_STATS).eq("id", m.id); return false; }
-  const { corners, cards, shots, sot } = r.stats;
-  await sb.from("matches").update({ ext365_id: r.id, corners_home: corners?.home ?? null, corners_away: corners?.away ?? null,
+  await sb.from("matches").update({ ...(r ? { ext365_id: r.id } : {}), corners_home: corners?.home ?? null, corners_away: corners?.away ?? null,
     cards_home: cards?.home ?? null, cards_away: cards?.away ?? null, shots_home: shots?.home ?? null, shots_away: shots?.away ?? null,
     sot_home: sot?.home ?? null, sot_away: sot?.away ?? null }).eq("id", m.id);
   return !!(corners && cards && shots && sot);
