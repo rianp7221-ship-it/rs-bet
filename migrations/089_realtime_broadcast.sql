@@ -2,7 +2,7 @@
 -- postgres_changes faz o Realtime ler o WAL do banco a cada ~0,4 s (72% do tempo do banco: o WAL é inflado
 -- pelos updates de matches). Broadcast só grava uma linha em realtime.messages por evento.
 --   user:<uuid>  → notif (nova notificação), tx (mudança de status de transação do próprio usuário)
---   admin        → alert (insert/update em alerts), tx / bet (algo mudou; o painel recarrega)
+--   admin        → alert (insert/update em alerts; só o id: o texto é lido via RLS de alerts), tx / bet (algo mudou; o painel recarrega)
 
 create or replace function public._rt_user_notif() returns trigger
 language plpgsql security definer set search_path = public as $$
@@ -26,7 +26,7 @@ end $$;
 create or replace function public._rt_admin_alert() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
-  perform realtime.send(jsonb_build_object('op', tg_op, 'message', new.message, 'severity', new.severity), 'alert', 'admin', true);
+  perform realtime.send(jsonb_build_object('op', tg_op, 'alert_id', new.id), 'alert', 'admin', true);
   return null;
 end $$;
 

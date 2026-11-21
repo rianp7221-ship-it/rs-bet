@@ -113,7 +113,8 @@
   // só entra quem a policy rt_read libera (um join negado derruba os outros canais da conexão)
   if (can("alerts.view") || can("finance.view") || can("users.view")) sb.channel("admin", { config: { private: true } })
     .on("broadcast", { event: "alert" }, ({ payload: a }) => {
-      if (a.op === "INSERT") RS.toast("Novo alerta: " + a.message, a.severity === "critica" ? "error" : "info");
+      if (a.op === "INSERT" && can("alerts.view")) sb.from("alerts").select("message,severity").eq("id", a.alert_id).maybeSingle()
+        .then(({ data: r }) => r && RS.toast("Novo alerta: " + r.message, r.severity === "critica" ? "error" : "info"));
       alertCount(); refresh();
     })
     .on("broadcast", { event: "tx" }, refresh)
