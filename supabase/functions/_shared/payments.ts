@@ -1,17 +1,25 @@
 // Adaptadores de gateway PIX. Para trocar de gateway: implemente PaymentProvider, registre em PROVIDERS
 // e defina o secret PAYMENT_PROVIDER com o nome do adaptador (padrão: mercadopago).
 
-export type Charge = { id: string; qr_code: string; qr_base64: string | null; ticket_url: string | null; expires_at: string };
+export type Charge = {
+  id: string; qr_code: string; qr_base64: string | null; ticket_url: string | null; expires_at: string; customer_id?: string;
+};
 export type PaymentInfo = {
   id: string; status: "approved" | "pending" | "failed" | "refunded"; amount: number; reference: string | null;
   detail: string; charge: Omit<Charge, "id" | "expires_at"> | null;
 };
-export type CreatePix = { reference: string; amount: number; description: string; email: string; expiresAt: Date; notifyUrl: string };
+export type CreatePix = {
+  reference: string; amount: number; description: string; email: string; expiresAt: Date; notifyUrl: string;
+  userId: string; cpf: string | null; name: string | null; customerId: string | null;
+};
 
 export interface PaymentProvider {
   name: string;
+  requiresCpf?: boolean;
   createPix(p: CreatePix): Promise<Charge>;
-  getPayment(id: string): Promise<PaymentInfo>;
+  getPayment(id: string, withCharge?: boolean): Promise<PaymentInfo>;
+  // Invalida um PIX vencido para que não possa mais ser pago (quando o gateway não expira sozinho).
+  cancel?(id: string): Promise<void>;
   // Valida a notificação e devolve o id do pagamento (ou null se não for de pagamento).
   webhookPaymentId(req: Request, url: URL, body: Record<string, unknown> | null): Promise<string | null>;
 }
@@ -87,11 +95,111 @@ function mercadoPago(token: string, webhookSecret?: string): PaymentProvider {
   };
 }
 
+
+// ---------- Asaas (API v3) ----------
+const ASAAS_UA = "RealSports/1.0";
+type AsaasPayment = {
+  id: string; status: string; value: number; externalReference?: string | null; deleted?: boolean; invoiceUrl?: string | null;
+};
+type AsaasTransfer = {
+  id: string; status: string; value: number; failReason?: string | null; authorized?: boolean; externalReference?: string | null;
+  bankAccount?: { pixAddressKey?: string | null } | null;
+};
+
+function asaasClient(apiKey: string) {
+  const base = (Deno.env.get("ASAAS_BASE_URL") ?? "https://api.asaas.com/v3").replace(/\/$/, "");
+  return async <T>(path: string, init: RequestInit = {}): Promise<T> => {
+    const r = await fetch(base + path, {
+      ...init, headers: { access_token: apiKey, "Content-Type": "application/json", "User-Agent": ASAAS_UA, ...init.headers },
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const msg = (body?.errors as { description?: string }[] | undefined)?.map((e) => e.description).join("; ");
+      throw new Error(`Asaas ${r.status}: ${msg || "erro"}`);
+    }
+    return body as T;
+  };
+}
+
+const safeEq = (a: string | null, b: string | undefined) => !!a && !!b && a.length === b.length &&
+  [...a].reduce((d, c, i) => d | (c.charCodeAt(0) ^ b.charCodeAt(i)), 0) === 0;
+
+function asaasToken(req: Request, token?: string) {
+  if (!token) throw new Error("Webhook do Asaas sem token configurado (ASAAS_WEBHOOK_TOKEN)");
+  if (!safeEq(req.headers.get("asaas-access-token"), token)) throw new Error("token inválido");
+}
+
+const brDate = (d: Date) => new Date(d.getTime() - 3 * 3600_000).toISOString().slice(0, 10);
+
+function asaas(apiKey: string, webhookToken?: string): PaymentProvider {
+  const call = asaasClient(apiKey);
+  const customer = async (c: CreatePix) => {
+    if (c.customerId) return c.customerId;
+    const cpf = (c.cpf ?? "").replace(/\D/g, "");
+    if (cpf.length !== 11 && cpf.length !== 14) throw new Error("CPF obrigatório para gerar o PIX");
+    const found = await call<{ data: { id: string; deleted?: boolean }[] }>(`/customers?cpfCnpj=${cpf}&limit=1`);
+    const hit = found.data?.find((x) => !x.deleted);
+    if (hit) return hit.id;
+    const made = await call<{ id: string }>("/customers", {
+      method: "POST",
+      body: JSON.stringify({ name: (c.name || c.email).slice(0, 100), cpfCnpj: cpf, email: c.email, externalReference: c.userId, notificationDisabled: true }),
+    });
+    return made.id;
+  };
+  const qr = async (id: string) => {
+    const q = await call<{ payload: string; encodedImage?: string }>(`/payments/${encodeURIComponent(id)}/pixQrCode`);
+    return q.payload ? { qr_code: q.payload, qr_base64: q.encodedImage ?? null } : null;
+  };
+  return {
+    name: "asaas",
+    requiresCpf: true,
+    async createPix(c) {
+      const cust = await customer(c);
+      const p = await call<AsaasPayment>("/payments", {
+        method: "POST",
+        body: JSON.stringify({
+          customer: cust, billingType: "PIX", value: c.amount, dueDate: brDate(c.expiresAt),
+          description: c.description, externalReference: c.reference,
+        }),
+      });
+      const q = await qr(p.id);
+      if (!q) throw new Error("Asaas não devolveu o código PIX");
+      return { id: p.id, ...q, ticket_url: p.invoiceUrl ?? null, expires_at: c.expiresAt.toISOString(), customer_id: cust };
+    },
+    async getPayment(id, withCharge = false) {
+      const p = await call<AsaasPayment>(`/payments/${encodeURIComponent(id)}`);
+      const s = p.status;
+      const status: PaymentInfo["status"] = p.deleted ? "failed"
+        : s === "RECEIVED" ? "approved"
+        : s.startsWith("REFUND") || s.startsWith("CHARGEBACK") || s === "AWAITING_CHARGEBACK_REVERSAL" ? "refunded"
+        : "pending";
+      const q = withCharge && status === "pending" ? await qr(id) : null;
+      return {
+        id: p.id, amount: Number(p.value), reference: p.externalReference ?? null, status,
+        detail: p.deleted ? `${s}/deleted` : s, charge: q ? { ...q, ticket_url: p.invoiceUrl ?? null } : null,
+      };
+    },
+    async cancel(id) {
+      await call(`/payments/${encodeURIComponent(id)}`, { method: "DELETE" });
+    },
+    webhookPaymentId(req, _url, body) {
+      asaasToken(req, webhookToken);
+      const id = (body?.payment as { id?: string } | undefined)?.id;
+      return Promise.resolve(typeof id === "string" && /^pay_\w+$/.test(id) ? id : null);
+    },
+  };
+}
+
 const PROVIDERS: Record<string, () => PaymentProvider> = {
   mercadopago: () => {
     const t = Deno.env.get("MP_ACCESS_TOKEN");
     if (!t) throw new Error("Gateway PIX não configurado (secret MP_ACCESS_TOKEN)");
     return mercadoPago(t, Deno.env.get("MP_WEBHOOK_SECRET") ?? undefined);
+  },
+  asaas: () => {
+    const k = Deno.env.get("ASAAS_API_KEY");
+    if (!k) throw new Error("Gateway PIX não configurado (secret ASAAS_API_KEY)");
+    return asaas(k, Deno.env.get("ASAAS_WEBHOOK_TOKEN") ?? undefined);
   },
 };
 
@@ -107,12 +215,76 @@ export function paymentProvider(): PaymentProvider {
 // Sem PAYOUT_PROVIDER, os saques automáticos ficam na fila até um gateway ser configurado.
 export type SendPix = { reference: string; amount: number; key: string; keyType: string; description: string };
 export type PayoutResult = { id: string | null; ok: boolean; detail: string };
+export type PayoutInfo = { id: string; status: "done" | "pending" | "failed"; amount: number; key: string | null; detail: string };
 export interface PayoutProvider {
   name: string;
   sendPix(p: SendPix): Promise<PayoutResult>;
+  getTransfer?(id: string): Promise<PayoutInfo>;
+  // Notificação de status de um envio: valida e devolve o id (ou null se não for de envio).
+  webhookTransferId?(req: Request, body: Record<string, unknown> | null): string | null;
+  // Pedido de autorização do gateway antes de executar o envio (mecanismo de segurança de saque).
+  authRequest?(req: Request, body: Record<string, unknown> | null): { id: string; amount: number; key: string | null } | null;
+  authResponse?(ok: boolean, reason?: string): Record<string, unknown>;
 }
 
-const PAYOUTS: Record<string, () => PayoutProvider> = {};
+export const pixKeyDigits = (key: string, type: string) => {
+  if (!["cpf", "cnpj", "telefone"].includes(type)) return key.trim().toLowerCase();
+  const d = key.replace(/\D/g, "");
+  return type === "telefone" && d.length === 13 && d.startsWith("55") ? d.slice(2) : d;
+};
+
+const ASAAS_KEY_TYPES: Record<string, string> = { cpf: "CPF", cnpj: "CNPJ", email: "EMAIL", telefone: "PHONE", aleatoria: "EVP" };
+
+function asaasPayout(apiKey: string, webhookToken?: string): PayoutProvider {
+  const call = asaasClient(apiKey);
+  const info = (t: AsaasTransfer): PayoutInfo => ({
+    id: t.id, amount: Number(t.value), key: t.bankAccount?.pixAddressKey ?? null,
+    status: t.status === "DONE" ? "done" : ["FAILED", "CANCELLED"].includes(t.status) ? "failed" : "pending",
+    detail: `${t.status}${t.failReason ? ": " + t.failReason : ""}`,
+  });
+  return {
+    name: "asaas",
+    async sendPix(p) {
+      const type = ASAAS_KEY_TYPES[p.keyType];
+      if (!type) return { id: null, ok: false, detail: `Tipo de chave não suportado: ${p.keyType}` };
+      const t = await call<AsaasTransfer>("/transfers", {
+        method: "POST",
+        body: JSON.stringify({
+          value: p.amount, operationType: "PIX", pixAddressKey: pixKeyDigits(p.key, p.keyType), pixAddressKeyType: type,
+          description: p.description, externalReference: p.reference,
+        }),
+      });
+      const i = info(t);
+      if (i.status === "failed") return { id: t.id, ok: false, detail: `Asaas: ${i.detail}` };
+      if (t.authorized === false) return { id: t.id, ok: false, detail: "Asaas: aguardando autorização (token SMS) no painel do Asaas" };
+      return { id: t.id, ok: true, detail: i.detail };
+    },
+    async getTransfer(id) {
+      return info(await call<AsaasTransfer>(`/transfers/${encodeURIComponent(id)}`));
+    },
+    webhookTransferId(req, body) {
+      const id = (body?.transfer as { id?: string } | undefined)?.id;
+      if (typeof id !== "string" || !String(body?.event ?? "").startsWith("TRANSFER_")) return null;
+      asaasToken(req, webhookToken);
+      return id;
+    },
+    authRequest(req, body) {
+      if (body?.type !== "TRANSFER") return null;
+      asaasToken(req, webhookToken);
+      const t = body.transfer as AsaasTransfer | undefined;
+      return t?.id ? { id: t.id, amount: Number(t.value), key: t.bankAccount?.pixAddressKey ?? null } : null;
+    },
+    authResponse: (ok, reason) => (ok ? { status: "APPROVED" } : { status: "REFUSED", refuseReason: reason ?? "Operação não reconhecida" }),
+  };
+}
+
+const PAYOUTS: Record<string, () => PayoutProvider> = {
+  asaas: () => {
+    const k = Deno.env.get("ASAAS_API_KEY");
+    if (!k) throw new Error("Gateway de saque não configurado (secret ASAAS_API_KEY)");
+    return asaasPayout(k, Deno.env.get("ASAAS_WEBHOOK_TOKEN") ?? undefined);
+  },
+};
 
 export function payoutProvider(): PayoutProvider | null {
   const name = Deno.env.get("PAYOUT_PROVIDER");
