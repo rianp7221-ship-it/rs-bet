@@ -514,7 +514,7 @@
     lockCashout(mine.map((h) => h.id), mine.some((h) => h.goal));
     loadCashouts();
   });
-  setInterval(() => { if (showingBets() && !document.hidden) loadCashouts(); }, 3000);
+  setInterval(() => { if (showingBets() && !document.hidden) loadCashouts(); }, 6000);
   const wake = () => { if (!document.hidden && showingBets()) { coAt = 1; loadCashouts(); } };
   document.addEventListener("visibilitychange", wake);
   addEventListener("pageshow", wake); addEventListener("focus", wake); addEventListener("online", wake);

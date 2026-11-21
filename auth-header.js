@@ -37,6 +37,7 @@
   let fbTimer = 0;
   async function render() {
     me = await RS.profile();
+    listen();
     el.innerHTML = `
       <div class="hdr">
         <a href="index.html" class="logo" aria-label="Real Sports"><img class="logo-mark" src="/icons/rs-mark.png" alt="RS" width="68" height="38"><span class="logo-word">Real<em>Sports</em></span></a>
@@ -664,9 +665,11 @@
     };
     const timer = end ? setInterval(tick, 1000) : 0;
     if (end) tick();
-    const ch = sb.channel("dep-" + id).on("postgres_changes",
-      { event: "UPDATE", schema: "public", table: "transactions", filter: `id=eq.${id}` },
-      (e) => { if (e.new.status === "done") { w.remove(); RS.toast("Depósito confirmado!", "ok"); RS.refreshBalance(); sb.removeChannel(ch); } }).subscribe();
+    const onTx = (e) => {
+      if (String(e.detail.id) !== String(id) || e.detail.status !== "done") return;
+      document.removeEventListener("rs:tx", onTx); w.remove(); RS.toast("Depósito confirmado!", "ok"); RS.refreshBalance();
+    };
+    document.addEventListener("rs:tx", onTx);
   }
 
   document.addEventListener("rs:balance", async () => {
@@ -681,9 +684,20 @@
   // banners e outros atalhos pedem o depósito por evento
   document.addEventListener("rs:deposit", () => (me ? panel("overview") : (location.href = "login.html?cadastro")));
   document.addEventListener("rs:bonus", () => (me ? panel("bonus") : (location.href = "login.html")));
-  sb.channel("my-notif").on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, (e) => {
-    if (me && e.new.user_id === me.id) { RS.toast("🔔 " + e.new.title, "info"); bell(); }
-  }).subscribe();
+  // avisos do próprio usuário: canal privado user:<id> (Broadcast disparado por trigger, migration 089)
+  let userCh = null;
+  function listen() {
+    const uid = me?.id || null;
+    if (userCh?.uid === uid) return;
+    if (userCh) sb.removeChannel(userCh);
+    userCh = null;
+    if (!uid) return;
+    userCh = sb.channel("user:" + uid, { config: { private: true } })
+      .on("broadcast", { event: "notif" }, ({ payload }) => { RS.toast("🔔 " + payload.title, "info"); bell(); })
+      .on("broadcast", { event: "tx" }, ({ payload }) => document.dispatchEvent(new CustomEvent("rs:tx", { detail: payload })))
+      .subscribe();
+    userCh.uid = uid;
+  }
   sb.auth.onAuthStateChange((ev) => {
     if (ev === "SIGNED_IN") sessionStorage.removeItem("rs-login-logged"); if (ev === "SIGNED_IN" || ev === "SIGNED_OUT") render();
   });

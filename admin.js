@@ -109,13 +109,16 @@
   }
   let pend;
   const refresh = () => { clearTimeout(pend); pend = setTimeout(() => current?.refresh?.(), 1200); };
-  sb.channel("adm")
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "alerts" }, (e) => {
-      RS.toast("Novo alerta: " + e.new.message, e.new.severity === "critica" ? "error" : "info"); alertCount(); refresh();
+  // canal privado "admin" (Broadcast disparado por trigger, migration 089)
+  // só entra quem a policy rt_read libera (um join negado derruba os outros canais da conexão)
+  if (can("alerts.view") || can("finance.view") || can("users.view")) sb.channel("admin", { config: { private: true } })
+    .on("broadcast", { event: "alert" }, ({ payload: a }) => {
+      if (a.op === "INSERT" && can("alerts.view")) sb.from("alerts").select("message,severity").eq("id", a.alert_id).maybeSingle()
+        .then(({ data: r }) => r && RS.toast("Novo alerta: " + r.message, r.severity === "critica" ? "error" : "info"));
+      alertCount(); refresh();
     })
-    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "alerts" }, () => { alertCount(); refresh(); })
-    .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, refresh)
-    .on("postgres_changes", { event: "*", schema: "public", table: "bets" }, refresh)
+    .on("broadcast", { event: "tx" }, refresh)
+    .on("broadcast", { event: "bet" }, refresh)
     .subscribe();
 
   // ---------- 1. VISÃO GERAL ----------
