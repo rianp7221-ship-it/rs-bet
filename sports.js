@@ -672,7 +672,7 @@
     RS.$("#fab-count").textContent = n;
     RS.$("#bn-count").textContent = n;
     RS.$("#bn-count").classList.toggle("hidden", !n);
-    if (!n) document.body.classList.remove("slip-open");
+    if (!n) { document.body.classList.remove("slip-open"); mode = "multi"; } // bilhete novo começa em Múltipla (com 1 jogo já vira Simples)
     const sys = mode === "system" && n >= 3;
     const multi = !sys && mode !== "single" && n > 1;
     if (sys) { sysK = Math.min(Math.max(sysK, 2), n - 1); while (sysK > 2 && nCk(n, sysK) > MAXC) sysK--; }
@@ -889,7 +889,7 @@
       if (!next.size) return 0;
       slip.clear();
       next.forEach((v, k) => slip.set(k, v));
-      mode = slip.size > 1 ? "multi" : "single";
+      mode = "multi";
       if (stake) stakeVal = String(stake);
       render(); renderSlip(); persist();
       document.body.classList.add("slip-open");
