@@ -2,6 +2,7 @@
 // Placar da ESPN, 365Scores, FotMob e LiveScore como fontes extras: se uma delas já mostra mais gols que o nosso jogo ao vivo, trava apostas e cashout
 // até a API-Football confirmar o gol (aí o sync-odds aplica a trava normal). Máx. 3 min por placar, para um
 // placar errado ou um jogo trocado na fonte externa não travar o mercado para sempre.
+// O placar do 365Scores também vai para score365_home/away (só exibição no site; a liquidação segue a API-Football).
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { cors, json } from "../_shared/auth.ts";
 import { hits, tokens } from "../_shared/names.ts";
@@ -31,7 +32,7 @@ const ESPN: Record<string, string> = {
 };
 const LOCK_MS = 30_000, MAX_MS = 180_000;
 
-type Live = { id: number; league: string; home: string; away: string; starts_at: string; score_home: number | null; score_away: number | null; suspended_until: string | null };
+type Live = { id: number; league: string; home: string; away: string; starts_at: string; score_home: number | null; score_away: number | null; suspended_until: string | null; score365_home: number | null };
 type G365 = { id: number; startTime: string; statusGroup: number; homeCompetitor: { name: string; score?: number }; awayCompetitor: { name: string; score?: number } };
 // jogo ao vivo de uma fonte extra (sem liga): casamos por horário de início e nome dos times
 type Ext = { id: string; start: number; home: string; away: string; h: number; a: number };
@@ -67,7 +68,7 @@ Deno.serve(async (req) => {
   if (!secret || req.headers.get("x-cron-secret") !== secret) return json({ error: "Sem permissão" }, 401);
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-  const { data } = await sb.from("matches").select("id, league, home, away, starts_at, score_home, score_away, suspended_until").eq("status", "live").eq("sport", "Futebol");
+  const { data } = await sb.from("matches").select("id, league, home, away, starts_at, score_home, score_away, suspended_until, score365_home").eq("status", "live").eq("sport", "Futebol");
   const live = (data ?? []) as Live[];
   if (!live.length) return json({ live: 0 });
   const slugs = [...new Set(live.map((m) => ESPN[m.league]).filter(Boolean))];
@@ -84,7 +85,7 @@ Deno.serve(async (req) => {
 
   const now = Date.now();
   let matched = 0, locked = 0;
-  const var365: { m: Live; gid: string }[] = [];
+  const var365: { m: Live; gid: string; flip: boolean | null }[] = [];
   for (const m of live) {
     const mh = tokens(m.home), ma = tokens(m.away);
     let best: { ev: Ev; h: number; a: number } | null = null, bestScore = 0, tie = false;
@@ -109,7 +110,13 @@ Deno.serve(async (req) => {
       if (!cur || sc > cur.sc) bySrc.set(k, { x, sc, tie: false }); else if (sc === cur.sc && cur.x.id !== x.id) cur.tie = true;
     }
     const s365 = bySrc.get("365");
-    if (s365 && !s365.tie) var365.push({ m, gid: s365.x.id.slice(4) });
+    if (s365 && !s365.tie) {
+      // placar na tela só com os dois times batendo e mandante/visitante sem dúvida
+      const th = tokens(s365.x.home), ta = tokens(s365.x.away);
+      const straight = hits(mh, th) && hits(ma, ta) ? hits(mh, th) + hits(ma, ta) : 0;
+      const swapped = hits(mh, ta) && hits(ma, th) ? hits(mh, ta) + hits(ma, th) : 0;
+      var365.push({ m, gid: s365.x.id.slice(4), flip: straight === swapped ? null : swapped > straight });
+    }
     for (const { x, tie: t } of bySrc.values()) {
       if (t) continue;
       if (!best || tie || x.h + x.a > best.h + best.a) { best = { ev: { id: x.id }, h: x.h, a: x.a }; tie = false; }
@@ -130,7 +137,10 @@ Deno.serve(async (req) => {
   }
   // relógio exato do 365Scores + VAR/pênalti/vermelho no 365Scores (aparece lá antes da API-Football): trava enquanto o lance é do minuto atual ou do anterior
   let vars = 0;
-  await Promise.all(var365.map(async ({ m, gid }) => {
+  const in365 = new Set(var365.filter((v) => v.flip !== null).map((v) => v.m.id));
+  const gone = live.filter((m) => m.score365_home != null && !in365.has(m.id)).map((m) => m.id);
+  if (gone.length) await sb.from("matches").update({ score365_home: null, score365_away: null }).in("id", gone);
+  await Promise.all(var365.map(async ({ m, gid, flip }) => {
     const g = (await get(`https://webws.365scores.com/web/game/?appTypeId=5&langId=1&timezoneName=UTC&userCountryId=21&gameId=${gid}`).catch(() => null))?.game;
     const pt = g?.preciseGameTime, min = Number(pt?.minutes ?? g?.gameTime);
     if (!g || !(min > 0) || g.statusGroup !== 3) return;
@@ -138,6 +148,8 @@ Deno.serve(async (req) => {
       ? { clock_secs: min * 60 + (Number(pt.seconds) || 0), clock_at: new Date().toISOString() }
       : { clock_at: null };
     patch.ext365_id = Number(gid);
+    const h = Number(g.homeCompetitor?.score), a = Number(g.awayCompetitor?.score);
+    if (flip !== null && h >= 0 && a >= 0) { patch.score365_home = flip ? a : h; patch.score365_away = flip ? h : a; }
     const varMin = Number(String(g.eventChartPenaltiesDetails?.uniqueHashEvent ?? "").match(/^var_.*_(\d+)$/)?.[1]);
     const ev = ((g.events ?? []) as { gameTime: number; addedTime?: number; statusId?: number; eventType?: { name?: string; subTypeName?: string } }[])
       .find((e) => e.statusId === g.statusId && e.gameTime + (e.addedTime ?? 0) >= min - 1 && /red card|penalt|var/i.test(`${e.eventType?.name} ${e.eventType?.subTypeName ?? ""}`));

@@ -296,7 +296,7 @@
     render();
     if (document.activeElement?.id !== "stake") renderSlip();
   }
-  const LIST_COLS = "id,external_id,sport,league,home,away,starts_at,odd_home,odd_draw,odd_away,status,result,score_home,score_away,locked,suspended_until,suspend_reason,minute,period,bb_lh,bb_la,home_logo,away_logo,league_logo,odds_at,n_markets";
+  const LIST_COLS = "id,external_id,sport,league,home,away,starts_at,odd_home,odd_draw,odd_away,status,result,score_home,score_away,score365_home,score365_away,clock_secs,clock_at,locked,suspended_until,suspend_reason,minute,period,bb_lh,bb_la,home_logo,away_logo,league_logo,odds_at,n_markets";
   async function loadMarkets(ids) {
     ids = ids.filter(Boolean);
     if (!ids.length) return;
@@ -304,12 +304,20 @@
     for (const r of data || []) { const m = matches.find((x) => x.id === r.id); if (m) m.markets = r.markets; }
     paint();
   }
+  // ao vivo: placar e minuto do 365Scores (chegam antes da API-Football); sem eles, os da API
+  function live365(r) {
+    if (r.status !== "live") return r;
+    if (r.score365_home != null) { r.score_home = r.score365_home; r.score_away = r.score365_away; }
+    const age = (Date.now() - Date.parse(r.clock_at || "")) / 1000;
+    if (age >= 0 && age < 60 && r.clock_secs != null) r.minute = Math.floor((r.clock_secs + age) / 60) + 1;
+    return r;
+  }
   async function load() {
     // lista sem os mercados extras (pesados): eles vêm só do jogo aberto e dos jogos no bilhete
     const { data, error } = await sb.from("matches").select(LIST_COLS).in("status", ["open", "live"]).order("starts_at");
     if (error) { list.innerHTML = `<p class="empty">Erro ao carregar jogos.</p>`; return; }
     const old = new Map(matches.map((m) => [m.id, m]));
-    matches = data.map((r) => (old.get(r.id)?.markets ? { ...r, markets: old.get(r.id).markets } : r));
+    matches = data.map(live365).map((r) => (old.get(r.id)?.markets ? { ...r, markets: old.get(r.id).markets } : r));
     loadMarkets([...slip.keys()]);
     lastFull = Date.now();
     paint();
@@ -910,7 +918,7 @@
     const { data, error } = await sb.from("matches").select(LIST_COLS).eq("status", "live");
     if (error || !data) return;
     const ids = new Set(data.map((r) => r.id)), hits = [];
-    for (const row of data) {
+    for (const row of data.map(live365)) {
       const prev = matches.find((m) => m.id === row.id);
       const goal = !!prev && (Number(prev.score_home) !== Number(row.score_home) || Number(prev.score_away) !== Number(row.score_away));
       if (goal || row.locked || (row.suspended_until && new Date(row.suspended_until) > new Date())) hits.push({ id: row.id, goal });
