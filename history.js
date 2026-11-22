@@ -105,6 +105,11 @@
   }
   const isLive = (s) => s.status === "pending" && s.matches.status === "live";
   const isFar = (s) => s.status === "pending" && new Date(s.matches.starts_at) - Date.now() > 7 * 864e5;
+  // ao vivo: placar do 365Scores (chega antes da API-Football); a liquidação segue o placar da API
+  function live365(m) {
+    if (m.status === "live" && m.score365_home != null) { m.score_home = m.score365_home; m.score_away = m.score365_away; }
+    return m;
+  }
   // relógio do jogo: tempo exato do 365Scores (clock_secs em clock_at); sem ele, minuto da fonte + segundos contados aqui
   const seen = new Map();
   function clock(m) {
@@ -346,10 +351,11 @@
 
     if (kind === "bets") {
       const { data } = await sb.from("bets")
-        .select("*, bet_selections(match_id, market, pick, odd, status, boosted, matches(home, away, league, status, starts_at, score_home, score_away, minute, period, clock_secs, clock_at, ext365_id, home_logo, away_logo, ht_home, ht_away, corners_home, corners_away, cards_home, cards_away, shots_home, shots_away, sot_home, sot_away))")
+        .select("*, bet_selections(match_id, market, pick, odd, status, boosted, matches(home, away, league, status, starts_at, score_home, score_away, score365_home, score365_away, minute, period, clock_secs, clock_at, ext365_id, home_logo, away_logo, ht_home, ht_away, corners_home, corners_away, cards_home, cards_away, shots_home, shots_away, sot_home, sot_away))")
         .eq("user_id", u.id).or(`status.eq.pending,created_at.gte.${new Date(Date.now() - 7 * 864e5).toISOString()}`)
         .order("created_at", { ascending: false }).limit(1000);
       bets = data || [];
+      for (const b of bets) for (const s of b.bet_selections) if (s.matches) live365(s.matches);
       renderBets();
       return;
     }
@@ -380,9 +386,9 @@
   async function refreshLive() {
     const ids = [...new Set(bets.filter((b) => b.status === "pending").flatMap((b) => b.bet_selections.map((s) => s.match_id)))];
     if (!ids.length) return;
-    const { data } = await sb.from("matches").select("id, status, starts_at, score_home, score_away, minute, period, clock_secs, clock_at, ext365_id, ht_home, ht_away, corners_home, corners_away, cards_home, cards_away, shots_home, shots_away, sot_home, sot_away").in("id", ids);
+    const { data } = await sb.from("matches").select("id, status, starts_at, score_home, score_away, score365_home, score365_away, minute, period, clock_secs, clock_at, ext365_id, ht_home, ht_away, corners_home, corners_away, cards_home, cards_away, shots_home, shots_away, sot_home, sot_away").in("id", ids);
     const byId = new Map((data || []).map((m) => [m.id, m]));
-    for (const b of bets) for (const s of b.bet_selections) { const m = byId.get(s.match_id); if (m) Object.assign(s.matches, m); }
+    for (const b of bets) for (const s of b.bet_selections) { const m = byId.get(s.match_id); if (m) live365(Object.assign(s.matches, m)); }
     for (const el of RS.$$("[data-st]", box)) {
       const b = bets.find((x) => x.id === Number(el.closest("[data-bet]")?.dataset.bet));
       const s = b?.bet_selections.find((x) => x.match_id === Number(el.dataset.st));
