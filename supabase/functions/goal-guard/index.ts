@@ -31,8 +31,11 @@ const ESPN: Record<string, string> = {
   "Liga Nacional Guatemala": "gua.1", "Copa Colômbia": "col.copa",
 };
 const LOCK_MS = 30_000, MAX_MS = 180_000;
+// travas que vêm da API-Football sem odd do jogo: aí o cashout usa a odd 1X2 da Bet365 pela 365Scores (migration 094)
+const SOURCE_LOCKS = ["Mercado suspenso nas casas", "Mercado travado na fonte", "Odds desatualizadas na fonte"];
+type Line = { gameId: number; bookmakerId: number; lineTypeId: number; options: { num: number; rate?: { decimal?: number } }[] };
 
-type Live = { id: number; league: string; home: string; away: string; starts_at: string; score_home: number | null; score_away: number | null; suspended_until: string | null; score365_home: number | null; score365_away: number | null };
+type Live = { id: number; league: string; home: string; away: string; starts_at: string; score_home: number | null; score_away: number | null; suspended_until: string | null; suspend_reason: string | null; odds_at: string | null; score365_home: number | null; score365_away: number | null };
 type G365 = { id: number; startTime: string; statusGroup: number; homeCompetitor: { name: string; score?: number }; awayCompetitor: { name: string; score?: number } };
 // jogo ao vivo de uma fonte extra (sem liga): casamos por horário de início e nome dos times
 type Ext = { id: string; start: number; home: string; away: string; h: number; a: number };
@@ -68,7 +71,7 @@ Deno.serve(async (req) => {
   if (!secret || req.headers.get("x-cron-secret") !== secret) return json({ error: "Sem permissão" }, 401);
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-  const { data } = await sb.from("matches").select("id, league, home, away, starts_at, score_home, score_away, suspended_until, score365_home, score365_away").eq("status", "live").eq("sport", "Futebol");
+  const { data } = await sb.from("matches").select("id, league, home, away, starts_at, score_home, score_away, suspended_until, suspend_reason, odds_at, score365_home, score365_away").eq("status", "live").eq("sport", "Futebol");
   const live = (data ?? []) as Live[];
   if (!live.length) return json({ live: 0 });
   const slugs = [...new Set(live.map((m) => ESPN[m.league]).filter(Boolean))];
@@ -148,14 +151,24 @@ Deno.serve(async (req) => {
     ...live.filter((m) => sc365.has(m.id) && (m.score365_home !== sc365.get(m.id)![0] || m.score365_away !== sc365.get(m.id)![1]))
       .map((m) => sb.from("matches").update({ score365_home: sc365.get(m.id)![0], score365_away: sc365.get(m.id)![1] }).eq("id", m.id)),
   ]);
-  await Promise.all(var365.map(async ({ m, gid }) => {
-    const g = (await get(`https://webws.365scores.com/web/game/?appTypeId=5&langId=1&timezoneName=UTC&userCountryId=21&gameId=${gid}`).catch(() => null))?.game;
+  await Promise.all(var365.map(async ({ m, gid, flip }) => {
+    const noOdds = flip !== null && ((Date.parse(m.suspended_until ?? "") || 0) > now && SOURCE_LOCKS.includes(m.suspend_reason ?? "")
+      || !((Date.parse(m.odds_at ?? "") || 0) > now - 30_000));
+    const [g, lines] = await Promise.all([
+      get(`https://webws.365scores.com/web/game/?appTypeId=5&langId=1&timezoneName=UTC&userCountryId=21&gameId=${gid}`).then((j) => j?.game).catch(() => null),
+      // userCountryId=1 traz a Bet365 (bookmakerId 14)
+      noOdds ? get(`https://webws.365scores.com/web/bets/lines/?appTypeId=5&langId=1&timezoneName=UTC&userCountryId=1&games=${gid}`).then((j) => (j?.lines ?? []) as Line[]).catch(() => []) : [],
+    ]);
     const pt = g?.preciseGameTime, min = Number(pt?.minutes ?? g?.gameTime);
     if (!g || !(min > 0) || g.statusGroup !== 3) return;
     const patch: Record<string, unknown> = pt?.autoProgress
       ? { clock_secs: min * 60 + (Number(pt.seconds) || 0), clock_at: new Date().toISOString() }
       : { clock_at: null };
     patch.ext365_id = Number(gid);
+    // 1X2 da Bet365 (-1 = suspenso lá); 1.00 = jogo decidido, o cashout calcula com 1.01
+    const l = lines.find((x) => x.gameId === Number(gid) && x.bookmakerId === 14 && x.lineTypeId === 1);
+    const r = [1, 2, 3].map((n) => Number(l?.options.find((o) => o.num === n)?.rate?.decimal));
+    if (r.every((x) => x >= 1)) Object.assign(patch, { odds365: flip ? { home: r[2], draw: r[1], away: r[0] } : { home: r[0], draw: r[1], away: r[2] }, odds365_at: new Date().toISOString() });
     const varMin = Number(String(g.eventChartPenaltiesDetails?.uniqueHashEvent ?? "").match(/^var_.*_(\d+)$/)?.[1]);
     const ev = ((g.events ?? []) as { gameTime: number; addedTime?: number; statusId?: number; eventType?: { name?: string; subTypeName?: string } }[])
       .find((e) => e.statusId === g.statusId && e.gameTime + (e.addedTime ?? 0) >= min - 1 && /red card|penalt|var/i.test(`${e.eventType?.name} ${e.eventType?.subTypeName ?? ""}`));
