@@ -200,3 +200,6 @@ body, button, input, select, textarea { font-family: "Helvetica Neue", Helvetica
 .table td, .table th { border-color: var(--line); }
 .table tr:hover td { background: #3a3a3a; }
 @media (max-width: 640px) { .lg-group .row-odds .odd { justify-content: space-between; } }
+
+/* botão redondo cassino/esportes: ao voltar do cassino ele fica .active, mas o ícone continua escuro sobre o amarelo */
+.bottom-nav a.bn-switch.active svg.i { background: none; color: inherit; }
