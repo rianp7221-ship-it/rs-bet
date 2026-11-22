@@ -32,7 +32,7 @@ const ESPN: Record<string, string> = {
 };
 const LOCK_MS = 30_000, MAX_MS = 180_000;
 
-type Live = { id: number; league: string; home: string; away: string; starts_at: string; score_home: number | null; score_away: number | null; suspended_until: string | null; score365_home: number | null };
+type Live = { id: number; league: string; home: string; away: string; starts_at: string; score_home: number | null; score_away: number | null; suspended_until: string | null; score365_home: number | null; score365_away: number | null };
 type G365 = { id: number; startTime: string; statusGroup: number; homeCompetitor: { name: string; score?: number }; awayCompetitor: { name: string; score?: number } };
 // jogo ao vivo de uma fonte extra (sem liga): casamos por horário de início e nome dos times
 type Ext = { id: string; start: number; home: string; away: string; h: number; a: number };
@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
   if (!secret || req.headers.get("x-cron-secret") !== secret) return json({ error: "Sem permissão" }, 401);
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-  const { data } = await sb.from("matches").select("id, league, home, away, starts_at, score_home, score_away, suspended_until, score365_home").eq("status", "live").eq("sport", "Futebol");
+  const { data } = await sb.from("matches").select("id, league, home, away, starts_at, score_home, score_away, suspended_until, score365_home, score365_away").eq("status", "live").eq("sport", "Futebol");
   const live = (data ?? []) as Live[];
   if (!live.length) return json({ live: 0 });
   const slugs = [...new Set(live.map((m) => ESPN[m.league]).filter(Boolean))];
@@ -137,10 +137,18 @@ Deno.serve(async (req) => {
   }
   // relógio exato do 365Scores + VAR/pênalti/vermelho no 365Scores (aparece lá antes da API-Football): trava enquanto o lance é do minuto atual ou do anterior
   let vars = 0;
-  const in365 = new Set(var365.filter((v) => v.flip !== null).map((v) => v.m.id));
-  const gone = live.filter((m) => m.score365_home != null && !in365.has(m.id)).map((m) => m.id);
-  if (gone.length) await sb.from("matches").update({ score365_home: null, score365_away: null }).in("id", gone);
-  await Promise.all(var365.map(async ({ m, gid, flip }) => {
+  // placar da lista do 365Scores (a mesma chamada de cada rodada): se ela falha, o jogo sai de var365 e o placar volta para null
+  const sc365 = new Map(var365.filter((v) => v.flip !== null).map((v) => {
+    const x = ext.find((e) => e.id === `365:${v.gid}`)!;
+    return [v.m.id, v.flip ? [x.a, x.h] : [x.h, x.a]] as const;
+  }));
+  const gone = live.filter((m) => m.score365_home != null && !sc365.has(m.id)).map((m) => m.id);
+  await Promise.all([
+    gone.length ? sb.from("matches").update({ score365_home: null, score365_away: null }).in("id", gone) : null,
+    ...live.filter((m) => sc365.has(m.id) && (m.score365_home !== sc365.get(m.id)![0] || m.score365_away !== sc365.get(m.id)![1]))
+      .map((m) => sb.from("matches").update({ score365_home: sc365.get(m.id)![0], score365_away: sc365.get(m.id)![1] }).eq("id", m.id)),
+  ]);
+  await Promise.all(var365.map(async ({ m, gid }) => {
     const g = (await get(`https://webws.365scores.com/web/game/?appTypeId=5&langId=1&timezoneName=UTC&userCountryId=21&gameId=${gid}`).catch(() => null))?.game;
     const pt = g?.preciseGameTime, min = Number(pt?.minutes ?? g?.gameTime);
     if (!g || !(min > 0) || g.statusGroup !== 3) return;
@@ -148,8 +156,6 @@ Deno.serve(async (req) => {
       ? { clock_secs: min * 60 + (Number(pt.seconds) || 0), clock_at: new Date().toISOString() }
       : { clock_at: null };
     patch.ext365_id = Number(gid);
-    const h = Number(g.homeCompetitor?.score), a = Number(g.awayCompetitor?.score);
-    if (flip !== null && h >= 0 && a >= 0) { patch.score365_home = flip ? a : h; patch.score365_away = flip ? h : a; }
     const varMin = Number(String(g.eventChartPenaltiesDetails?.uniqueHashEvent ?? "").match(/^var_.*_(\d+)$/)?.[1]);
     const ev = ((g.events ?? []) as { gameTime: number; addedTime?: number; statusId?: number; eventType?: { name?: string; subTypeName?: string } }[])
       .find((e) => e.statusId === g.statusId && e.gameTime + (e.addedTime ?? 0) >= min - 1 && /red card|penalt|var/i.test(`${e.eventType?.name} ${e.eventType?.subTypeName ?? ""}`));
