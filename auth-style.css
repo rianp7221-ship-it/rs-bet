@@ -1435,3 +1435,13 @@ body.on-casino { background: #1b1d24; }
   .mv .odds:has(> .odd:nth-child(3)) .odd { flex-direction: column; justify-content: center; gap: 2px; padding: 6px; }
   .mv .odds:has(> .odd:nth-child(3)) .odd small { text-align: center; overflow-wrap: anywhere; }
 }
+
+/* depósito: valor digitado grande (vence o 16px anti-zoom do iOS) e tela de pagamento confirmado */
+#mm-amount { font-size: 40px !important; }
+.pay-ok { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 32px 18px 20px; }
+.pay-ok-ic { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; background: #1fbf7a; color: #fff; box-shadow: 0 0 0 8px rgba(31,191,122,.18); margin-bottom: 8px; animation: pay-pop .35s ease-out; }
+.pay-ok-ic svg { width: 42px; height: 42px; }
+.pay-ok > b { font-size: 22px; font-weight: 900; }
+.pay-ok p { margin: 0 0 14px; color: var(--muted); font-size: 15px; }
+.pay-ok p strong { color: var(--text); }
+@keyframes pay-pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }

@@ -665,11 +665,33 @@
     };
     const timer = end ? setInterval(tick, 1000) : 0;
     if (end) tick();
-    const onTx = (e) => {
-      if (String(e.detail.id) !== String(id) || e.detail.status !== "done") return;
-      document.removeEventListener("rs:tx", onTx); w.remove(); RS.toast("Depósito confirmado!", "ok"); RS.refreshBalance();
+    // o aviso em tempo real se perde quando o celular sai para o app do banco: confere também ao voltar e a cada 4 s
+    let paid = false;
+    const stop = () => {
+      clearInterval(poll); document.removeEventListener("rs:tx", onTx);
+      document.removeEventListener("visibilitychange", check); removeEventListener("focus", check); removeEventListener("pageshow", check);
     };
+    const done = () => {
+      if (paid) return;
+      paid = true; stop(); clearInterval(timer); RS.refreshBalance();
+      if (!document.body.contains(w)) return RS.toast(`Depósito de ${RS.money(v)} confirmado!`, "ok");
+      RS.$(".rs-modal-box", w).innerHTML = `${payHead("Depósito")}<div class="pay-card pay-ok">
+        <span class="pay-ok-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <b>Pagamento confirmado!</b><p><strong>${RS.money(v)}</strong> já está no seu saldo.</p>
+        <button class="btn btn-green w-full pay-go" data-pay-close>Começar a apostar</button></div>`;
+      RS.$$("[data-pay-close]", w).forEach((x) => (x.onclick = () => w.remove()));
+      setTimeout(() => w.remove(), 6000);
+    };
+    const check = async () => {
+      if (paid || document.visibilityState === "hidden") return;
+      if (!document.body.contains(w)) return stop();
+      const { data: t } = await sb.from("transactions").select("status").eq("id", id).maybeSingle();
+      if (t?.status === "done") done();
+    };
+    const onTx = (e) => { if (String(e.detail.id) === String(id) && e.detail.status === "done") done(); };
+    const poll = setInterval(check, 4000);
     document.addEventListener("rs:tx", onTx);
+    document.addEventListener("visibilitychange", check); addEventListener("focus", check); addEventListener("pageshow", check);
   }
 
   document.addEventListener("rs:balance", async () => {
