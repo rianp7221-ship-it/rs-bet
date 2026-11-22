@@ -296,7 +296,8 @@
     let betN = 200;
     async function bets(more) {
       betN = more ? betN + 200 : 200;
-      const { data, count } = await sb.from("bets").select("*, profiles(email), bet_selections(count)", { count: "exact" }).order("created_at", { ascending: false }).limit(betN);
+      const { data, count, error } = await sb.from("bets").select("*, profiles(email), bet_selections(count)", { count: "exact" }).order("created_at", { ascending: false }).limit(betN);
+      if (error) { RS.$("#sp-bets").innerHTML = `<p class="empty">Não foi possível carregar os bilhetes (${esc(error.message)}). <button class="btn sm" id="b-retry">Tentar de novo</button></p>`; return; }
       RS.$("#sp-bets").innerHTML = (manage ? `<div class="filters"><button class="btn btn-outline danger sm" id="b-cancel">Cancelar selecionados (reembolsa)</button></div>` : "") + table(["", "#", "Usuário", "Jogos", "Aposta", "Odd", "Retorno", "Status", "Data", ""], (data || []).map((b) => [
         manage && b.status === "pending" ? `<input type="checkbox" data-bc="${b.id}">` : "", b.id, `<a href="#users" data-open-user="${b.user_id}" style="color:var(--primary)">${esc(b.profiles?.email || "")}</a>`, b.bet_selections[0]?.count,
         M(b.stake), b.total_odd, M(b.status === "cashout" ? b.cashout_amount : b.potential), betBadge(b), RS.date(b.created_at), `<button class="btn sm" data-bv="${b.id}">Abrir</button>`]), "Nenhum bilhete.")
@@ -414,6 +415,7 @@
       const bv = e.target.closest("[data-bv]");
       if (bv) return openBet(+bv.dataset.bv);
       if (e.target.id === "b-more") { e.target.disabled = true; return bets(true); }
+      if (e.target.id === "b-retry") return bets();
       if (e.target.id !== "b-cancel") return;
       const ids = RS.$$("[data-bc]:checked").map((x) => +x.dataset.bc);
       if (!ids.length) { RS.toast("Marque os bilhetes", "error"); return; }

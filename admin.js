@@ -157,11 +157,21 @@
         options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
           plugins: { legend: { position: "bottom" } }, scales: { y: { beginAtZero: true } } } }));
     }
+    let seq = 0;
     async function load() {
-      const r = range();
-      const [k, s] = await Promise.all([
-        RS.rpc("admin_kpis", { p_from: r.from, p_to: r.to }),
-        RS.rpc("admin_series", { p_from: r.from, p_to: r.to, p_bucket: r.bucket })]);
+      const r = range(), my = ++seq, box = RS.$("#d-kpis");
+      box.style.opacity = ".5";
+      let k, s;
+      try {
+        [k, s] = await Promise.all([
+          RS.rpc("admin_kpis", { p_from: r.from, p_to: r.to }),
+          RS.rpc("admin_series", { p_from: r.from, p_to: r.to, p_bucket: r.bucket })]);
+      } catch (e) {
+        if (my === seq) { box.style.opacity = ""; RS.toast(e.message, "error"); }
+        return;
+      }
+      if (my !== seq || !box.isConnected) return;
+      box.style.opacity = "";
       const cards = [["Total apostado", M(k.handle)], ["GGR", M(k.ggr), k.ggr >= 0], ["NGR", M(k.ngr), k.ngr >= 0], ["Lucro líquido", M(k.net), k.net >= 0],
         ["Prêmios pagos", M(k.prizes)], ["Pagamentos (saques)", M(k.withdrawals)], ["Depósitos", M(k.deposits)], ["Imposto estimado", M(k.tax)],
         ["GGR esportes", M(k.sports_ggr)], ["GGR cassino", M(k.casino_ggr)], ["Novos cadastros", k.signups], ["1º depósito (FTD)", k.ftd],
