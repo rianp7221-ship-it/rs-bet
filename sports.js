@@ -191,9 +191,9 @@
     "Saudi Pro League": "Pro League Arábia Saudita" };
   const lname = (l) => LEAGUE_PT[l] || l;
   // ligas principais primeiro nas listas; o resto pela quantidade de jogos
-  const TOP = ["UEFA Nations League", "Brazil Série A", "Brazil Série B", "Copa do Brasil", "CONMEBOL Libertadores", "CONMEBOL Sudamericana",
+  const TOP = ["Brazil Série A", "Brazil Série B", "Copa do Brasil", "CONMEBOL Libertadores", "CONMEBOL Sudamericana",
     "UEFA Champions League", "Premier League", "La Liga", "Serie A - Italy", "Bundesliga", "Ligue 1", "UEFA Europa League",
-    "UEFA Conference League", "Primeira Liga Portugal", "Liga Profesional Argentina", "Copa del Rey", "FA Cup Inglaterra",
+    "UEFA Conference League", "UEFA Nations League", "Primeira Liga Portugal", "Liga Profesional Argentina", "Copa del Rey", "FA Cup Inglaterra",
     "Championship Inglaterra", "2. Bundesliga Alemanha", "3. Liga Alemanha", "Eredivisie Holanda", "Eerste Divisie Holanda",
     "Liga MX México", "MLS EUA", "USL Championship EUA", "Saudi Pro League", "Süper Lig Turquia",
     "Super League Suíça", "Pro League Bélgica", "Premiership Escócia", "Allsvenskan Suécia", "Eliteserien Noruega",
