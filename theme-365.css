@@ -1,0 +1,202 @@
+/* =====================================================
+   theme-365.css — tema escuro verde e amarelo (opcional: Admin → Configurações → Tema do site)
+   ===================================================== */
+:root {
+  --bg: #262626; --bg-2: #2f2f2f; --card: #353535; --card-2: #404040; --line: #4a4a4a;
+  --text: #f2f2f2; --muted: #a9a9a9; --primary: #ffdf1b; --primary-2: #ffe84d; --primary-ink: #1d1d1d;
+  --green: #1fbf7a; --green-2: #26d08a; --odd: #ffdf1b; --dark: #126e51; --gold: #ffdf1b;
+  --danger: #ff5c5c; --ok: #1fbf7a; --g365: #126e51; --g365-2: #0d5a42; --g365-3: #1b8a66;
+  --shadow: 0 1px 3px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--text); }
+a { color: inherit; }
+
+/* superfícies que eram brancas */
+.btn-outline, .chip, .seg button.active, .lside, .comp-ico, .pills button:hover, .pills button.active, .row, .lg-group,
+.lg-bar .comp-ico, .empty, .slip-box, .slip-actions button, .slip-x, .stake, .widget, .mentor, .ranges button, .game-card,
+.hist-card, .table, .stat, .auth-card, .auth-switch button.active, .rs-toast, .rs-modal-box, .footer, .slip-fab, .bottom-nav,
+.league-chip, .league-chip .comp-ico, .lh-tabs button.active, .keypad button, .bt-tabs, .bt-f, .bet-card, .mv-match, .mv-bar,
+.mv-acc, .tx-card, .lh-ico .lg-logo, .cz-more, .fb-chip, .pay-top, .pay-bal, .pay-card, .action-head .btn-outline, .mv-head,
+.mv-tabs button, .cz .cz-cats button.active, .auth-card .input, .auth-top, .az-list, .ex-search .input, .ex-grid a,
+.acct-pop, .ap-side, .ap-card, .ap-quick button, .si-odd span { background: var(--card); color: var(--text); border-color: var(--line); }
+.seg, .auth-switch, .auth-switch button, .quick button, .keypad button:active, .more-mk, .mk-panel, .slip-item, .ap-body, .auth-page,
+.ap-field .input, .pay-modal .rs-modal-box, .b-void, .pay-row svg.i, .pay-go.off { background: var(--bg-2); color: var(--text); border-color: var(--line); }
+.input, input, select, textarea { background: var(--bg-2); color: var(--text); border-color: var(--line); }
+.pay-qr { background: #fff; }
+
+/* topo verde, faixa de navegação mais escura */
+#rs-header { background: var(--g365); color: #fff; box-shadow: 0 2px 0 var(--g365-2); }
+#rs-header .logo, #rs-header .logo span, #rs-header .logo span.logo-word { color: #fff; }
+.logo-word em { color: var(--primary); opacity: 1; }
+.hdr-nav a { color: #e6f4ef; font-weight: 700; }
+.hdr-nav a:hover, .hdr-nav a.active { border-bottom-color: var(--primary); color: #fff; }
+.btn-hdr-out { border-color: #fff; color: #fff; }
+.balance { background: var(--g365-2); }
+.balance b.flash { color: var(--primary); }
+.avatar { background: var(--primary); color: #1d1d1d; }
+.bell-dot { border-color: var(--g365); }
+.btn-primary, .ranges button.active { background: var(--primary); border-color: var(--primary); color: #1d1d1d; }
+.btn-primary:hover { background: var(--primary-2); border-color: var(--primary-2); }
+.btn-green, .btn-success { background: var(--g365-3); border-color: var(--g365-3); color: #fff; }
+
+/* menu da esquerda */
+.lside { border-right-color: #1c1c1c; background: #2d2d2d; }
+.lnav a { color: #e8e8e8; }
+.lnav a:hover, .lnav a.active { background: #3a3a3a; color: var(--primary); box-shadow: inset 3px 0 0 var(--primary); }
+.comp summary { color: var(--primary); }
+.comp-item { background: transparent; border-radius: 4px; }
+.comp-item:hover, .comp-item.active { background: #3a3a3a; border-color: transparent; }
+.comp-item b { color: #fff; }
+
+/* lista de jogos: cabeçalho de liga verde, linhas cinza, odds em blocos */
+.lg-group, .row { border-radius: 4px; border-color: #1f1f1f; }
+.lg-group { box-shadow: none; }
+.lg-bar { background: linear-gradient(90deg, var(--g365-2), var(--g365)); color: #fff; font-weight: 700; }
+.lg-group .row { border-top-color: #2a2a2a; }
+.row:hover { background: #3b3b3b; }
+.row-time { color: var(--muted); }
+.odd { background: #464646; border: 1px solid #464646; border-radius: 3px; color: #ddd; }
+.odd small { color: #cfcfcf; }
+.odd b { color: var(--odd); }
+.odd:hover:not(:disabled):not(.selected) { background: #545454; border-color: #545454; }
+.odd.selected { background: var(--primary); border-color: var(--primary); }
+.odd.selected b, .odd.selected small { color: #1d1d1d; }
+.feat-card .odd { background: rgba(30,30,30,.82); border-color: transparent; }
+.feat-card .odd small { color: #ddd; }
+.pills button { color: #ddd; }
+.pills button.active { background: var(--g365); border-color: var(--g365); color: #fff; }
+.pills button em { color: var(--primary); }
+.league-chip { border: 1px solid var(--line); }
+.league-chip:hover { border-color: var(--primary); }
+.fav { color: #8a8a8a; }
+.score { color: var(--primary); }
+.live { background: #e0261b; }
+.sub-title, .h-title { color: #fff; }
+
+/* bilhete e widgets */
+.slip-head { background: var(--g365); color: #fff; }
+.slip-item { border-color: var(--line); }
+.si-main .si-mkt { color: #9fd9c4; }
+.si-odd .down { background: rgba(255,92,92,.15); }
+.si-odd .up { background: rgba(31,191,122,.15); }
+.mentor-head { background: var(--g365); }
+.ranges button { border-color: #5a5a5a; color: var(--text); }
+.widget h4 { color: var(--primary); }
+.mb-all { color: var(--primary); }
+
+/* selos de status em tons escuros */
+.b-won, .b-done, .b-aprovado, .b-cashout.co-gain, .cell.gem { background: rgba(31,191,122,.18); }
+.b-lost, .b-rejected, .b-canceled, .b-rejeitado, .b-cashout.co-loss, .cell.bomb { background: rgba(255,92,92,.18); }
+.b-pending, .b-active, .b-live, .b-cashout, .b-em_analise, .fb-row, .b-fb, .row .odd.boost-row, .si-boost { background: rgba(255,223,27,.14); }
+
+/* conta */
+.ap-head { background: var(--g365); box-shadow: none; }
+.ap-side button.active, .ap-saldo svg.i, .ap-quick svg.i, .bottom-nav a.active svg.i { background: rgba(255,223,27,.16); color: var(--primary); }
+.ap-who { background: var(--card); }
+.acct-bal2 { background: linear-gradient(135deg, var(--g365-2), var(--g365)); }
+.acct-menu svg.i, .ap-side button svg.i, .acct-out { color: var(--primary); }
+
+/* navegação inferior (celular) */
+.bottom-nav { background: #1f1f1f; border-top: 1px solid #111; }
+.bottom-nav a.active { color: var(--primary); }
+
+/* faixa de fundo da home: verde em vez de laranja */
+body.is-home .main:has(> #sports:not(.hidden))::before {
+  background: linear-gradient(180deg, var(--g365) 0, #0f5f46 110px, #0b4433 240px, #082e23 340px, rgba(38,38,38,0) 470px); }
+body.is-home .feat-top { background: rgba(0,0,0,.45); }
+
+/* odd turbinada */
+.boost-card { background: linear-gradient(135deg, #222 0%, #2e2e2e 60%, #10392c 100%); border-color: #3a3a3a; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+.bst-top { background: linear-gradient(90deg, var(--g365), var(--g365-3)); }
+.bst-tag { color: var(--primary); }
+.boost-card .odd.bst-odd { background: #464646; color: var(--odd); }
+.boost-card .odd.bst-odd s { color: #9a9a9a; }
+.boost-card .odd.bst-odd.selected { background: var(--primary); box-shadow: none; }
+.boost-card .odd.bst-odd.selected b { color: #1d1d1d; }
+.boost-card .odd.bst-normal.selected { background: var(--primary); color: #1d1d1d; }
+
+/* atalhos e promoções no tom do site */
+.pt-top { --pt-bg: linear-gradient(150deg, var(--g365-3) 0%, var(--g365) 45%, #062219 100%); --pt-g: rgba(255,223,27,.3); }
+.pt-ic { border-color: var(--primary); }
+.cs-nav button.active, .cz-promo em, .bz-ic { background: var(--primary); color: #1d1d1d; box-shadow: none; }
+.cz-side a.active { box-shadow: inset 3px 0 var(--primary); }
+.cs-big .pf-tile { border-color: var(--primary); box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+.wh-prog s { background: linear-gradient(90deg, #ffe84d, var(--primary)); }
+.bz-wheel i { background: var(--g365); }
+
+/* login */
+.auth-promo { background: radial-gradient(circle at 20% 15%, var(--g365-3), var(--g365) 55%, #073626); }
+.auth-promo .logo em, .auth-promo .logo span { color: var(--primary); }
+.auth-switch button.active { background: var(--primary); color: #1d1d1d; }
+
+/* texto escuro em tudo que ficou com fundo amarelo */
+.chip.active, .more-mk.on, .bn-switch span, .bt-f.active, .mv-acc-h .ca, .la-grp[open] summary, .la-who .avatar,
+.bz-tabs button.active, .slip-head .pill, .az-top, .boost-card .odd.bst-normal.selected b { color: #1d1d1d; }
+
+/* sigla do logo no celular: a imagem é escura, deixa branca sobre o verde */
+#rs-header .logo-mark { filter: brightness(0) invert(1); }
+
+/* celular: nome completo no lugar da sigla */
+@media (max-width: 1000px) {
+  #rs-header .logo-mark { display: none; }
+  #rs-header .logo .logo-word { display: inline; font-size: 20px; white-space: nowrap; }
+}
+@media (max-width: 380px) { #rs-header .logo .logo-word { font-size: 17px; } }
+/* logado em tela estreita (saldo + depositar + conta) não cabe o nome: volta a sigla */
+@media (max-width: 560px) {
+  #rs-header .hdr:has(.hdr-right.logged) .logo-mark { display: block; }
+  #rs-header .hdr:has(.hdr-right.logged) .logo-word { display: none; }
+}
+
+/* ===== estrutura mais próxima de uma casa de apostas clássica ===== */
+:root { --radius: 4px; }
+body, button, input, select, textarea { font-family: "Helvetica Neue", Helvetica, Arial, "Roboto", sans-serif; }
+.h-title { font-family: inherit; font-weight: 700; text-transform: none; font-size: 18px; letter-spacing: 0; }
+.sub-title { font-weight: 700; color: #fff; }
+
+/* logo em minúsculas, sem itálico */
+#rs-header .logo, .auth-promo .logo, .auth-top .logo { font-style: normal; text-transform: lowercase; letter-spacing: -.02em; font-weight: 900; }
+
+/* barra de esportes: faixa reta com sublinhado amarelo */
+#sport-pills, #day-pills { gap: 0; padding: 0; margin-bottom: 10px; background: #1f1f1f; border-radius: 4px; overflow-x: auto; }
+#sport-pills button, #day-pills button { border-radius: 0; border: 0; border-bottom: 3px solid transparent; padding: 12px 16px; background: transparent; color: #cfcfcf; font-weight: 700; }
+#sport-pills button:hover, #day-pills button:hover { background: #2c2c2c; color: #fff; }
+#sport-pills button.active, #day-pills button.active { background: transparent; border-color: transparent; border-bottom-color: var(--primary); color: #fff; }
+
+/* cabeçalho da liga com rótulos das colunas */
+.lg-bar { padding: 8px 14px; font-size: 14px; }
+.lg-cols { display: flex; gap: 8px; margin-right: 44px; flex: none; }
+.lg-cols i { width: 106px; text-align: center; font-style: normal; font-weight: 700; font-size: 12px; color: #e6f4ef; }
+.lg-group:has(.lg-cols) .row-odds .odd small { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.lg-group .row-odds .odd { justify-content: center; }
+.lg-group .row { padding: 8px 14px; }
+@media (max-width: 640px) {
+  .lg-cols { display: none; }
+  .lg-group:has(.lg-cols) .row-odds .odd small { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+}
+
+/* cards e atalhos retos, menos arredondados */
+.feat-card, .cs-tile, .pt, .pc-strip .pt, .promo, .tile, .league-chip, .boost-card, .casino-dark, .casino-hero { border-radius: 4px !important; }
+.league-chip { background: #2f2f2f; }
+.comp summary { font-size: 12px; letter-spacing: .04em; }
+.bottom-nav a.active::before { background: var(--primary); }
+
+/* ===== painel admin ===== */
+.adm-side, .kpi, .chart-card, .panel, .adm-burger { background: var(--card); color: var(--text); border-color: var(--line); }
+.adm-side { background: #2d2d2d; border-right-color: #1c1c1c; }
+.adm-side a { color: #e8e8e8; }
+.adm-side a.active, .adm-side a:hover { background: #3a3a3a; color: var(--primary); box-shadow: inset 3px 0 0 var(--primary); }
+.kpi { border-top: 3px solid var(--g365-3); }
+.kpi b { color: #fff; }
+.chart-card h3, .panel h2, .panel h3 { color: #fff; }
+.sev-critica { background: rgba(255,92,92,.18); }
+.sev-alta { background: rgba(255,223,27,.14); }
+.art-row.active { background: rgba(255,223,27,.12); border-color: var(--primary); }
+.art-co { background: rgba(31,191,122,.18); }
+.adm-bars, .adm-bars::before, .adm-bars::after { background: var(--primary); }
+.adm-side-top { background: var(--g365); color: #fff; }
+.table th { background: #2a2a2a; color: #cfcfcf; }
+.table td, .table th { border-color: var(--line); }
+.table tr:hover td { background: #3a3a3a; }
+@media (max-width: 640px) { .lg-group .row-odds .odd { justify-content: space-between; } }

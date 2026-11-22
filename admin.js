@@ -153,6 +153,9 @@
     };
     function draw(id, type, labels, sets) {
       if (!window.Chart) return;
+      const dark = document.documentElement.dataset.theme === "verde";
+      Chart.defaults.color = dark ? "#cfcfcf" : "#666";
+      Chart.defaults.borderColor = dark ? "rgba(255,255,255,.08)" : "rgba(0,0,0,.1)";
       charts.push(new Chart(RS.$(id), { type, data: { labels, datasets: sets },
         options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
           plugins: { legend: { position: "bottom" } }, scales: { y: { beginAtZero: true } } } }));
@@ -184,8 +187,11 @@
         { label: "Depósitos", data: s.map((x) => x.deposits), backgroundColor: "#2f9b57" },
         { label: "Saques", data: s.map((x) => x.withdrawals), backgroundColor: "#d93545" }]);
       draw("#c-vol", "line", labels, [
-        { label: "Apostado", data: s.map((x) => x.handle), borderColor: "#ff4d00", backgroundColor: "rgba(255,77,0,.12)", fill: true, tension: .3 },
-        { label: "GGR", data: s.map((x) => x.ggr), borderColor: "#222838", tension: .3 }]);
+        ...(document.documentElement.dataset.theme === "verde"
+          ? [{ label: "Apostado", data: s.map((x) => x.handle), borderColor: "#ffdf1b", backgroundColor: "rgba(255,223,27,.12)", fill: true, tension: .3 },
+            { label: "GGR", data: s.map((x) => x.ggr), borderColor: "#f2f2f2", tension: .3 }]
+          : [{ label: "Apostado", data: s.map((x) => x.handle), borderColor: "#ff4d00", backgroundColor: "rgba(255,77,0,.12)", fill: true, tension: .3 },
+            { label: "GGR", data: s.map((x) => x.ggr), borderColor: "#222838", tension: .3 }])]);
       draw("#c-users", "bar", labels, [
         { label: "Cadastros", data: s.map((x) => x.signups), backgroundColor: "#4b63a8" },
         { label: "Bilhetes", data: s.map((x) => x.bets_count), backgroundColor: "#ffb23e" }]);
@@ -314,10 +320,25 @@
 
   // ---------- CONFIGURAÇÕES ----------
   async function settings() {
-    main.innerHTML = head("Configurações") + `<div class="panel" id="se-list"></div>`;
+    main.innerHTML = head("Configurações") + `<div class="panel" id="se-theme" style="margin-bottom:14px"></div><div class="panel" id="se-list"></div>`;
+    const THEMES = [["classico", "Clássico", "Laranja e branco, o visual de sempre", ["#ff4d00", "#ffffff", "#222838"]],
+      ["verde", "Verde e amarelo", "Fundo escuro, topo verde, odds em amarelo e colunas 1 X 2", ["#126e51", "#ffdf1b", "#262626"]]];
     async function load() {
       const { data } = await sb.from("settings").select("*").order("key");
-      RS.$("#se-list").innerHTML = table(["Configuração", "Valor", ""], (data || []).map((s) => {
+      const cur = (data || []).find((s) => s.key === "site_theme")?.value || "classico";
+      RS.$("#se-theme").innerHTML = `<h2>Tema do site</h2><p class="muted small">Cores e modelo do site, do login e do admin para todos os clientes. Vale na hora, sem deploy.</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px">${THEMES.map(([k, n, d, c]) => `
+          <label style="flex:1 1 220px;display:flex;gap:10px;align-items:center;padding:12px;border:2px solid ${k === cur ? "var(--primary)" : "var(--line)"};border-radius:8px;cursor:pointer">
+            <input type="radio" name="se-th" value="${k}" ${k === cur ? "checked" : ""}>
+            <span style="display:flex;flex:none">${c.map((x) => `<i style="width:18px;height:28px;background:${x};border:1px solid rgba(0,0,0,.15)"></i>`).join("")}</span>
+            <span><b>${n}</b><br><small class="muted">${d}</small></span></label>`).join("")}</div>
+        ${can("settings.manage") ? `<button class="btn btn-primary" id="se-th-save" style="margin-top:12px">Aplicar tema</button>` : ""}`;
+      RS.$("#se-th-save")?.addEventListener("click", async () => {
+        const v = RS.$('[name="se-th"]:checked')?.value;
+        if (!v || v === cur) return;
+        if (await act("admin_set_setting", { p_key: "site_theme", p_value: v }, "Tema aplicado")) { window.applyTheme(v); load(); }
+      });
+      RS.$("#se-list").innerHTML = table(["Configuração", "Valor", ""], (data || []).filter((s) => s.key !== "site_theme").map((s) => {
         const t = typeof s.value;
         const input = t === "boolean"
           ? `<select class="input" data-k="${s.key}" style="margin:0"><option value="true" ${s.value ? "selected" : ""}>Sim</option><option value="false" ${!s.value ? "selected" : ""}>Não</option></select>`

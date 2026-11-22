@@ -1424,3 +1424,6 @@ body.on-casino { background: #1b1d24; }
   .pt-pct { display: grid; font-size: 10px; font-weight: 700; line-height: 1.15; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
   .pt-pct em { font-style: normal; font-size: 22px; font-weight: 900; line-height: 1; color: #ffd34d; letter-spacing: -.02em; }
 }
+
+/* rótulos 1 X 2 do cabeçalho da liga: só aparecem no tema verde (theme-365.css) */
+.lg-cols { display: none; }
