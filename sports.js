@@ -609,13 +609,20 @@
     renderMv();
   }
 
+  // rótulos das colunas de odds no cabeçalho da liga (1 X 2 ou 1 2), visíveis no tema verde
+  const cols = (ms) => {
+    const d = ms.map((m) => !!m.odd_draw);
+    if (d.some((x) => x !== d[0])) return "";
+    return `<span class="lg-cols">${(d[0] ? ["1", "X", "2"] : ["1", "2"]).map((c) => `<i>${c}</i>`).join("")}</span>`;
+  };
+
   // lista separada por campeonato, ligas principais primeiro
   function groups(rows) {
     const by = new Map();
     rows.forEach((m) => { if (!by.has(m.league)) by.set(m.league, []); by.get(m.league).push(m); });
     return [...by].sort((a, b) => rank(a[0]) - rank(b[0]) || b[1].length - a[1].length)
       .map(([l, ms]) => `<section class="lg-group"><button class="lg-bar" data-league="${RS.esc(l)}"><span class="comp-ico">${lico(l)}</span>
-        <b>${RS.esc(lname(l))}</b><em>${ms.length}</em></button>${ms.map(row).join("")}</section>`).join("");
+        <b>${RS.esc(lname(l))}</b><em>${ms.length}</em>${cols(ms)}</button>${ms.map(row).join("")}</section>`).join("");
   }
 
   function setView(v, opts = {}) {
