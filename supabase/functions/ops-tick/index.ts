@@ -1,6 +1,7 @@
 // ops-tick — chamado pelo pg_cron a cada minuto (header x-cron-secret).
 //   1. Envia os e-mails da fila (alerta de aposta alta) pelo Resend, se RESEND_API_KEY estiver salvo.
 //   2. Envia os saques automáticos pelo gateway de PIX (PAYOUT_PROVIDER), se configurado.
+//   3. Reenvia para o push-send as notificações no celular que ficaram pendentes.
 // Publicar com --no-verify-jwt.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { cors, json } from "../_shared/auth.ts";
@@ -58,6 +59,13 @@ Deno.serve(async (req) => {
     }
   } catch (err) {
     payout.error = (err as Error).message;
+  }
+
+  // notificações no celular que ficaram na fila (a chamada imediata do admin falhou)
+  const { count: pushPending } = await sb.from("push_outbox").select("id", { count: "exact", head: true })
+    .is("done_at", null).lt("created_at", new Date(Date.now() - 60_000).toISOString());
+  if (pushPending) {
+    await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/push-send`, { method: "POST", headers: { "x-cron-secret": secret } }).catch(() => {});
   }
 
   await sb.from("ops_status").upsert([
