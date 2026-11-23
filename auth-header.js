@@ -234,6 +234,7 @@
     document.body.appendChild(d);
   }
   async function logout(scope) {
+    if (scope === "global") await sb.rpc("push_unsubscribe_all").then(() => {}, () => {});
     await pushOff();
     await sb.auth.signOut(scope ? { scope } : undefined);
     location.href = "index.html";

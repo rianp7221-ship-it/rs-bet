@@ -32,7 +32,9 @@ language plpgsql security definer set search_path = public as $$
 declare u uuid := auth.uid();
 begin
   if u is null then raise exception 'Entre na sua conta'; end if;
-  if p_endpoint !~ '^https://' or length(p_endpoint) > 1000 or length(coalesce(p_p256dh, '')) not between 20 and 200
+  -- só serviços de push dos navegadores (Chrome/Android, Firefox, Safari/iOS, Edge)
+  if p_endpoint !~ '^https://(fcm\.googleapis\.com|[a-z0-9-]+\.google\.com|updates\.push\.services\.mozilla\.com|[a-z0-9.-]+\.push\.apple\.com|[a-z0-9.-]+\.notify\.windows\.com)/'
+     or length(p_endpoint) > 1000 or length(coalesce(p_p256dh, '')) not between 20 and 200
      or length(coalesce(p_auth, '')) not between 8 and 100 then
     raise exception 'Inscrição inválida';
   end if;
@@ -48,13 +50,19 @@ language sql security definer set search_path = public as $$
   delete from public.push_subscriptions where endpoint = p_endpoint and user_id = auth.uid()
 $$;
 
+-- "Sair em todos os aparelhos": nenhum aparelho continua recebendo
+create or replace function public.push_unsubscribe_all() returns void
+language sql security definer set search_path = public as $$
+  delete from public.push_subscriptions where user_id = auth.uid()
+$$;
+
 create or replace function public.clear_notifications() returns void
 language sql security definer set search_path = public as $$
   delete from public.notifications where user_id = auth.uid()
 $$;
 
-revoke all on function public.push_subscribe(text, text, text), public.push_unsubscribe(text), public.clear_notifications() from public, anon;
-grant execute on function public.push_subscribe(text, text, text), public.push_unsubscribe(text), public.clear_notifications() to authenticated;
+revoke all on function public.push_subscribe(text, text, text), public.push_unsubscribe(text), public.push_unsubscribe_all(), public.clear_notifications() from public, anon;
+grant execute on function public.push_subscribe(text, text, text), public.push_unsubscribe(text), public.push_unsubscribe_all(), public.clear_notifications() to authenticated;
 
 -- usados só pela Edge Function (service_role)
 create or replace function public.push_claim(p_limit int default 5) returns setof public.push_outbox

@@ -20,8 +20,11 @@ Deno.serve(async (req) => {
   const out: { id: number; sent: number; failed: number }[] = [];
   const { data: msgs } = await sb.rpc("push_claim", { p_limit: 5 });
   for (const m of (msgs ?? []) as Msg[]) {
-    const { data: subs } = await sb.rpc("push_targets", { p_user: m.user_id });
-    const payload = JSON.stringify({ title: m.title, body: m.body ?? "", url: "/index.html", tag: `rs-msg-${m.id}` });
+    const { data: subs, error } = await sb.rpc("push_targets", { p_user: m.user_id });
+    if (error) continue; // fica reservada e volta para a fila em 5 min (push_claim)
+    // o push tem limite de ~4 KB; o texto completo continua no sino do site
+    const cut = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+    const payload = JSON.stringify({ title: cut(m.title, 120), body: cut(m.body ?? "", 900), url: "/index.html", tag: `rs-msg-${m.id}` });
     const gone: string[] = [];
     let sent = 0, failed = 0;
     const list = (subs ?? []) as Sub[];

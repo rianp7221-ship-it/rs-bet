@@ -21,6 +21,6 @@ self.addEventListener("notificationclick", (e) => {
   const url = new URL(e.notification.data?.url || "/index.html", self.location.origin).href;
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
     const w = list.find((c) => c.url.startsWith(self.location.origin));
-    return w ? w.focus().then((c) => c.navigate ? c.navigate(url) : c) : self.clients.openWindow(url);
+    return w ? w.focus() : self.clients.openWindow(url); // não recarrega a aba aberta (perderia o bilhete em andamento)
   }));
 });
