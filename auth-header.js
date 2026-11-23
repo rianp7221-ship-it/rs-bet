@@ -81,6 +81,8 @@
     RS.$("#hdr-avatar").onclick = togglePop;
     RS.$("#hdr-bell").onclick = showNotifications;
     bell();
+    pushSync();
+    setTimeout(pushAsk, 8000);
     if (!sessionStorage.getItem("rs-login-logged")) {
       sessionStorage.setItem("rs-login-logged", "1");
       sb.rpc("log_login", { p_fingerprint: await fingerprint() });
@@ -102,6 +104,7 @@
       ${grp("card", "Transações", [["deposit", "Depositar"], ["withdraw", "Sacar"], ["tx", "Histórico de transações"]])}
       ${grp("clock", "Histórico", [["h:bets", "Apostas esportivas"], ["h:casino", "Cassino"]])}
       ${grp("user", "Perfil", [["data", "Dados pessoais"], ["security", "Login & Segurança"], ["betcfg", "Configurações de apostas"], ["limits", "Proteção do jogador"], ["kyc", "Processo de verificação"]])}
+      <button class="la-item" data-la="notif">${RS.icon("bell")}<span>Notificações</span></button>
       <button class="la-item" data-la="feedback">${RS.icon("msg")}<span>Enviar sugestão</span></button>
       <button class="la-item" data-la="privacy">${RS.icon("lock")}<span>Definições de privacidade</span></button>
       <button class="la-out" data-la="logout">Sair ${RS.icon("logout")}</button>`;
@@ -114,7 +117,8 @@
       else if (a.startsWith("h:")) {
         location.hash = "#history";
         setTimeout(() => document.querySelector(`[data-hist="${a.slice(2)}"]`)?.click(), 50);
-      } else if (a === "logout") { await sb.auth.signOut(); location.href = "index.html"; }
+      } else if (a === "logout") logout();
+      else if (a === "notif") showNotifications();
       else panel(a);
     };
   }
@@ -136,10 +140,103 @@
   }
   async function showNotifications() {
     const { data } = await sb.from("notifications").select("*").eq("user_id", me.id).order("created_at", { ascending: false }).limit(30);
-    RS.modal(`<h3>Notificações</h3>${data?.length ? data.map((n) => `<div class="mb-item" style="display:block"><b>${RS.esc(n.title)}</b>${n.read_at ? "" : ' <span class="badge b-pending">nova</span>'}
-      <small>${RS.date(n.created_at)}</small>${n.body ? `<p style="margin:6px 0 0">${RS.esc(n.body)}</p>` : ""}</div>`).join("") : `<p class="muted">Nenhuma notificação.</p>`}`);
+    const m = RS.modal(`<div class="ntf-head"><h3>Notificações</h3>${data?.length ? '<button class="btn btn-outline btn-sm" id="ntf-clear">Limpar</button>' : ""}</div>
+      <div id="ntf-push"></div>
+      <div id="ntf-list">${data?.length ? data.map((n) => `<div class="mb-item" style="display:block"><b>${RS.esc(n.title)}</b>${n.read_at ? "" : ' <span class="badge b-pending">nova</span>'}
+      <small>${RS.date(n.created_at)}</small>${n.body ? `<p style="margin:6px 0 0">${RS.esc(n.body)}</p>` : ""}</div>`).join("") : `<p class="muted">Nenhuma notificação.</p>`}</div>`);
+    pushBox(RS.$("#ntf-push", m));
+    const clr = RS.$("#ntf-clear", m);
+    if (clr) clr.onclick = async () => {
+      clr.disabled = true;
+      const { error } = await sb.rpc("clear_notifications");
+      if (error) { clr.disabled = false; RS.toast(RS.err(error), "error"); return; }
+      clr.remove();
+      RS.$("#ntf-list", m).innerHTML = `<p class="muted">Nenhuma notificação.</p>`;
+      bell();
+    };
     await sb.rpc("mark_notifications_read");
     bell();
+  }
+
+  // ---------- notificação no celular (Web Push: mensagens/promoções do admin) ----------
+  const VAPID = "BKQmjx1ShVxbJsvoTY4wf-nbxZjrHExznwGqcHd_XUuYqD-WAryIa1H19MUDueBKhA7kO6-ngT4jyyybOIJYvkE";
+  const pushOk = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  const iosBrowser = () => /iPhone|iPad|iPod/i.test(navigator.userAgent) && !matchMedia("(display-mode: standalone)").matches && !navigator.standalone;
+  const swReg = () => navigator.serviceWorker.register("/sw.js").then(() => navigator.serviceWorker.ready);
+  const b64key = (k) => {
+    const raw = atob((k + "=".repeat((4 - (k.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+  };
+  async function pushSave(sub) {
+    const j = sub.toJSON();
+    const { error } = await sb.rpc("push_subscribe", { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth });
+    if (error) throw error;
+  }
+  async function pushOn() {
+    if (await Notification.requestPermission() !== "granted") throw new Error("Notificações bloqueadas. Libere nas configurações do navegador.");
+    const reg = await swReg();
+    const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64key(VAPID) });
+    await pushSave(sub);
+  }
+  async function pushOff() {
+    if (!pushOk()) return;
+    const reg = await navigator.serviceWorker.getRegistration().catch(() => null);
+    const sub = await reg?.pushManager.getSubscription().catch(() => null);
+    if (!sub) return;
+    await sb.rpc("push_unsubscribe", { p_endpoint: sub.endpoint }).then(() => {}, () => {});
+    await sub.unsubscribe().catch(() => {});
+  }
+  async function pushActive() {
+    if (!pushOk() || Notification.permission !== "granted") return false;
+    const reg = await navigator.serviceWorker.getRegistration().catch(() => null);
+    return !!(await reg?.pushManager.getSubscription().catch(() => null));
+  }
+  // aparelho já autorizado: liga a inscrição à conta que entrou agora
+  async function pushSync() {
+    if (await pushActive()) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      pushSave(await reg.pushManager.getSubscription()).catch(() => {});
+    }
+  }
+  async function pushBox(box) {
+    if (!box) return;
+    if (iosBrowser()) {
+      box.innerHTML = `<div class="ntf-push"><b>Receba avisos no iPhone</b><small>Toque em Compartilhar e depois em "Adicionar à Tela de Início". Abra o Real Sports pelo ícone e ative aqui.</small></div>`;
+      return;
+    }
+    if (!pushOk()) return;
+    const on = await pushActive();
+    box.innerHTML = `<div class="ntf-push"><div><b>Notificações no celular</b><small>${on ? "Ativadas neste aparelho." : Notification.permission === "denied" ? "Bloqueadas. Libere nas configurações do navegador." : "Receba promoções e avisos mesmo com o site fechado."}</small></div>
+      <button class="btn btn-sm ${on ? "btn-outline" : "btn-green"}" id="ntf-push-b">${on ? "Desativar" : "Ativar"}</button></div>`;
+    RS.$("#ntf-push-b", box).onclick = async (e) => {
+      e.target.disabled = true;
+      try {
+        if (on) await pushOff(); else await pushOn();
+        RS.toast(on ? "Notificações desativadas." : "Notificações ativadas!", "ok");
+      } catch (err) { RS.toast(RS.err(err), "error"); }
+      pushBox(box);
+    };
+  }
+  function pushAsk() {
+    if (!pushOk() || iosBrowser() || Notification.permission !== "default" || localStorage.rsPushAsk || document.querySelector(".push-ask")) return;
+    const d = document.createElement("div");
+    d.className = "push-ask";
+    d.innerHTML = `<span>${RS.icon("bell")}</span><div><b>Ative as notificações</b><small>Receba promoções e bônus no celular.</small></div>
+      <button class="btn btn-green btn-sm" data-y>Ativar</button><button class="icon-btn" data-n aria-label="Agora não">×</button>`;
+    d.onclick = async (e) => {
+      if (!e.target.closest("[data-y],[data-n]")) return;
+      localStorage.rsPushAsk = 1;
+      d.remove();
+      if (e.target.closest("[data-y]")) {
+        try { await pushOn(); RS.toast("Notificações ativadas!", "ok"); } catch (err) { RS.toast(RS.err(err), "error"); }
+      }
+    };
+    document.body.appendChild(d);
+  }
+  async function logout(scope) {
+    await pushOff();
+    await sb.auth.signOut(scope ? { scope } : undefined);
+    location.href = "index.html";
   }
 
   function markNav() {
@@ -188,7 +285,7 @@
       if (a === "pass") resetPass();
       if (a === "support") RS.support();
       if (a === "feedback") RS.feedback();
-      if (a === "logout") { await sb.auth.signOut(); location.href = "index.html"; }
+      if (a === "logout") logout();
       if (a === "deposit" || a === "withdraw") moneyModal(a);
       if (a === "wheel") { if (window.RSwheel) window.RSwheel(); else location.href = "index.html"; }
       if (a === "bets") { const t = document.querySelector('[data-tabs] [data-tab="history"]'); if (t) t.click(); else location.href = "index.html#history"; }
@@ -504,9 +601,9 @@
       if (a === "refresh") { RS.refreshBalance(); show("overview"); }
       if (a === "deposit" || a === "withdraw") moneyModal(a);
       if (a === "pass") resetPass();
-      if (a === "logout-all" && confirm("Sair da conta em todos os aparelhos?")) sb.auth.signOut({ scope: "global" }).then(() => (location.href = "index.html"));
+      if (a === "logout-all" && confirm("Sair da conta em todos os aparelhos?")) logout("global");
       if (a === "bets" || a === "wheel") { w.remove(); if (a === "wheel") { if (window.RSwheel) window.RSwheel(); else location.href = "index.html"; } else document.querySelector('[data-tabs] [data-tab="history"]')?.click(); }
-      if (a === "logout") sb.auth.signOut().then(() => (location.href = "index.html"));
+      if (a === "logout") logout();
       if (a === "export") exportData();
       if (a === "delete") RS.support();
       const cp = e.target.closest("[data-copy]")?.dataset.copy;

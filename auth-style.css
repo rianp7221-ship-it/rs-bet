@@ -1445,3 +1445,19 @@ body.on-casino { background: #1b1d24; }
 .pay-ok p { margin: 0 0 14px; color: var(--muted); font-size: 15px; }
 .pay-ok p strong { color: var(--text); }
 @keyframes pay-pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* notificações: limpar e ativar no celular */
+.btn-sm { padding: 6px 12px; font-size: 12px; min-height: 0; }
+.ntf-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-right: 28px; margin-bottom: 8px; }
+.ntf-head h3 { margin: 0; }
+.ntf-push { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--card-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+.ntf-push b { display: block; font-size: 13px; }
+.ntf-push small { display: block; color: var(--muted); font-size: 12px; }
+.push-ask { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 110; width: min(420px, calc(100% - 24px));
+  display: flex; align-items: center; gap: 10px; background: var(--card); color: var(--text); border: 1px solid var(--line); border-left: 4px solid var(--primary);
+  border-radius: 12px; padding: 10px 10px 10px 12px; box-shadow: 0 8px 24px rgba(20,30,60,.25); }
+.push-ask > span { color: var(--primary); display: inline-flex; }
+.push-ask > div { flex: 1; min-width: 0; }
+.push-ask b { display: block; font-size: 13px; }
+.push-ask small { display: block; color: var(--muted); font-size: 12px; }
+@media (max-width: 760px) { .push-ask { bottom: 80px; } }
