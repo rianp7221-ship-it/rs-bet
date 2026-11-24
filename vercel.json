@@ -62,6 +62,14 @@
       "destination": "/api/seo?p=jogos"
     },
     {
+      "source": "/palpites",
+      "destination": "/api/seo?p=palpites"
+    },
+    {
+      "source": "/palpites/:s",
+      "destination": "/api/seo?p=palpites&s=:s"
+    },
+    {
       "source": "/apostas/:s",
       "destination": "/api/seo?p=liga&s=:s"
     },
