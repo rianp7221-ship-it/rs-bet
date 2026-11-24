@@ -80,7 +80,7 @@
           · País ${esc(p.country)} · Cadastro ${RS.date(p.created_at)} · Último acesso ${p.last_login_at ? RS.date(p.last_login_at) + " (" + esc(p.last_ip || "") + ")" : "-"}</p>
         <div class="filters" id="pf-acts" style="margin:12px 0 0">
           ${can("users.balance") ? `<button class="btn sm" data-a="adj">Ajustar saldo</button>` : ""}
-          ${can("users.block") ? `<button class="btn sm ${p.blocked ? "" : "danger"}" data-a="blk">${p.blocked ? "Desbloquear" : "Bloquear"}</button><button class="btn sm" data-a="risk">Nível de risco</button>` : ""}
+          ${can("users.block") ? `<button class="btn sm ${p.blocked ? "" : "danger"}" data-a="blk">${p.blocked ? "Desbloquear" : "Bloquear"}</button><button class="btn sm" data-a="risk">Nível de risco</button>${p.username === "Conta excluída" ? "" : `<button class="btn sm danger" data-a="del">Excluir conta</button>`}` : ""}
           ${can("users.message") ? `<button class="btn sm" data-a="msg">Enviar mensagem</button>` : ""}
           ${can("users.limits") ? `<button class="btn sm" data-a="lim">Limites de jogo</button>` : ""}
           <button class="btn sm" data-a="note">Adicionar nota</button></div></div>
@@ -132,6 +132,10 @@
       if (a === "blk") {
         const v = p.blocked ? { reason: null } : await ask("Bloquear conta", [{ name: "reason", label: "Motivo do bloqueio", type: "textarea", required: true }]);
         if (v) ok = await act("admin_set_blocked", { p_user: id, p_blocked: !p.blocked, p_reason: v.reason }, "Atualizado");
+      }
+      if (a === "del") {
+        const v = await ask("Excluir conta", [{ name: "reason", label: "Motivo (fica na auditoria). O login, nome, e-mail e CPF são apagados; bilhetes e transações continuam no financeiro.", type: "textarea", required: true }]);
+        if (v && confirm("Excluir esta conta? Não dá para desfazer.")) ok = await act("admin_delete_account", { p_user: id, p_reason: v.reason }, "Conta excluída");
       }
       if (a === "risk") {
         const v = await ask("Nível de risco", [{ name: "level", label: "Nível", value: p.risk_level, options: Object.entries(RISK) }, { name: "reason", label: "Motivo", type: "textarea", required: true }]);
