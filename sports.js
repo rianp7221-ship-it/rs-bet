@@ -952,7 +952,11 @@
   (async () => {
     await load();
     const shared = new URLSearchParams(location.search).get("b");
-    restore(sessionStorage.getItem("rs-slip"));
+    const saved = sessionStorage.getItem("rs-slip");
+    // seleções de outros mercados (id~mercado.palpite) precisam das odds de matches.markets
+    const mkIds = [saved, shared].join(",").split(",").filter((p) => p.includes("~")).map((p) => Number(p.split("~")[0]));
+    if (mkIds.length) await loadMarkets([...new Set(mkIds)]);
+    restore(saved);
     if (shared) restore(shared);
     if (shared) { history.replaceState(null, "", location.pathname + location.hash); document.body.classList.add("slip-open"); }
     const jogo = Number(new URLSearchParams(location.search).get("jogo"));

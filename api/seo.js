@@ -3,6 +3,7 @@
 const SB = "https://pscpcxleyysspvwkevpe.supabase.co/rest/v1";
 const KEY = "sb_publishable_wZYqk42N5iDD-Mv7emPp0A_UQm8cLNV";
 const COLS = "id,sport,league,home,away,starts_at,odd_home,odd_draw,odd_away,status,score_home,score_away,minute";
+const COLS_M = COLS + ",markets";
 const LEAGUE_PT = { "Brazil Série A": "Brasileirão Série A", "Brazil Série B": "Brasileirão Série B", EPL: "Premier League",
   "UEFA Champions League": "Liga dos Campeões da UEFA", "UEFA Europa League": "Liga Europa da UEFA", "La Liga - Spain": "La Liga",
   "Serie A - Italy": "Serie A Itália", "Saudi Pro League": "Pro League Arábia Saudita" };
@@ -25,7 +26,7 @@ async function q(path) {
   return r.json();
 }
 // jogos abertos/ao vivo que ainda fazem sentido (ignora "abertos" que começaram há mais de 4h)
-const upcoming = () => q(`matches?select=${COLS}&status=in.(open,live)&starts_at=gte.${new Date(Date.now() - 4 * 3600e3).toISOString()}&order=starts_at&limit=2000`);
+const upcoming = (cols = COLS) => q(`matches?select=${cols}&status=in.(open,live)&starts_at=gte.${new Date(Date.now() - 4 * 3600e3).toISOString()}&order=starts_at&limit=2000`);
 const rpc = async (fn) => {
   const r = await fetch(`${SB}/rpc/${fn}`, { method: "POST", headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" }, body: "{}" });
   return r.ok ? r.json() : null;
@@ -47,6 +48,61 @@ const tipBox = (m) => {
   return `<div class="tip"><b>Palpite: ${esc(t.text)}</b> <small>(confiança ${t.level.toLowerCase()})</small>
 <div class="pr">${t.pr.map((x) => `<span>${esc(x.name)} <b>${x.p}%</b></span>`).join("")}</div></div>`;
 };
+// outros mercados: o lado mais provável de cada um, com a chance tirada das odds (sem a margem)
+const pct2 = (a, b) => (Number(a) > 1 && Number(b) > 1 ? Math.round((100 / a) / (1 / a + 1 / b)) : null);
+const mkLine = (k) => (Number(k.replace(/^[a-z]+/, "")) / 10).toLocaleString("pt-BR");
+function extras(m) {
+  const mk = m.markets || {}, out = [], t = tip(m);
+  const two = (key, title, a, b, na, nb) => {
+    const x = mk[key], p = x && pct2(x[a], x[b]);
+    if (p == null) return;
+    const [k, text, pp] = p >= 50 ? [a, na, p] : [b, nb, 100 - p];
+    out.push({ title, text, p: pp, odd: Number(x[k]), code: `${m.id}~${key}.${k}` });
+  };
+  const mid = (re) => { const ks = Object.keys(mk).filter((k) => re.test(k)).sort((a, b) => a.replace(/\D/g, "") - b.replace(/\D/g, "")); return ks[Math.floor(ks.length / 2)]; };
+  if (m.sport === "Futebol") {
+    two("ou25", "Gols", "over", "under", "Mais de 2,5 gols", "Menos de 2,5 gols");
+    two("btts", "Ambas marcam", "yes", "no", "Sim, os dois marcam", "Não, um não marca");
+    if (t && mk.dc) {
+      const pr = Object.fromEntries(t.pr.map((x) => [x.k, x.p]));
+      const k = t.f.k === "home" ? "1x" : t.f.k === "away" ? "x2" : Number(mk.dc["1x"]) <= Number(mk.dc.x2) ? "1x" : "x2";
+      if (Number(mk.dc[k]) > 1) out.push({ title: "Chance dupla", text: `${k === "1x" ? m.home : m.away} ou empate`, p: Math.min(99, (pr[k === "1x" ? "home" : "away"] || 0) + (pr.draw || 0)), odd: Number(mk.dc[k]), code: `${m.id}~dc.${k}` });
+    }
+    const co = mid(/^co\d+$/);
+    if (co) two(co, "Escanteios", "over", "under", `Mais de ${mkLine(co)} escanteios`, `Menos de ${mkLine(co)} escanteios`);
+    const cs = Object.entries(mk.cs || {}).filter(([, o]) => Number(o) > 1);
+    if (cs.length) {
+      const sum = cs.reduce((a, [, o]) => a + 1 / o, 0), [k, o] = cs.sort((a, b) => a[1] - b[1])[0];
+      out.push({ title: "Placar provável", text: `${k[1]} x ${k[2]}`, p: Math.round(100 / o / sum), odd: Number(o), code: `${m.id}~cs.${k}` });
+    }
+  } else {
+    const ou = mid(/^ou\d{3,}$/);
+    if (ou) two(ou, "Pontos", "over", "under", `Mais de ${mkLine(ou)} pontos`, `Menos de ${mkLine(ou)} pontos`);
+  }
+  return out;
+}
+const extrasBox = (m) => {
+  const x = extras(m);
+  return x.length ? `<div class="mk-h">Mais palpites</div><div class="odds mkg">${x.map((e) => `<a href="/?b=${encodeURIComponent(e.code)}#sports" data-s="${e.code}" rel="nofollow"><small>${esc(e.title)} · ${e.p}%</small><span>${esc(e.text)}</span><b>${odd(e.odd)}</b></a>`).join("")}</div>` : "";
+};
+// múltipla pronta: a seleção mais provável (odd 1,25–1,80) dos jogos de futebol das ligas mais fortes
+function multi(games) {
+  const c = [];
+  for (const m of games.filter((g) => g.sport === "Futebol").slice(0, 40)) {
+    const t = tip(m), opts = extras(m).filter((e) => e.title !== "Placar provável");
+    if (t && t.f.k !== "draw") opts.push({ title: "Resultado", text: `Vitória do ${t.f.name}`, p: t.f.p, odd: t.f.odd, code: `${m.id}${t.f.k[0]}` });
+    const best = opts.filter((e) => e.odd >= 1.25 && e.odd <= 1.8).sort((a, b) => b.p - a.p)[0];
+    if (best) c.push({ m, e: best });
+  }
+  return c.sort((a, b) => b.e.p - a.e.p).slice(0, 4);
+}
+const multiBox = (games) => {
+  const ms = multi(games);
+  if (ms.length < 2) return "";
+  const total = ms.reduce((a, x) => a * x.e.odd, 1);
+  return `<div class="card hl"><b>Múltipla pronta do dia</b>${ms.map(({ m, e }) => `<div class="ml"><span><a class="t" href="/jogo/${gameSlug(m)}">${esc(m.home)} x ${esc(m.away)}</a><small>${esc(e.text)} · ${e.p}%</small></span><b>${odd(e.odd)}</b></div>`).join("")}
+<a class="cta" href="/?b=${encodeURIComponent(ms.map((x) => x.e.code).join(","))}#sports" rel="nofollow">Colocar no bilhete · odd ${odd(total)}</a></div>`;
+};
 const leagues = (ms) => {
   const by = new Map();
   for (const m of ms) { const k = slug(lname(m.league)); if (!by.has(k)) by.set(k, { name: lname(m.league), raw: m.league, sport: m.sport, games: [] }); by.get(k).games.push(m); }
@@ -66,7 +122,7 @@ main{max-width:760px;margin:0 auto;padding:16px}h1{font-size:24px;margin:8px 0 4
 .live{color:#e11d48;font-weight:700}.lg a{display:inline-block;margin:4px 6px 4px 0;padding:6px 10px;background:#fff;border-radius:16px;color:#1c1f26;text-decoration:none;font-size:14px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .tip{margin-top:10px;padding:10px 12px;background:#f7f8fa;border-left:4px solid #ff4d00;border-radius:8px;font-size:14px}
 .tip small{color:#6b7280}.pr{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;color:#6b7280;font-size:13px}.pr b{color:#1c1f26}
-.hl{background:#fff4ee;border:1px solid #ffd2bd}.disc{font-size:12px;color:#6b7280}
+.hl{background:#fff4ee;border:1px solid #ffd2bd}.mk-h{margin-top:12px;font-size:13px;font-weight:700;color:#6b7280}.odds.mkg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}.mkg a span{display:block;font-size:14px;font-weight:600;margin:2px 0}.odds a.on span{color:#fff}.ml{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #ffd2bd}.ml small{display:block;color:#6b7280;font-size:13px}.ml b{color:#ff4d00;font-size:17px}.hl .cta{margin:12px 0 0}.disc{font-size:12px;color:#6b7280}
 footer{max-width:760px;margin:20px auto;padding:0 16px 30px;color:#6b7280;font-size:13px}nav.bc{font-size:13px}nav.bc a{color:#ff4d00}`;
 
 function page({ title, desc, canon, body, ld, noindex }) {
@@ -96,7 +152,7 @@ const gameCard = (m) => `<div class="card"><a class="t" href="/jogo/${gameSlug(m
 
 async function gamePage(base, s) {
   const id = Number((s.match(/-(\d+)$/) || s.match(/^(\d+)$/) || [])[1]);
-  const [m] = id ? await q(`matches?select=${COLS}&id=eq.${id}`) : [];
+  const [m] = id ? await q(`matches?select=${COLS_M}&id=eq.${id}`) : [];
   if (!m) return null;
   const canon = `${base}/jogo/${gameSlug(m)}`, lg = lname(m.league), open = m.status === "open" || m.status === "live";
   const name = `${m.home} x ${m.away}`;
@@ -110,7 +166,7 @@ async function gamePage(base, s) {
     location: { "@type": "Place", name: lg, address: lg } };
   const body = `<nav class="bc"><a href="/jogos">Jogos</a> › <a href="/apostas/${slug(lg)}">${esc(lg)}</a></nav>
 <h1>${esc(name)}: palpites e odds</h1><p class="muted">${esc(lg)} · ${esc(when(m.starts_at))}${m.status === "live" ? ` · <span class="live">AO VIVO ${m.score_home ?? 0}–${m.score_away ?? 0}${m.minute ? ` (${esc(m.minute)}')` : ""}</span>` : ""}</p>
-${open ? `<div class="card"><b>Resultado final</b>${oddsRow(m)}${tipBox(m)}</div>
+${open ? `<div class="card"><b>Resultado final</b>${oddsRow(m)}${tipBox(m)}${extrasBox(m)}</div>
 <a class="cta" href="/?jogo=${m.id}#sports">Ver todos os mercados e apostar</a>
 <p>Veja as odds de <b>${esc(name)}</b> pela ${esc(lg)} em ${esc(day(m.starts_at))}. Na Real Sports você aposta no resultado final, ambas marcam, total de gols e muito mais${m.status === "live" ? ", também ao vivo" : ""}. As odds podem mudar até o início da partida.</p>`
     : `<div class="card"><b>Jogo encerrado</b>${m.score_home != null ? `<p>Placar final: ${esc(m.home)} ${m.score_home} x ${m.score_away} ${esc(m.away)}</p>` : ""}</div>
@@ -131,11 +187,11 @@ async function leaguePage(base, s) {
 }
 
 const tipCard = (m) => `<div class="card"><a class="t" href="/jogo/${gameSlug(m)}">${esc(m.home)} x ${esc(m.away)}</a>
-<div class="muted">${m.status === "live" ? `<span class="live">AO VIVO</span> ${m.score_home ?? 0}–${m.score_away ?? 0}` : esc(when(m.starts_at))} · ${esc(lname(m.league))}</div>${tipBox(m)}${oddsRow(m)}</div>`;
+<div class="muted">${m.status === "live" ? `<span class="live">AO VIVO</span> ${m.score_home ?? 0}–${m.score_away ?? 0}` : esc(when(m.starts_at))} · ${esc(lname(m.league))}</div>${tipBox(m)}${oddsRow(m)}${extrasBox(m)}</div>`;
 
 // /palpites (hoje), /palpites/amanha e /palpites/<liga>
 async function tipsPage(base, s) {
-  const all = (await upcoming()).filter((m) => m.status === "open" && tip(m));
+  const all = (await upcoming(COLS_M)).filter((m) => m.status === "open" && tip(m));
   const today = ymd(new Date()), tomorrow = ymd(new Date(Date.now() + 864e5));
   let games, h1, title, desc, canon, sub = "";
   if (!s || s === "amanha") {
@@ -153,6 +209,7 @@ async function tipsPage(base, s) {
       const [pick, boost] = await Promise.all([rpc("top_pick_today").catch(() => null), rpc("boost_today").catch(() => null)]);
       const pn = (x) => (x.pick === "h" || x.pick === "home" ? x.home : x.pick === "a" || x.pick === "away" ? x.away : x.pick === "d" || x.pick === "draw" ? "Empate" : x.pick);
       if (boost && boost.match) sub += `<div class="card hl"><b>Odd turbinada do dia</b><p><a class="t" href="/?jogo=${boost.match}#sports">${esc(boost.home)} x ${esc(boost.away)}</a>: ${esc(pn(boost))} de <s>${odd(boost.base)}</s> por <b>${odd(boost.odd)}</b></p></div>`;
+      sub = multiBox(games) + sub;
       if (pick && pick.match) sub += `<div class="card hl"><b>Mais apostado na Real Sports hoje</b><p><a class="t" href="/?jogo=${pick.match}#sports">${esc(pick.home)} x ${esc(pick.away)}</a>: ${pick.pct}% dos apostadores foram de ${esc(pn(pick))} (odd ${odd(pick.odd)})</p></div>`;
     }
   } else {
