@@ -17,6 +17,7 @@ begin
       -- só quem parou há pouco (até 60 dias): conta abandonada há meses não volta com R$ 5
       and exists (select 1 from public.transactions t where t.user_id = p.id and t.type in ('bet', 'casino_bet')
                     and t.created_at > now() - interval '60 days')
+      and not exists (select 1 from public.user_limits l where l.user_id = p.id and l.self_excluded_until > now())
       and not exists (select 1 from public.user_rewards w where w.user_id = p.id and w.source like 'reativacao:%'
                         and w.created_at > now() - interval '30 days')
   loop
@@ -29,7 +30,8 @@ begin
         format(E'Oi%s!\n\nFaz %s dias que você não aparece na Real Sports, então deixamos um presente na sua conta: %s.\n\nÉ só entrar, montar seu bilhete e usar a freebet (odd mínima %s, válida por %s dias). O lucro vai para o saldo, sem rollover.\n\nApostar agora: https://realsports.online\n\n+18 | Jogue com responsabilidade.\n',
           coalesce(' ' || nullif(r.username, ''), ''), v_days, v_title,
           coalesce((public._setting('freebet_min_odd'))::text, '1.5'), coalesce((public._setting('reward_days'))::text, '7')),
-        'reativacao:' || r.id);
+        'reativacao:' || r.id || ':' || current_date)
+      on conflict (ref) do nothing;
     end if;
     n := n + 1;
   end loop;
