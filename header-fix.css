@@ -138,3 +138,10 @@
 .tips-banner .tb-t b { display: block; font-size: 15px; }
 .tips-banner .tb-t small { color: var(--muted, #6b7280); font-size: 12px; }
 .tips-banner .tb-go { flex: none; background: var(--primary, #ff4d00); color: var(--primary-ink, #fff); font-weight: 700; font-size: 13px; padding: 8px 12px; border-radius: 8px; white-space: nowrap; }
+
+/* convite para compartilhar bilhete ganho */
+.won-pop { text-align: center; }
+.won-pop .won-ic { font-size: 52px; line-height: 1; margin: 4px 0 6px; }
+.won-pop h3 { margin: 0 0 6px; }
+.won-pop b { color: #16a34a; font-size: 1.25em; }
+.won-pop .btn { margin-top: 10px; }
