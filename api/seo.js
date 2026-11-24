@@ -7,6 +7,11 @@ const LEAGUE_PT = { "Brazil Série A": "Brasileirão Série A", "Brazil Série B
   "UEFA Champions League": "Liga dos Campeões da UEFA", "UEFA Europa League": "Liga Europa da UEFA", "La Liga - Spain": "La Liga",
   "Serie A - Italy": "Serie A Itália", "Saudi Pro League": "Pro League Arábia Saudita" };
 const lname = (l) => LEAGUE_PT[l] || l;
+// mesma ordem do site (sports.js TOP): ligas mais famosas primeiro
+const TOP = ["Brazil Série A", "Brazil Série B", "Copa do Brasil", "CONMEBOL Libertadores", "CONMEBOL Sudamericana",
+  "UEFA Champions League", "Premier League", "EPL", "La Liga", "La Liga - Spain", "Serie A - Italy", "Bundesliga", "Ligue 1", "UEFA Europa League",
+  "UEFA Conference League", "UEFA Nations League", "Primeira Liga Portugal", "Liga Profesional Argentina", "Copa del Rey", "FA Cup Inglaterra",
+  "Championship Inglaterra", "2. Bundesliga Alemanha", "Eredivisie Holanda", "Liga MX México", "MLS EUA", "Saudi Pro League", "Süper Lig Turquia", "NBA", "EuroLeague"];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const slug = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const gameSlug = (m) => `${slug(m.home)}-x-${slug(m.away)}-${m.id}`;
@@ -21,10 +26,32 @@ async function q(path) {
 }
 // jogos abertos/ao vivo que ainda fazem sentido (ignora "abertos" que começaram há mais de 4h)
 const upcoming = () => q(`matches?select=${COLS}&status=in.(open,live)&starts_at=gte.${new Date(Date.now() - 4 * 3600e3).toISOString()}&order=starts_at&limit=2000`);
+const rpc = async (fn) => {
+  const r = await fetch(`${SB}/rpc/${fn}`, { method: "POST", headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" }, body: "{}" });
+  return r.ok ? r.json() : null;
+};
+const ymd = (d) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(d);
+// probabilidade de cada resultado pelas odds (sem a margem da casa)
+function tip(m) {
+  const o = [["home", m.home, m.odd_home], ["draw", "Empate", m.odd_draw], ["away", m.away, m.odd_away]].filter((x) => Number(x[2]) > 1);
+  if (o.length < 2) return null;
+  const inv = o.map((x) => 1 / Number(x[2])), sum = inv.reduce((a, b) => a + b, 0);
+  const pr = o.map((x, i) => ({ k: x[0], name: x[1], odd: Number(x[2]), p: Math.round((100 * inv[i]) / sum) })).sort((a, b) => b.p - a.p);
+  const f = pr[0];
+  const text = f.k === "draw" ? "Empate" : f.p >= 60 ? `Vitória do ${f.name}` : f.p >= 45 ? `${f.name} é favorito` : "Jogo equilibrado";
+  return { pr, f, text, level: f.p >= 60 ? "Alta" : f.p >= 45 ? "Média" : "Baixa" };
+}
+const tipBox = (m) => {
+  const t = tip(m);
+  if (!t) return "";
+  return `<div class="tip"><b>Palpite: ${esc(t.text)}</b> <small>(confiança ${t.level.toLowerCase()})</small>
+<div class="pr">${t.pr.map((x) => `<span>${esc(x.name)} <b>${x.p}%</b></span>`).join("")}</div></div>`;
+};
 const leagues = (ms) => {
   const by = new Map();
-  for (const m of ms) { const k = slug(lname(m.league)); if (!by.has(k)) by.set(k, { name: lname(m.league), sport: m.sport, games: [] }); by.get(k).games.push(m); }
-  return [...by.entries()].sort((a, b) => (b[1].sport === "Futebol") - (a[1].sport === "Futebol") || b[1].games.length - a[1].games.length);
+  for (const m of ms) { const k = slug(lname(m.league)); if (!by.has(k)) by.set(k, { name: lname(m.league), raw: m.league, sport: m.sport, games: [] }); by.get(k).games.push(m); }
+  const r = (l) => { const i = TOP.indexOf(l.raw); return i < 0 ? 999 : i; };
+  return [...by.entries()].sort((a, b) => r(a[1]) - r(b[1]) || (b[1].sport === "Futebol") - (a[1].sport === "Futebol") || b[1].games.length - a[1].games.length);
 };
 
 const CSS = `*{box-sizing:border-box}body{margin:0;font-family:Roboto,Arial,sans-serif;background:#f4f5f7;color:#1c1f26}
@@ -36,6 +63,9 @@ main{max-width:760px;margin:0 auto;padding:16px}h1{font-size:24px;margin:8px 0 4
 .odds small{display:block;color:#6b7280;font-size:12px}.odds b{color:#ff4d00;font-size:17px}
 .cta{display:block;text-align:center;background:#ff4d00;color:#fff;font-weight:700;padding:14px;border-radius:10px;text-decoration:none;margin:16px 0}
 .live{color:#e11d48;font-weight:700}.lg a{display:inline-block;margin:4px 6px 4px 0;padding:6px 10px;background:#fff;border-radius:16px;color:#1c1f26;text-decoration:none;font-size:14px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.tip{margin-top:10px;padding:10px 12px;background:#f7f8fa;border-left:4px solid #ff4d00;border-radius:8px;font-size:14px}
+.tip small{color:#6b7280}.pr{display:flex;gap:12px;flex-wrap:wrap;margin-top:4px;color:#6b7280;font-size:13px}.pr b{color:#1c1f26}
+.hl{background:#fff4ee;border:1px solid #ffd2bd}.disc{font-size:12px;color:#6b7280}
 footer{max-width:760px;margin:20px auto;padding:0 16px 30px;color:#6b7280;font-size:13px}nav.bc{font-size:13px}nav.bc a{color:#ff4d00}`;
 
 function page({ title, desc, canon, body, ld, noindex }) {
@@ -47,7 +77,7 @@ ${noindex ? '<meta name="robots" content="noindex">' : ""}<meta name="theme-colo
 <link rel="icon" type="image/png" href="/icons/favicon.png"><style>${CSS}</style>
 ${ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>` : ""}</head>
 <body><header><a href="/">REAL SPORTS</a></header><main>${body}</main>
-<footer><p><a href="/jogos">Todos os jogos</a> · <a href="/login.html">Cadastre-se</a></p><p><b>+18</b> Jogue com responsabilidade. Apostas envolvem risco de perda financeira. Proibido para menores de 18 anos.</p></footer></body></html>`;
+<footer><p><a href="/jogos">Todos os jogos</a> · <a href="/palpites">Palpites de hoje</a> · <a href="/login.html">Cadastre-se</a></p><p><b>+18</b> Jogue com responsabilidade. Apostas envolvem risco de perda financeira. Proibido para menores de 18 anos.</p></footer></body></html>`;
 }
 
 const oddsRow = (m) => `<div class="odds">
@@ -73,7 +103,7 @@ async function gamePage(base, s) {
     location: { "@type": "Place", name: lg, address: lg } };
   const body = `<nav class="bc"><a href="/jogos">Jogos</a> › <a href="/apostas/${slug(lg)}">${esc(lg)}</a></nav>
 <h1>${esc(name)}: palpites e odds</h1><p class="muted">${esc(lg)} · ${esc(when(m.starts_at))}${m.status === "live" ? ` · <span class="live">AO VIVO ${m.score_home ?? 0}–${m.score_away ?? 0}${m.minute ? ` (${esc(m.minute)}')` : ""}</span>` : ""}</p>
-${open ? `<div class="card"><b>Resultado final</b>${oddsRow(m)}</div>
+${open ? `<div class="card"><b>Resultado final</b>${oddsRow(m)}${tipBox(m)}</div>
 <a class="cta" href="/?jogo=${m.id}#sports">Ver todos os mercados e apostar</a>
 <p>Veja as odds de <b>${esc(name)}</b> pela ${esc(lg)} em ${esc(day(m.starts_at))}. Na Real Sports você aposta no resultado final, ambas marcam, total de gols e muito mais${m.status === "live" ? ", também ao vivo" : ""}. As odds podem mudar até o início da partida.</p>`
     : `<div class="card"><b>Jogo encerrado</b>${m.score_home != null ? `<p>Placar final: ${esc(m.home)} ${m.score_home} x ${m.score_away} ${esc(m.away)}</p>` : ""}</div>
@@ -93,9 +123,52 @@ async function leaguePage(base, s) {
     canon: `${base}/apostas/${s}`, body });
 }
 
+const tipCard = (m) => `<div class="card"><a class="t" href="/jogo/${gameSlug(m)}">${esc(m.home)} x ${esc(m.away)}</a>
+<div class="muted">${m.status === "live" ? `<span class="live">AO VIVO</span> ${m.score_home ?? 0}–${m.score_away ?? 0}` : esc(when(m.starts_at))} · ${esc(lname(m.league))}</div>${tipBox(m)}${oddsRow(m)}</div>`;
+
+// /palpites (hoje), /palpites/amanha e /palpites/<liga>
+async function tipsPage(base, s) {
+  const all = (await upcoming()).filter((m) => m.status === "open" && tip(m));
+  const today = ymd(new Date()), tomorrow = ymd(new Date(Date.now() + 864e5));
+  let games, h1, title, desc, canon, sub = "";
+  if (!s || s === "amanha") {
+    const d = s ? tomorrow : today, label = s ? "amanhã" : "hoje";
+    games = all.filter((m) => ymd(new Date(m.starts_at)) === d);
+    const ls = leagues(games);
+    // jogos das ligas mais fortes primeiro
+    games = ls.flatMap(([, l]) => l.games);
+    h1 = `Palpites de ${label} (${day(d + "T12:00:00-03:00")})`;
+    title = `Palpites de ${label}: futebol e basquete, ${day(d + "T12:00:00-03:00")} | Real Sports`;
+    desc = `Palpites de ${label} com as probabilidades de cada resultado: ${games.slice(0, 3).map((m) => `${m.home} x ${m.away}`).join(", ")} e mais ${Math.max(games.length - 3, 0)} jogos.`;
+    canon = `${base}/palpites${s ? "/amanha" : ""}`;
+    sub = `<div class="lg">${s ? `<a href="/palpites">Palpites de hoje</a>` : `<a href="/palpites/amanha">Palpites de amanhã</a>`}${ls.slice(0, 15).map(([k, l]) => `<a href="/palpites/${k}">${esc(l.name)}</a>`).join("")}</div>`;
+    if (!s) {
+      const [pick, boost] = await Promise.all([rpc("top_pick_today").catch(() => null), rpc("boost_today").catch(() => null)]);
+      const pn = (x) => (x.pick === "h" || x.pick === "home" ? x.home : x.pick === "a" || x.pick === "away" ? x.away : x.pick === "d" || x.pick === "draw" ? "Empate" : x.pick);
+      if (boost && boost.match) sub += `<div class="card hl"><b>Odd turbinada do dia</b><p><a class="t" href="/?jogo=${boost.match}#sports">${esc(boost.home)} x ${esc(boost.away)}</a>: ${esc(pn(boost))} de <s>${odd(boost.base)}</s> por <b>${odd(boost.odd)}</b></p></div>`;
+      if (pick && pick.match) sub += `<div class="card hl"><b>Mais apostado na Real Sports hoje</b><p><a class="t" href="/?jogo=${pick.match}#sports">${esc(pick.home)} x ${esc(pick.away)}</a>: ${pick.pct}% dos apostadores foram de ${esc(pn(pick))} (odd ${odd(pick.odd)})</p></div>`;
+    }
+  } else {
+    const lg = leagues(all).find(([k]) => k === s);
+    if (!lg) return null;
+    games = lg[1].games;
+    h1 = `Palpites ${lg[1].name}`;
+    title = `Palpites ${lg[1].name}: próximos jogos e probabilidades | Real Sports`;
+    desc = `Palpites para os jogos da ${lg[1].name}: ${games.slice(0, 3).map((m) => `${m.home} x ${m.away}`).join(", ")}. Probabilidades calculadas pelas odds.`;
+    canon = `${base}/palpites/${s}`;
+    sub = `<nav class="bc"><a href="/palpites">Palpites de hoje</a> › ${esc(lg[1].name)}</nav>`;
+  }
+  const ld = { "@context": "https://schema.org", "@type": "ItemList", name: h1, itemListElement: games.slice(0, 50).map((m, i) => ({ "@type": "ListItem", position: i + 1, url: `${base}/jogo/${gameSlug(m)}`, name: `${m.home} x ${m.away}` })) };
+  const body = `<h1>${esc(h1)}</h1><p class="muted">${games.length} jogo${games.length === 1 ? "" : "s"} · probabilidades calculadas pelas odds atuais, sem a margem da casa</p>${sub}
+${games.length ? games.slice(0, 80).map(tipCard).join("") : `<div class="card">Nenhum jogo com odds abertas agora. <a href="/palpites${s ? "" : "/amanha"}">Veja os palpites de ${s ? "hoje" : "amanhã"}</a>.</div>`}
+<a class="cta" href="/#sports">Apostar na Real Sports</a>
+<p class="disc">Palpites são estimativas baseadas nas odds e não garantem resultado. Aposte só o que pode perder.</p>`;
+  return page({ title, desc, canon, body, ld, noindex: !games.length });
+}
+
 async function indexPage(base) {
   const ls = leagues(await upcoming());
-  const body = `<h1>Jogos de hoje e próximos: odds e apostas</h1><p class="muted">Futebol, basquete e mais, com odds atualizadas.</p>
+  const body = `<h1>Jogos de hoje e próximos: odds e apostas</h1><p class="muted">Futebol, basquete e mais, com odds atualizadas. <a href="/palpites">Ver palpites de hoje</a></p>
 <div class="lg">${ls.map(([k, l]) => `<a href="/apostas/${k}">${esc(l.name)} (${l.games.length})</a>`).join("")}</div>
 ${ls.slice(0, 12).map(([k, l]) => `<h2><a href="/apostas/${k}" style="color:inherit">${esc(l.name)}</a></h2>${l.games.slice(0, 6).map(gameCard).join("")}`).join("")}`;
   return page({ title: "Jogos de hoje: odds e apostas esportivas | Real Sports", desc: "Veja os jogos de hoje e dos próximos dias com as odds da Real Sports: Brasileirão, Champions, NBA e muito mais.", canon: `${base}/jogos`, body });
@@ -104,7 +177,7 @@ ${ls.slice(0, 12).map(([k, l]) => `<h2><a href="/apostas/${k}" style="color:inhe
 async function sitemap(base) {
   const ms = await upcoming(), ls = leagues(ms);
   const u = (loc, pri) => `<url><loc>${esc(base + loc)}</loc><changefreq>hourly</changefreq><priority>${pri}</priority></url>`;
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${u("/", "1.0")}${u("/jogos", "0.9")}${ls.map(([k]) => u(`/apostas/${k}`, "0.8")).join("")}${ms.map((m) => u(`/jogo/${gameSlug(m)}`, "0.6")).join("")}</urlset>`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${u("/", "1.0")}${u("/jogos", "0.9")}${u("/palpites", "0.9")}${u("/palpites/amanha", "0.8")}${ls.map(([k]) => u(`/palpites/${k}`, "0.7")).join("")}${ls.map(([k]) => u(`/apostas/${k}`, "0.8")).join("")}${ms.map((m) => u(`/jogo/${gameSlug(m)}`, "0.6")).join("")}</urlset>`;
 }
 
 module.exports = async (req, res) => {
@@ -116,7 +189,7 @@ module.exports = async (req, res) => {
       res.setHeader("Cache-Control", "public, s-maxage=1800, stale-while-revalidate=3600");
       return res.end(await sitemap(base));
     }
-    const html = p === "jogo" ? await gamePage(base, s) : p === "liga" ? await leaguePage(base, s) : await indexPage(base);
+    const html = p === "jogo" ? await gamePage(base, s) : p === "liga" ? await leaguePage(base, s) : p === "palpites" ? await tipsPage(base, s) : await indexPage(base);
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     if (!html) {
       res.statusCode = 404;
