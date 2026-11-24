@@ -15,7 +15,7 @@
     main().innerHTML = head("Usuários", can("users.message") ? `<button class="btn btn-outline" id="u-msg-all">Mensagem para todos</button>` : "") + `
       <div class="filters panel">
         <input class="input" id="u-q" placeholder="E-mail, usuário, ID ou IP" style="min-width:220px">
-        <select class="input" id="u-st"><option value="">Todos</option><option value="ativo">Ativos</option><option value="bloqueado">Bloqueados</option><option value="equipe">Equipe</option></select>
+        <select class="input" id="u-st"><option value="">Todos</option><option value="ativo">Ativos</option><option value="bloqueado">Bloqueados</option><option value="equipe">Equipe</option><option value="excluida">Excluídas</option></select>
         <select class="input" id="u-risk"><option value="">Qualquer risco</option><option value="baixo">Risco baixo</option><option value="medio">Risco médio</option><option value="alto">Risco alto</option></select>
         <select class="input" id="u-ord"><option value="">Mais recentes</option><option value="saldo">Maior saldo</option></select>
         <input class="input" id="u-min" type="number" placeholder="Saldo mín." style="width:110px">
