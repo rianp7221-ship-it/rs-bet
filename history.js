@@ -344,6 +344,7 @@
     RS.$("#sh-dl", m).onclick = () => { const a = document.createElement("a"); a.href = href; a.download = file.name; a.click(); };
   }
 
+  const BET_SEL = "*, bet_selections(match_id, market, pick, odd, status, boosted, matches(home, away, league, status, starts_at, score_home, score_away, score365_home, score365_away, minute, period, clock_secs, clock_at, ext365_id, home_logo, away_logo, ht_home, ht_away, corners_home, corners_away, cards_home, cards_away, shots_home, shots_away, sot_home, sot_away))";
   async function load() {
     const u = await RS.user();
     if (!u) { box.innerHTML = `<p class="muted">Entre na sua conta para ver o histórico. <a href="login.html">Entrar</a></p>`; return; }
@@ -351,7 +352,7 @@
 
     if (kind === "bets") {
       const { data } = await sb.from("bets")
-        .select("*, bet_selections(match_id, market, pick, odd, status, boosted, matches(home, away, league, status, starts_at, score_home, score_away, score365_home, score365_away, minute, period, clock_secs, clock_at, ext365_id, home_logo, away_logo, ht_home, ht_away, corners_home, corners_away, cards_home, cards_away, shots_home, shots_away, sot_home, sot_away))")
+        .select(BET_SEL)
         .eq("user_id", u.id).or(`status.eq.pending,created_at.gte.${new Date(Date.now() - 7 * 864e5).toISOString()}`)
         .order("created_at", { ascending: false }).limit(1000);
       bets = data || [];
@@ -530,6 +531,27 @@
     RS.$$("[data-hist]").forEach((x) => x.classList.toggle("active", x === b));
     load();
   }));
+  // bilhete ganho nos últimos 3 dias: convida a mostrar pros amigos (imagem com o link de indicação), uma vez por bilhete
+  async function winPrompt() {
+    const u = await RS.user();
+    if (!u || document.querySelector(".rs-modal")) return;
+    const seen = JSON.parse(localStorage.getItem("rs-won-seen") || "[]");
+    const { data } = await sb.from("bets").select(BET_SEL).eq("user_id", u.id).eq("status", "won")
+      .gte("settled_at", new Date(Date.now() - 3 * 864e5).toISOString()).order("settled_at", { ascending: false }).limit(5);
+    const bet = (data || []).find((b) => !seen.includes(b.id));
+    if (!bet) return;
+    localStorage.setItem("rs-won-seen", JSON.stringify([...seen, ...(data || []).map((b) => b.id)].slice(-50)));
+    for (const s of bet.bet_selections) if (s.matches) live365(s.matches);
+    const m = RS.modal(`<div class="won-pop"><div class="won-ic">🎉</div><h3>Seu bilhete bateu!</h3>
+      <p>Você ganhou <b>${RS.money(bet.potential)}</b>.</p>
+      <p class="muted small">Mostre pros amigos: quem se cadastrar pelo seu link e depositar te dá bônus de indicação.</p>
+      <button class="btn btn-primary w-full" id="won-sh">Mostrar pros amigos</button>
+      <button class="btn btn-outline w-full" id="won-no">Agora não</button></div>`);
+    RS.$("#won-no", m).onclick = () => m.remove();
+    RS.$("#won-sh", m).onclick = () => { m.remove(); shareBet(bet); };
+  }
+  setTimeout(winPrompt, 2500);
+  document.addEventListener("rs:balance", () => setTimeout(winPrompt, 1500));
   document.addEventListener("rs:tab", (e) => { if (e.detail === "history") load(); });
   document.addEventListener("rs:balance", () => { if (!RS.$("#history").classList.contains("hidden")) load(); });
   if (!RS.$("#history").classList.contains("hidden")) load();
