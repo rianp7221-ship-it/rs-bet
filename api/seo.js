@@ -55,7 +55,7 @@ const leagues = (ms) => {
 };
 
 const CSS = `*{box-sizing:border-box}body{margin:0;font-family:Roboto,Arial,sans-serif;background:#f4f5f7;color:#1c1f26}
-header{background:#ff4d00;padding:14px 18px}header a{color:#fff;font-weight:900;font-size:22px;text-decoration:none;letter-spacing:.5px}
+header{background:#ff4d00;padding:14px 18px;display:flex;align-items:center;justify-content:space-between}header a.bk{font-size:14px;font-weight:700;background:rgba(255,255,255,.2);padding:7px 12px;border-radius:8px}header a{color:#fff;font-weight:900;font-size:22px;text-decoration:none;letter-spacing:.5px}
 main{max-width:760px;margin:0 auto;padding:16px}h1{font-size:24px;margin:8px 0 4px}h2{font-size:18px;margin:22px 0 8px}
 .muted{color:#6b7280;font-size:14px}.card{background:#fff;border-radius:12px;padding:14px 16px;margin:10px 0;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .card a.t{color:#1c1f26;text-decoration:none;font-weight:700}.odds{display:flex;gap:8px;margin-top:10px}
@@ -76,7 +76,7 @@ ${noindex ? '<meta name="robots" content="noindex">' : ""}<meta name="theme-colo
 <meta property="og:url" content="${esc(canon)}"><meta property="og:site_name" content="Real Sports"><meta property="og:image" content="${esc(new URL("/icons/apple-touch-icon.png", canon).href)}">
 <link rel="icon" type="image/png" href="/icons/favicon.png"><style>${CSS}</style>
 ${ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>` : ""}</head>
-<body><header><a href="/">REAL SPORTS</a></header><main>${body}</main>
+<body><header><a href="/">REAL SPORTS</a><a class="bk" href="/">‹ Voltar ao site</a></header><main>${body}</main>
 <footer><p><a href="/jogos">Todos os jogos</a> · <a href="/palpites">Palpites de hoje</a> · <a href="/login.html">Cadastre-se</a></p><p><b>+18</b> Jogue com responsabilidade. Apostas envolvem risco de perda financeira. Proibido para menores de 18 anos.</p></footer></body></html>`;
 }
 
