@@ -60,7 +60,8 @@ main{max-width:760px;margin:0 auto;padding:16px}h1{font-size:24px;margin:8px 0 4
 .muted{color:#6b7280;font-size:14px}.card{background:#fff;border-radius:12px;padding:14px 16px;margin:10px 0;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .card a.t{color:#1c1f26;text-decoration:none;font-weight:700}.odds{display:flex;gap:8px;margin-top:10px}
 .odds a{flex:1;text-align:center;background:#fff4ee;border:1px solid #ffd2bd;border-radius:8px;padding:8px 4px;color:#1c1f26;text-decoration:none}
-.odds small{display:block;color:#6b7280;font-size:12px}.odds b{color:#ff4d00;font-size:17px}
+.odds small{display:block;color:#6b7280;font-size:12px}.odds b{color:#ff4d00;font-size:17px}.odds a.on{background:#ff4d00;border-color:#ff4d00}.odds a.on small,.odds a.on b{color:#fff}
+#slipbar{position:fixed;left:12px;right:12px;bottom:12px;max-width:756px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#1fa055;color:#fff;border-radius:12px;padding:14px 16px;font-weight:700;text-decoration:none;box-shadow:0 8px 24px rgba(0,0,0,.25)}#slipbar[hidden]{display:none}body.has-slip{padding-bottom:80px}
 .cta{display:block;text-align:center;background:#ff4d00;color:#fff;font-weight:700;padding:14px;border-radius:10px;text-decoration:none;margin:16px 0}
 .live{color:#e11d48;font-weight:700}.lg a{display:inline-block;margin:4px 6px 4px 0;padding:6px 10px;background:#fff;border-radius:16px;color:#1c1f26;text-decoration:none;font-size:14px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .tip{margin-top:10px;padding:10px 12px;background:#f7f8fa;border-left:4px solid #ff4d00;border-radius:8px;font-size:14px}
@@ -77,13 +78,19 @@ ${noindex ? '<meta name="robots" content="noindex">' : ""}<meta name="theme-colo
 <link rel="icon" type="image/png" href="/icons/favicon.png"><style>${CSS}</style>
 ${ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>` : ""}</head>
 <body><header><a href="/">REAL SPORTS</a><a class="bk" href="/">‹ Voltar ao site</a></header><main>${body}</main>
+<a id="slipbar" href="/#sports" hidden><span id="sb-t"></span><span>Apostar ›</span></a>
+<script>(function(){var K="rs-slip",g=function(){try{return (sessionStorage.getItem(K)||"").split(",").filter(Boolean)}catch(e){return []}},id=function(c){return c.match(/^[0-9]+/)[0]};
+function paint(){var s=g(),b=document.getElementById("slipbar");document.querySelectorAll(".odds a[data-s]").forEach(function(a){a.classList.toggle("on",s.indexOf(a.dataset.s)>=0)});
+b.hidden=!s.length;document.body.classList.toggle("has-slip",!!s.length);b.href="/?b="+encodeURIComponent(s.join(","))+"#sports";document.getElementById("sb-t").textContent="Bilhete: "+s.length+(s.length>1?" jogos":" jogo")}
+document.addEventListener("click",function(e){var a=e.target.closest(".odds a[data-s]");if(!a)return;e.preventDefault();var c=a.dataset.s,s=g(),on=s.indexOf(c)>=0;
+s=s.filter(function(x){return id(x)!==id(c)});if(!on)s.push(c);try{sessionStorage.setItem(K,s.join(","))}catch(e){location.href=a.href;return}paint()});paint()})();</script>
 <footer><p><a href="/jogos">Todos os jogos</a> · <a href="/palpites">Palpites de hoje</a> · <a href="/login.html">Cadastre-se</a></p><p><b>+18</b> Jogue com responsabilidade. Apostas envolvem risco de perda financeira. Proibido para menores de 18 anos.</p></footer></body></html>`;
 }
 
 const oddsRow = (m) => `<div class="odds">
-<a href="/?b=${m.id}h#sports" rel="nofollow"><small>${esc(m.home)}</small><b>${odd(m.odd_home)}</b></a>
-${m.odd_draw ? `<a href="/?b=${m.id}d#sports" rel="nofollow"><small>Empate</small><b>${odd(m.odd_draw)}</b></a>` : ""}
-<a href="/?b=${m.id}a#sports" rel="nofollow"><small>${esc(m.away)}</small><b>${odd(m.odd_away)}</b></a></div>`;
+<a href="/?b=${m.id}h#sports" data-s="${m.id}h" rel="nofollow"><small>${esc(m.home)}</small><b>${odd(m.odd_home)}</b></a>
+${m.odd_draw ? `<a href="/?b=${m.id}d#sports" data-s="${m.id}d" rel="nofollow"><small>Empate</small><b>${odd(m.odd_draw)}</b></a>` : ""}
+<a href="/?b=${m.id}a#sports" data-s="${m.id}a" rel="nofollow"><small>${esc(m.away)}</small><b>${odd(m.odd_away)}</b></a></div>`;
 const gameCard = (m) => `<div class="card"><a class="t" href="/jogo/${gameSlug(m)}">${esc(m.home)} x ${esc(m.away)}</a>
 <div class="muted">${m.status === "live" ? `<span class="live">AO VIVO</span> ${m.score_home ?? 0}–${m.score_away ?? 0}` : esc(when(m.starts_at))} · ${esc(lname(m.league))}</div>${oddsRow(m)}</div>`;
 
