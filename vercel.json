@@ -74,6 +74,14 @@
       "destination": "/api/seo?p=liga&s=:s"
     },
     {
+      "source": "/times",
+      "destination": "/api/seo?p=times"
+    },
+    {
+      "source": "/time/:s",
+      "destination": "/api/seo?p=time&s=:s"
+    },
+    {
       "source": "/jogo/:s",
       "destination": "/api/seo?p=jogo&s=:s"
     }
